@@ -30,7 +30,7 @@ PROJECT       := re4mepc
 TAGLINE       := Resident Evil 4 Mobile Linux PC host
 # `=` and not `:=`: with `:=` these expand before the variables they cite are
 # defined further down, and the help footer prints empty values with no error.
-HELP_VARS      = PYTHON=$(PYTHON) ARGS=$(ARGS) TEST_ARGS=$(TEST_ARGS)
+HELP_VARS      = PYTHON=$(PYTHON) ARGS=$(ARGS) TEST_ARGS=$(TEST_ARGS) DESKTOP_ARGS=$(DESKTOP_ARGS)
 HELP_EXAMPLE   = make run ARGS="--skip-videos --log-level debug"
 
 # ─── Preamble ────────────────────────────────────────────────────────────────
@@ -91,11 +91,19 @@ help: ## List the available targets
 PYTHON ?= .venv/bin/python
 ARGS ?=
 TEST_ARGS ?=
+DESKTOP_ARGS ?=
 
 ##@ Setup
 .PHONY: setup
 setup: ## Install dependencies and build native helpers
 	./setup.sh
+
+##@ Desktop app
+.PHONY: desktop uninstall-desktop
+desktop: build ## Install a Linux executable and app-menu shortcut (DESKTOP_ARGS selects icon)
+	$(PYTHON) tools/install_desktop.py $(DESKTOP_ARGS)
+uninstall-desktop: ## Remove the per-user launcher and icon; preserve game and saves
+	$(PYTHON) tools/install_desktop.py --uninstall $(DESKTOP_ARGS)
 
 ##@ Development
 .PHONY: dev build run

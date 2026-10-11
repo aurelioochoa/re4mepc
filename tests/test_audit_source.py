@@ -32,6 +32,20 @@ class SourceAuditTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as output: audit(self.root)
         self.assertIn('SOURCE_AUDIT_PASS',output.getvalue())
 
+    def test_text_banner_passes_but_binary_banner_is_rejected(self):
+        self.write('docs/readme-banner.svg',
+                   b'<svg xmlns="http://www.w3.org/2000/svg"><title>Host banner</title></svg>\n')
+        self.git('add','docs/readme-banner.svg')
+        with contextlib.redirect_stdout(io.StringIO()): audit(self.root)
+        self.write('docs/readme-banner.svg',b'\x89PNG\r\n\x1a\nsynthetic')
+        self.git('add','docs/readme-banner.svg')
+        with self.assertRaisesRegex(AuditError,'Binary'): audit(self.root)
+
+    def test_unlisted_documentation_asset_is_rejected(self):
+        self.write('docs/other.svg',b'<svg/>\n')
+        self.git('add','docs/other.svg')
+        with self.assertRaisesRegex(AuditError,'Forbidden publication path'): audit(self.root)
+
     def test_forced_ignored_packages_assets_saves_and_captures_are_rejected(self):
         for name in ('game/lib/engine.so','input.apk','logs/capture.png','game/saves/save.dat','assets/resource.h2z'):
             with self.subTest(name=name):

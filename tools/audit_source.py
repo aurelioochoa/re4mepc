@@ -10,15 +10,16 @@ import sys
 from pathlib import Path
 
 TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'VALIDATION.md',
-             'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml'}
+             'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
+             'docs/readme-banner.svg'}
 SOURCE_FILES = {
-    're4pc': ('__init__', '__main__', 'arm', 'assets', 'bionic', 'eabi', 'fast',
+    're4pc': ('__init__', '__main__', 'arm', 'assets', 'bionic', 'desktop', 'eabi', 'fast',
               'filesystem', 'game', 'graphics', 'input', 'jni', 'media',
               'paths', 'pc_controls', 'runtime_log', 'textures'),
-    'tools': ('audit_source', 'build_native', 'disassemble', 'live_test',
+    'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
               'migrate_local', 'probe_input', 'test_components',
               'test_pc_controls', 'test_visible'),
-    'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_graphics',
+    'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_desktop', 'test_graphics',
               'test_input', 'test_key_routing', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures'),
 }

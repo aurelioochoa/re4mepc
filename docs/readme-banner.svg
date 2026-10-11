@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="480" viewBox="0 0 1440 480" role="img" aria-labelledby="title description">
+  <title id="title">re4mepc — Resident Evil 4 Mobile, Linux PC host</title>
+  <desc id="description">A dark illustrated village with bare trees, rooftops and a bell tower in amber fog. Text reads: re4mepc, Resident Evil 4 Mobile, Linux PC host, original ARM32 engine, desktop controls.</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#111b1e"/>
+      <stop offset="1" stop-color="#303633"/>
+    </linearGradient>
+    <radialGradient id="haze" cx="76%" cy="61%" r="60%">
+      <stop stop-color="#b7a076" stop-opacity=".25"/>
+      <stop offset="1" stop-color="#b7a076" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shade">
+      <stop stop-color="#10191c" stop-opacity=".95"/>
+      <stop offset=".52" stop-color="#10191c" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#10191c" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ground" x2="0" y2="1">
+      <stop stop-color="#10191c" stop-opacity="0"/>
+      <stop offset="1" stop-color="#10191c"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h1440v480H0z"/>
+  <path fill="url(#haze)" d="M0 0h1440v480H0z"/>
+  <circle cx="1138" cy="125" r="49" fill="#bdad8b" opacity=".12"/>
+  <!-- Original vector scenery; no game artwork or embedded bitmap data. -->
+  <path fill="#5d6256" opacity=".24" d="m570 292 94-59 88 34 92-77 81 41 91-56 122 69 96-35 106 66 100-26v231H570z"/>
+  <path fill="#3f4840" d="m620 333 76-51 117 25 89-48 77 34 126-40 94 32 113-49 128 64v180H620z"/>
+  <g fill="#222c29">
+    <path d="M756 333v-59l67-40 62 40v59zM765 269l58-42 57 42z"/>
+    <path d="M1158 328v-81l74-43 70 43v81zM1148 248l83-54 83 54z"/>
+    <path d="M1034 325V157h60v168zM1026 157l38-48 38 48zM1052 104h24v13h-24z"/>
+  </g>
+  <path fill="#aa966e" opacity=".5" d="M1057 188v-16a7 7 0 0 1 14 0v16z"/>
+  <g fill="#182321">
+    <path d="M865 385V293l87-52 99 57v87zM847 297l105-69 117 69z"/>
+    <path d="M1123 406v-64l65-38 89 38v64zM1109 344l79-51 102 51z"/>
+    <path d="M1311 407V300l64-44 65 44v107zM1297 304l78-61 65 46v15z"/>
+  </g>
+  <path fill="#c3a475" opacity=".35" d="M926 319h16v22h-16zM977 319h16v22h-16zM1200 355h15v18h-15z"/>
+  <g fill="none" stroke="#172220" stroke-linecap="square">
+    <path stroke-width="10" d="m727 419 8-121-19-129m17 101-40-47-8-58m47 92 39-54 4-80m-59 67-33-33-16-56"/>
+    <path stroke-width="5" d="m696 230-41-10-24-24m141 19 30-27 12-45m-99 36 18-46-6-48"/>
+    <path stroke-width="12" d="m1391 434-13-167 21-162m-17 157-54-48-30-70m85 80 43-38 14-51"/>
+    <path stroke-width="5" d="m1336 221-51-7-30-32m138-27-33-52-3-54m-58 96 12-57"/>
+  </g>
+  <path fill="#919584" opacity=".08" d="M625 349q202-39 397-15t418-9v26q-246 25-418 0t-397 24z"/>
+  <path fill="#10191c" d="M0 425q312-39 613-4t501-15 326 0v74H0z"/>
+  <path fill="url(#ground)" d="M0 350h1440v130H0z"/>
+  <path fill="url(#shade)" d="M0 0h1440v480H0z"/>
+  <path stroke="#bb9b66" stroke-width="3" d="M76 86h44"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="76" y="128" fill="#bb9b66" font-size="15" letter-spacing="4">RESIDENT EVIL 4 MOBILE</text>
+    <text x="70" y="257" fill="#f1eee6" font-size="112" font-weight="700" letter-spacing="-5">re4mepc</text>
+    <text x="76" y="308" fill="#d1d5cc" font-size="28">Linux PC host</text>
+    <text x="76" y="392" fill="#a2ada5" font-size="16" letter-spacing="1">Original ARM32 engine · Desktop controls</text>
+  </g>
+  <path fill="none" stroke="#95a28e" stroke-opacity=".16" d="M.5.5h1439v479H.5z"/>
+</svg>
