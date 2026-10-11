@@ -1,4 +1,4 @@
-![re4mepc — Resident Evil 4 Mobile Linux PC host](docs/readme-banner.svg)
+![re4mepc — Resident Evil 4 Mobile Linux PC port; Tux dressed as Leon and Ashley in a misty village](docs/readme-banner.png)
 
 # Resident Evil 4 Mobile on Linux
 
@@ -9,6 +9,15 @@ Play the original ARM32 Android engine in a Linux desktop window with mouse and 
 You supply the APK. The repository contains the host, importer, synthetic tests and documentation; it never downloads the game. Imported libraries, resources, saves and captures stay outside the checkout. No Android installation is required.
 
 [Setup](#setup-and-play) · [Linux app and desktop shortcut](#linux-app-and-desktop-shortcut) · [Controls](#controls) · [How the port was made](#how-the-port-was-made) · [How it works](#how-it-works) · [Español](#español)
+
+## Gameplay gallery
+
+<p>
+  <a href="https://www.mobygames.com/game/42794/resident-evil-4-mobile-edition/screenshots/"><img src="https://cdn.mobygames.com/d6238dc0-ac1c-11ed-9c12-02420a00012f.webp" width="420" alt="Original mobile edition: Leon aiming his handgun at a villager, with the red laser sight and touch controls visible"></a>
+  <a href="https://www.mobygames.com/game/42794/resident-evil-4-mobile-edition/screenshots/"><img src="https://cdn.mobygames.com/dc72a67a-ac1c-11ed-9c12-02420a00012f.webp" width="420" alt="Original mobile edition: Leon facing a chainsaw-wielding Ganado in the village"></a>
+</p>
+
+Reference screenshots of the original **Resident Evil 4: Mobile Edition**, hosted by [MobyGames](https://www.mobygames.com/game/42794/resident-evil-4-mobile-edition/screenshots/). These show the mobile game and its touch interface, rather than captures from this Linux port. Game artwork © Capcom. The generated Tux banner's references and prompts are documented in [Banner artwork](docs/banner-artwork.md).
 
 ## Status and limitations
 
@@ -286,7 +295,7 @@ review to reclaim disk space.
 
 `make audit-source` checks the Git index, every tree in all refs and reflogs,
 and every stored blob, including dangling blobs. It rejects paths outside an
-explicit source/documentation allowlist, symlinks, submodules, binary contents,
+explicit source/documentation allowlist, symlinks, submodules, unapproved binary contents,
 and large encoded payloads or disassembly dumps. It also checks past commits
 whose forbidden files have been deleted from the tip. Updating the allowed
 source inventory requires editing `tools/audit_source.py` and reviewing the
@@ -296,7 +305,7 @@ CI installs host dependencies, builds the C helpers, runs synthetic tests and
 audits the complete fetched history. It needs no APK, game saves or game
 captures. Binary distribution packages containing the game are not produced.
 
-The README banner is an original, editable SVG illustration at `docs/readme-banner.svg`. That exact path is included in the publication allowlist; it is checked as UTF-8 source, with the same binary and encoded-payload rejection as other files.
+The README banner is generated fan artwork at `docs/readme-banner.png`. Its exact path and reviewed SHA-256 are included in the publication allowlist; altered or additional binary images are rejected. The previous SVG remains available at `docs/readme-banner.svg`. References and generation prompts are recorded in [Banner artwork](docs/banner-artwork.md). The gameplay gallery links to external reference screenshots; game assets and local captures remain outside the repository.
 
 </details>
 

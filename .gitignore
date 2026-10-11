@@ -17,6 +17,7 @@
 *.wav
 *.f32
 *.png
+!/docs/readme-banner.png
 *.jpg
 *.jpeg
 *.ppm

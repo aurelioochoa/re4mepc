@@ -1,9 +1,11 @@
 """Negative controls in disposable Git repositories; never stage real data."""
 import contextlib
+import hashlib
 import io
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from tools.audit_source import audit, AuditError
 
@@ -45,6 +47,42 @@ class SourceAuditTests(unittest.TestCase):
         self.write('docs/other.svg',b'<svg/>\n')
         self.git('add','docs/other.svg')
         with self.assertRaisesRegex(AuditError,'Forbidden publication path'): audit(self.root)
+
+    def reviewed_banner(self):
+        data=b'\x89PNG\r\n\x1a\nsynthetic reviewed artwork'
+        registry=patch.dict('tools.audit_source.DOCUMENTATION_IMAGES',
+                            {'docs/readme-banner.png':hashlib.sha256(data).hexdigest()},
+                            clear=True)
+        registry.start();self.addCleanup(registry.stop)
+        return data
+
+    def test_reviewed_binary_banner_passes_in_index_and_history(self):
+        self.write('docs/readme-banner.png',self.reviewed_banner())
+        self.git('add','docs/readme-banner.png');self.git('commit','-m','Reviewed artwork')
+        with contextlib.redirect_stdout(io.StringIO()): audit(self.root)
+
+    def test_altered_banner_is_rejected(self):
+        data=self.reviewed_banner()
+        self.write('docs/readme-banner.png',data+b'altered')
+        self.git('add','docs/readme-banner.png')
+        with self.assertRaisesRegex(AuditError,'Unreviewed documentation image'): audit(self.root)
+
+    def test_reviewed_banner_cannot_be_renamed_as_source(self):
+        self.write('README.md',self.reviewed_banner());self.git('add','README.md')
+        with self.assertRaisesRegex(AuditError,'wrong path'): audit(self.root)
+
+    def test_unreviewed_banner_only_in_history_is_rejected(self):
+        data=self.reviewed_banner()
+        self.write('docs/readme-banner.png',data+b'altered')
+        self.git('add','docs/readme-banner.png');self.git('commit','-m','Unreviewed image')
+        self.write('docs/readme-banner.png',data)
+        self.git('add','docs/readme-banner.png');self.git('commit','-m','Reviewed image')
+        with self.assertRaisesRegex(AuditError,'Unreviewed documentation image'): audit(self.root)
+
+    def test_large_unapproved_binary_is_rejected(self):
+        self.reviewed_banner()
+        self.write('README.md',b'\0'*(256*1024+1));self.git('add','README.md')
+        with self.assertRaisesRegex(AuditError,'Oversized source blob'): audit(self.root)
 
     def test_forced_ignored_packages_assets_saves_and_captures_are_rejected(self):
         for name in ('game/lib/engine.so','input.apk','logs/capture.png','game/saves/save.dat','assets/resource.h2z'):

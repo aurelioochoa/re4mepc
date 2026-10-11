@@ -1,9 +1,10 @@
-"""Fail closed on unpublished paths, symlinks, binaries and encoded dumps.
+"""Fail closed on unpublished paths, symlinks, unapproved binaries and encoded dumps.
 
 Inspect the index, every tree reachable through refs/reflogs, and every stored
 blob (even dangling objects). A source review remains necessary for provenance.
 """
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -11,7 +12,13 @@ from pathlib import Path
 
 TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'VALIDATION.md',
              'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
-             'docs/readme-banner.svg'}
+             'docs/readme-banner.svg', 'docs/banner-artwork.md'}
+# Only this reviewed, AI-generated documentation artwork may be binary.
+# New versions require visual review and an explicit SHA-256 update.
+DOCUMENTATION_IMAGES = {
+    'docs/readme-banner.png':
+        'c588302bbfd8dc9806bdf25832cacc86a51cc08b88c067437755b081b3dcadea',
+}
 SOURCE_FILES = {
     're4pc': ('__init__', '__main__', 'arm', 'assets', 'bionic', 'desktop', 'eabi', 'fast',
               'filesystem', 'game', 'graphics', 'input', 'jni', 'media',
@@ -23,9 +30,10 @@ SOURCE_FILES = {
               'test_input', 'test_key_routing', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures'),
 }
-PUBLISH_FILES = TOP_LEVEL | {'native/audio.c', 'native/fast.c'} | {
+PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c'} | {
     f'{folder}/{name}.py' for folder, names in SOURCE_FILES.items() for name in names}
 MAX_SOURCE_BYTES = 256 * 1024
+MAX_DOCUMENTATION_IMAGE_BYTES = 4 * 1024 * 1024
 
 
 class AuditError(ValueError):
@@ -43,7 +51,16 @@ def check_entry(path, mode, kind='blob'):
         raise AuditError(f'Forbidden file mode/type (symlink or submodule): {path} {mode} {kind}')
 
 
-def check_blob(data, identifier):
+def check_blob(data, identifier, path=None):
+    if len(data) > MAX_DOCUMENTATION_IMAGE_BYTES:
+        raise AuditError(f'Oversized source blob: {identifier}')
+    digest = hashlib.sha256(data).hexdigest()
+    if path in DOCUMENTATION_IMAGES and digest != DOCUMENTATION_IMAGES[path]:
+        raise AuditError(f'Unreviewed documentation image: {path}')
+    if digest in DOCUMENTATION_IMAGES.values():
+        if path is not None and DOCUMENTATION_IMAGES.get(path) != digest:
+            raise AuditError(f'Documentation image at wrong path: {path}')
+        return
     if len(data) > MAX_SOURCE_BYTES:
         raise AuditError(f'Oversized source blob: {identifier}')
     try:
@@ -62,6 +79,13 @@ def check_blob(data, identifier):
 
 
 def audit(root):
+    checked_entries = set()
+
+    def check_content(path, blob):
+        if (path, blob) not in checked_entries:
+            check_blob(git(root, 'cat-file', 'blob', blob), blob, path)
+            checked_entries.add((path, blob))
+
     entries = git(root, 'ls-files', '--stage', '-z').split(b'\0')
     if not any(entries):
         raise AuditError('No staged/tracked source files to audit')
@@ -72,6 +96,7 @@ def audit(root):
         if stage != '0':
             raise AuditError('Unmerged index entry')
         check_entry(path.decode('utf-8'), mode)
+        check_content(path.decode('utf-8'), blob)
         indexed += 1
     commits = git(root, 'rev-list', '--all', '--reflog').decode().splitlines()
     for commit in commits:
@@ -79,6 +104,7 @@ def audit(root):
             metadata, path = entry.split(b'\t', 1)
             mode, kind, blob = metadata.decode().split()
             check_entry(path.decode('utf-8'), mode, kind)
+            check_content(path.decode('utf-8'), blob)
     objects = git(root, 'cat-file', '--batch-all-objects',
                   '--batch-check=%(objectname) %(objecttype) %(objectsize)').decode().splitlines()
     blobs = 0
@@ -86,7 +112,7 @@ def audit(root):
         identifier, kind, size = obj.split()
         if kind != 'blob':
             continue
-        if int(size) > MAX_SOURCE_BYTES:
+        if int(size) > MAX_DOCUMENTATION_IMAGE_BYTES:
             raise AuditError(f'Oversized source blob: {identifier}')
         check_blob(git(root, 'cat-file', 'blob', identifier), identifier)
         blobs += 1
