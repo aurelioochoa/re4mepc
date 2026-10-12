@@ -1,0 +1,722 @@
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from re4pc.launcher import ChildProcess, child_command
+from unittest.mock import patch, Mock
+
+
+def widget_texts(widget):
+    """Read rendered native text, including transparent canvas typography."""
+    import tkinter as tk
+    from tkinter import ttk
+    result = []
+    if isinstance(widget, ttk.Label):
+        result.append(widget.cget('text'))
+    if isinstance(widget, tk.Canvas):
+        result.extend(widget.itemcget(identity, 'text') for identity in widget.find_all()
+                      if widget.type(identity) == 'text')
+    for child in widget.winfo_children():
+        result.extend(widget_texts(child))
+    return result
+
+
+class LauncherTests(unittest.TestCase):
+    def test_package_fonts_are_registered_from_runtime_prefix_with_spaces(self):
+        from re4pc.launcher import configure_bundled_fonts
+        with tempfile.TemporaryDirectory(prefix='runtime with spaces ') as directory:
+            fonts = Path(directory) / 'share/fonts'
+            fonts.mkdir(parents=True)
+            library = Mock()
+            library.FcConfigAppFontAddDir.return_value = 1
+            with patch('re4pc.launcher.sys.prefix', directory), patch('ctypes.CDLL', return_value=library):
+                configure_bundled_fonts()
+            library.FcConfigAppFontAddDir.assert_called_once_with(None, bytes(str(fonts), 'utf-8'))
+
+    def drain(self, child, timeout=5):
+        output = ''
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            text, code = child.poll()
+            output += text
+            if code is not None:
+                return output, code
+            time.sleep(.01)
+        child.kill()
+        self.fail('Child did not complete')
+
+    def test_commands_preserve_spaces_and_use_active_interpreter(self):
+        self.assertEqual(child_command('run', '--game', '/game with spaces'),
+                         [sys.executable, '-u', '-m', 're4pc', 'run', '--game', '/game with spaces'])
+        self.assertEqual(child_command('export-backup', 'id', '/backup with spaces.zip')[-2:],
+                         ['id', '/backup with spaces.zip'])
+
+    def test_child_output_and_failure_do_not_block_gui_poll(self):
+        start = time.monotonic()
+        child = ChildProcess([sys.executable, '-c', 'import time; print("begin",flush=True); time.sleep(.2); print("end"); raise SystemExit(7)'])
+        self.assertLess(time.monotonic() - start, .15)
+        text, code = child.poll()
+        self.assertIsNone(code)
+        rest, code = self.drain(child)
+        self.assertEqual(code, 7)
+        self.assertIn('begin', text + rest)
+        self.assertIn('end', text + rest)
+
+    def test_stop_and_output_are_bounded(self):
+        child = ChildProcess([sys.executable, '-c', 'import time; print("x"*3000000,flush=True); time.sleep(30)'])
+        time.sleep(.1)
+        self.assertLessEqual(child.output.qsize(), 256)
+        child.stop()
+        _, code = self.drain(child)
+        self.assertLess(code, 0)
+
+    def test_cli_help_has_no_tk_display_dependency(self):
+        import subprocess
+        result = subprocess.run(child_command('launcher', '--help'), text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--game', result.stdout)
+
+
+class LauncherGuiFixture(unittest.TestCase):
+    """Real widget lifecycle; skipped on runners without a graphical display."""
+    def setUp(self):
+        import tkinter as tk
+        from re4pc.launcher import Launcher
+        try:
+            self.window = tk.Tk()
+        except tk.TclError as error:
+            self.skipTest(str(error))
+        self.addCleanup(self.window.destroy)
+        self.callback_errors = []
+        self.window.report_callback_exception = lambda kind, value, trace: self.callback_errors.append(str(value))
+        self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Native callback errors'))
+        self.window.geometry('1000x600')
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name) / 'game with spaces'
+        self.app = Launcher(self.window, self.folder)
+        self.window.update_idletasks()
+
+    def complete_installation(self):
+        from re4pc.assets import LIBRARIES, REQUIRED
+        for name in [*('lib/' + name for name in LIBRARIES),
+                     *('data/monhun/' + name for name in REQUIRED)]:
+            path = self.folder / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'fixture; readiness only, not validated game data')
+        self.app.refresh_installation()
+
+
+class LauncherGuiTests(LauncherGuiFixture):
+    def test_console_is_absent_until_requested_and_log_survives_reopening(self):
+        self.assertIsNone(self.app.console)
+        self.assertIsNone(self.app.log_window)
+        self.app.append('Captured without a console\n')
+        self.app.show_logs()
+        self.assertIn('Captured without a console', self.app.console.get('1.0', 'end'))
+        self.app.log_window.destroy()
+        self.app.append('More output\n')
+        self.app.show_logs()
+        self.assertIn('More output', self.app.console.get('1.0', 'end'))
+        self.app.log_window.destroy()
+        self.app.append('x' * 300000)
+        self.assertLessEqual(len(self.app.log_output), 128 * 1024)
+
+    def test_missing_installation_disables_game_actions_but_keeps_import(self):
+        self.assertTrue(self.app.play_button.instate(['disabled']))
+        self.assertTrue(self.app.backups_button.instate(['disabled']))
+        self.assertTrue(self.app.diagnostics_button.instate(['disabled']))
+        self.assertTrue(self.app.achievements_button.instate(['disabled']))
+        self.assertFalse(self.app.import_button.instate(['disabled']))
+        self.complete_installation()
+        self.assertFalse(self.app.play_button.instate(['disabled']))
+        self.assertFalse(self.app.achievements_button.instate(['disabled']))
+        self.app.game.set('   ')
+        self.app.refresh_installation()
+        self.assertTrue(self.app.play_button.instate(['disabled']))
+
+    def test_achievements_show_saved_unlocks_progress_and_scroll(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from re4pc.achievements import ACHIEVEMENTS, AchievementStore, Progress
+        self.complete_installation()
+        ranks = [[-1] * 5 for _ in range(22)]
+        ranks[0][0] = 4
+        AchievementStore(self.folder).update(Progress(tuple(tuple(row) for row in ranks)))
+        self.app.achievements()
+        popup = next(widget for widget in self.window.winfo_children() if isinstance(widget, tk.Toplevel))
+        self.window.update()
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        widgets = list(descendants(popup))
+        texts = widget_texts(popup)
+        self.assertIn('It Begins With a Ring', texts)
+        self.assertIn('Unlocked', texts)
+        self.assertIn('Locked', texts)
+        self.assertIn(f'2 / {len(ACHIEVEMENTS)} unlocked', popup.view.summary.get())
+        canvas = popup.view.catalog.canvas
+        canvas.yview_moveto(1)
+        self.assertGreater(canvas.yview()[0], 0)
+        popup.event_generate('<Button-4>')
+        self.window.update()
+        self.assertLess(canvas.yview()[1], 1)
+        popup.destroy()
+
+    def test_achievements_empty_state_and_bad_record_are_visible(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from re4pc.achievements import AchievementStore
+        self.complete_installation()
+        for corrupt in (False, True):
+            if corrupt:
+                path = AchievementStore(self.folder).path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'broken')
+            self.app.achievements()
+            popup = next(widget for widget in self.window.winfo_children() if isinstance(widget, tk.Toplevel))
+            self.assertIn('Could not read' if corrupt else 'Play once', popup.view.summary.get())
+            popup.destroy()
+
+    def test_achievement_media_icons_preview_and_capture_settings(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from PIL import Image
+        from re4pc.achievements import AchievementStore, Progress, ACHIEVEMENTS
+        from re4pc.achievement_media import UnlockCapture
+        self.complete_installation()
+        store = AchievementStore(self.folder)
+        store.update(Progress(story=(True,) + (False,) * 21))
+        capture = UnlockCapture(self.folder, store, {'achievement_capture':'screenshot'})
+        capture.tick(lambda:Image.new('RGB', (80,48), 'green'), ['village'])
+        capture.close()
+        self.app.achievements()
+        popup = next(widget for widget in self.window.winfo_children() if isinstance(widget, tk.Toplevel))
+        self.window.update()
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+        widgets = list(descendants(popup))
+        self.assertGreaterEqual(sum(isinstance(widget, tk.Canvas) for widget in widgets), len(ACHIEVEMENTS) + 1)
+        view = next(widget for widget in widgets if isinstance(widget, ttk.Button) and widget.cget('text') == 'View screenshot')
+        view.invoke()
+        viewer = next(widget for widget in popup.winfo_children() if isinstance(widget, tk.Toplevel))
+        self.assertIsNotNone(viewer.capture_image)
+        popup.destroy()
+        self.app.settings()
+        popup = next(widget for widget in self.window.winfo_children() if isinstance(widget, tk.Toplevel))
+        popup.view.select('Achievements')
+        controls = [widget for widget in descendants(popup.view.panes['Achievements'].content) if isinstance(widget, ttk.Combobox)]
+        controls[0].set('both')
+        controls[1].set('7')
+        save = popup.view.save_button
+        with patch('re4pc.settings.Settings.save') as saved:
+            save.invoke()
+        self.assertEqual(saved.call_args.args[0]['achievement_capture'], 'both')
+        self.assertEqual(saved.call_args.args[0]['achievement_clip_seconds'], 7)
+
+    def test_generated_assets_load_and_settings_bindings_scroll(self):
+        import tkinter as tk
+        from tkinter import ttk
+        self.assertIsNotNone(self.app.banner_source)
+        self.assertEqual(set(self.app.utility_images), {'settings', 'backups', 'achievements'})
+        self.assertIsNotNone(self.app.app_icon)
+        self.app.settings()
+        popup = next(widget for widget in self.window.winfo_children() if isinstance(widget, tk.Toplevel))
+        popup.geometry('640x520')
+        self.window.update()
+        popup.view.select('Keyboard')
+        self.window.update()
+        canvas = popup.view.panes['Keyboard'].canvas
+        canvas.yview_moveto(1)
+        self.assertGreater(canvas.yview()[0], 0)
+        popup.event_generate('<Button-4>')
+        self.window.update()
+        self.assertLess(canvas.yview()[1], 1)
+        popup.destroy()
+
+    def test_busy_failure_and_stop_are_visible_without_opening_logs(self):
+        self.complete_installation()
+        child = Mock()
+        child.poll.return_value = ('fixture failure\n', 7)
+        with patch('re4pc.launcher.ChildProcess', return_value=child):
+            self.app.play()
+        self.assertTrue(self.app.import_button.instate(['disabled']))
+        self.assertTrue(self.app.game_entry.instate(['disabled']))
+        self.assertEqual(self.app.play_button.cget('text'), 'Playing')
+        self.window.after_cancel(self.app.tick_job)
+        self.app.tick()
+        self.assertIn('failed', self.app.status.get())
+        self.assertIsNone(self.app.log_window)
+        self.assertFalse(self.app.play_button.instate(['disabled']))
+        self.assertIn('fixture failure', self.app.log_output)
+        with patch('re4pc.launcher.ChildProcess', return_value=child):
+            self.app.play()
+        self.app.stop()
+        self.app.stop()
+        child.stop.assert_called_once()
+        self.window.after_cancel(self.app.tick_job)
+        self.app.tick()
+        self.assertEqual(self.app.status.get(), 'Operation stopped.')
+
+    def test_import_uses_unused_destination_and_only_switches_on_success(self):
+        self.complete_installation()
+        destination = self.folder.with_name('new imported game')
+        with patch('tkinter.filedialog.askopenfilename', return_value='/tmp/my game.apk'), \
+             patch('tkinter.simpledialog.askstring', return_value=str(destination)) as prompt, \
+             patch.object(self.app, 'start') as start:
+            self.app.import_apk()
+        self.assertEqual(prompt.call_args.kwargs['initialvalue'], str(self.folder.with_name(self.folder.name + '-2')))
+        self.assertEqual(self.app.game.get(), str(self.folder))
+        callback = start.call_args.kwargs['on_complete']
+        callback(1)
+        self.assertEqual(self.app.game.get(), str(self.folder))
+        callback(0)
+        self.assertEqual(self.app.game.get(), str(destination))
+
+    def test_artwork_actions_support_keyboard_activation_and_disabled_state(self):
+        self.window.deiconify()
+        button = self.app.import_button
+        button.command = Mock()
+        button.focus_force()
+        self.window.update()
+        button.event_generate('<Return>')
+        self.window.update()
+        button.command.assert_called_once_with()
+        button.configure(state='disabled')
+        button.event_generate('<space>')
+        button.invoke()
+        self.window.update()
+        button.command.assert_called_once_with()
+        self.assertFalse(bool(int(button.cget('takefocus'))))
+
+    def test_resize_keeps_controls_inside_artwork_and_stop_is_only_visible_when_busy(self):
+        self.window.deiconify()
+        self.complete_installation()
+        for width, height in ((1000, 600), (1000, 800), (1440, 810)):
+            with self.subTest(size=(width, height)):
+                self.window.geometry(f'{width}x{height}')
+                self.window.update()
+                self.app.view.draw(width, height)
+                self.window.update_idletasks()
+                for button, bounds in self.app.view.bounds.items():
+                    x, y, bw, bh = bounds
+                    self.assertGreaterEqual(x, 0)
+                    self.assertGreaterEqual(y, 0)
+                    self.assertLessEqual(x + bw, width)
+                    self.assertLessEqual(y + bh, height)
+                self.assertFalse(self.app.stop_button.winfo_ismapped())
+        child = Mock()
+        child.poll.return_value = ('', None)
+        with patch('re4pc.launcher.ChildProcess', return_value=child):
+            self.app.play()
+        self.window.update_idletasks()
+        self.assertTrue(self.app.stop_button.winfo_ismapped())
+        self.assertLess(self.app.stop_button.winfo_width(), 90)
+        self.assertLess(self.app.stop_button.winfo_height(), 40)
+        self.assertTrue(self.app.view.nav['settings'].instate(['disabled']))
+        self.assertTrue(self.app.view.nav['backups'].instate(['disabled']))
+        child.poll.return_value = ('', 0)
+        self.window.after_cancel(self.app.tick_job)
+        self.app.tick()
+        self.window.update_idletasks()
+        self.assertFalse(self.app.stop_button.winfo_ismapped())
+        self.assertFalse(self.app.view.nav['settings'].instate(['disabled']))
+
+
+class DialogFormattingTests(unittest.TestCase):
+    def test_completion_timestamp_local_zone_and_midnight(self):
+        import datetime as dt
+        from re4pc.launcher_ui import completion_time
+        zone = dt.timezone(dt.timedelta(hours=-5))
+        stamp = int(dt.datetime(2026, 10, 12, 19, 32, 8, tzinfo=dt.timezone.utc).timestamp() * 1e9)
+        self.assertEqual(completion_time(stamp, zone=zone),
+                         'Completion recorded: 12 Oct 2026 · 14:32:08 UTC−05:00')
+        self.assertEqual(completion_time(stamp, short=True, zone=zone), '12 Oct 2026 · 14:32')
+        midnight = int(dt.datetime(2026, 10, 12, 4, 59, 59, tzinfo=dt.timezone.utc).timestamp() * 1e9)
+        self.assertIn('11 Oct 2026 · 23:59:59', completion_time(midnight, zone=zone))
+        self.assertIn('12 Oct 2026 · 00:00:00', completion_time(midnight + 1_000_000_000, zone=zone))
+        self.assertIn('UTC+05:30', completion_time(stamp, zone=dt.timezone(dt.timedelta(hours=5, minutes=30))))
+
+
+class CaseFileDialogTests(LauncherGuiFixture):
+    def test_settings_roundtrip_every_field_and_all_bindings(self):
+        from re4pc.settings import Settings, DEFAULTS
+        from re4pc.actions import NATIVE_CODES
+        from copy import deepcopy
+        path = self.folder / 'fixture-settings.json'
+        values = deepcopy(DEFAULTS)
+        values.update(sensitivity=2.3, controller_sensitivity=.8, invert_y=True, stick_dead_zone=.3,
+                      window_mode='fullscreen', window_width=1280, window_height=720,
+                      achievement_capture='both', achievement_clip_seconds=7)
+        # Include a comma key and an unbound action without colliding with defaults.
+        values['bindings']['keyboard'] = {action: [] for action in NATIVE_CODES}
+        values['bindings']['keyboard']['forward'] = [ord(','), ord('w')]
+        Settings.save(values, path)
+        with patch('re4pc.settings.Settings.load', return_value=Settings.load(path)):
+            view = self.app.settings()
+        self.window.update()
+        save_to_disk = Settings.save
+        with patch('re4pc.settings.Settings.save', side_effect=lambda data: save_to_disk(data, path)):
+            view.save()
+        expected = Settings.load(path)
+        for device in ('mouse', 'controller'):
+            values['bindings'][device] = {action: values['bindings'][device].get(action, []) for action in NATIVE_CODES}
+        self.assertEqual(expected, values)
+        self.assertFalse(view.window.winfo_exists())
+
+    def test_invalid_values_and_bindings_are_inline_and_do_not_write(self):
+        from re4pc.settings import Settings, DEFAULTS
+        path = self.folder / 'settings.json'
+        Settings.save(DEFAULTS, path)
+        original = path.read_bytes()
+        with patch('re4pc.settings.Settings.load', return_value=Settings.load(path)):
+            view = self.app.settings()
+        for key, invalid in (('window_width', '239'), ('sensitivity', 'nan'),
+                             ('achievement_clip_seconds', '16'), ('presentation_rate', '30'),
+                             (('keyboard', 'forward'), 'Tab'), (('mouse', 'forward'), 'Unknown'),
+                             (('controller', 'forward'), 'not-a-button')):
+            with self.subTest(field=key):
+                variables = view.binding_editors if isinstance(key, tuple) else view.editors
+                old = variables[key].get()
+                variables[key].set(invalid)
+                with patch('re4pc.settings.Settings.save') as save:
+                    view.save()
+                save.assert_not_called()
+                self.assertTrue(view.fields[key][2].cget('text'))
+                self.assertEqual(view.section, view.fields[key][0])
+                self.assertEqual(path.read_bytes(), original)
+                variables[key].set(old)
+        self.assertTrue(view.window.winfo_exists())
+        view.window.destroy()
+
+    def test_cancel_and_wm_close_confirm_only_actual_edits(self):
+        view = self.app.settings()
+        with patch('tkinter.messagebox.askyesno') as ask:
+            view.close()
+        ask.assert_not_called()
+        view = self.app.settings()
+        view.editors['window_width'].set('1440')
+        with patch('tkinter.messagebox.askyesno', return_value=False) as ask:
+            view.close()
+        ask.assert_called_once()
+        self.assertTrue(view.window.winfo_exists())
+        with patch('tkinter.messagebox.askyesno', return_value=True):
+            view.close()
+        self.assertFalse(view.window.winfo_exists())
+
+    def test_settings_focus_navigation_scroll_and_footer_at_minimum(self):
+        view = self.app.settings()
+        view.window.geometry('640x520')
+        self.window.update()
+        view.nav['Display & sensitivity'].focus_force()
+        view.nav['Display & sensitivity'].event_generate('<Down>')
+        self.window.update()
+        self.assertEqual(view.section, 'Achievements')
+        view.select('Keyboard')
+        self.window.update()
+        pane = view.panes['Keyboard']
+        keys = [key for key in view.binding_editors if key[0] == 'keyboard']
+        control = view.fields[keys[-1]][1]
+        control.focus_force()
+        self.window.update()
+        self.assertGreater(pane.canvas.yview()[0], 0)
+        self.assertLess(control.winfo_rooty(), pane.canvas.winfo_rooty() + pane.canvas.winfo_height())
+        for button in (view.save_button, view.cancel_button):
+            self.assertTrue(button.winfo_ismapped())
+            self.assertLessEqual(button.winfo_y() + button.winfo_height(), button.master.winfo_height())
+        view.window.destroy()
+        self.window.update()
+
+    def test_catalog_filters_refresh_retention_and_keyboard_selection(self):
+        from re4pc.achievements import ACHIEVEMENTS, AchievementStore, Progress
+        store = AchievementStore(self.folder)
+        store.update(Progress(story=(True,) + (False,) * 21))
+        view = self.app.achievements()
+        self.window.update()
+        self.assertEqual([item.id for item in view.visible], [item.id for item in ACHIEVEMENTS])
+        self.assertEqual(view.selected, 'village')
+        with patch.object(self.app, 'start') as start:
+            view.rows['village'].focus_force()
+            view.rows['village'].event_generate('<Down>')
+            self.window.update()
+            self.assertEqual(view.selected, 'gigante')
+            view.select('expert')
+            view.catalog.canvas.yview_moveto(.5)
+            self.window.update()
+            fraction = view.catalog.canvas.yview()[0]
+            view.refresh()
+            self.window.update()
+            self.assertEqual(view.selected, 'expert')
+            self.assertAlmostEqual(view.catalog.canvas.yview()[0], fraction, delta=.015)
+        start.assert_not_called()
+        view.filter.set('Unlocked')
+        self.window.update()
+        self.assertEqual([item.id for item in view.visible], ['village'])
+        self.assertEqual(view.selected, 'village')
+        view.search.set('no-such-title')
+        self.window.update()
+        self.assertEqual(view.visible, [])
+        self.assertIsNone(view.selected)
+        view.filter.set('Locked')
+        view.search.set('tune-up')
+        self.window.update()
+        self.assertEqual([item.id for item in view.visible], ['first_upgrade', 'tuned', 'expert'])
+        view.window.destroy()
+        self.assertEqual(view.art.images, {})
+        self.assertIsNone(view.job)
+
+    def test_responsive_achievement_panes_and_independent_scroll(self):
+        view = self.app.achievements()
+        for geometry, stacked in (('1040x760', False), ('600x420', True), ('900x600', False)):
+            view.window.geometry(geometry)
+            self.window.update()
+            self.assertEqual(view.mode, stacked)
+            self.assertEqual(int(view.detail.frame.grid_info()['row']), 1 if stacked else 0)
+            for button in (view.close_button, view.refresh_button):
+                self.assertTrue(button.winfo_ismapped())
+                self.assertLessEqual(button.winfo_rooty() + button.winfo_height(),
+                                     view.window.winfo_rooty() + view.window.winfo_height())
+            self.assertGreater(view.detail.canvas.winfo_height(), 65)
+            self.assertTrue(view.detail.frame.winfo_ismapped())
+            self.assertGreater(view.catalog.frame.winfo_width(), view.body.winfo_width() * (.8 if stacked else .4))
+        view.window.geometry('600x420')
+        self.window.update()
+        before = view.catalog.canvas.yview()
+        view.detail.canvas.event_generate('<Button-5>')
+        self.window.update()
+        self.assertEqual(view.catalog.canvas.yview(), before)
+        self.assertGreater(view.detail.canvas.yview()[0], 0)
+        view.window.destroy()
+
+    def test_missing_capture_corrupt_record_and_fallbacks(self):
+        from re4pc.achievements import AchievementStore, Progress, ACHIEVEMENTS
+        from re4pc.launcher_ui import AchievementArtwork
+        import tkinter as tk
+        store = AchievementStore(self.folder)
+        store.update(Progress(story=(True,) + (False,) * 21))
+        store.attach_media(['village'], {'image': 'unlock-missing.png', 'clip': 'unlock-missing.mp4'})
+        view = self.app.achievements()
+        self.window.update()
+        def texts(widget):
+            from tkinter import ttk
+            return widget_texts(widget)
+        self.assertTrue(any('missing' in text for text in texts(view.detail.content)))
+        self.assertTrue(any('detection timestamp' in text for text in texts(view.detail.content)))
+        with patch('tkinter.messagebox.showerror') as error:
+            view.open_capture('unlock-missing.png')
+        error.assert_called_once()
+        art = AchievementArtwork(self.folder / 'no art')
+        canvas = tk.Canvas(view.window, width=192, height=192)
+        for item in ACHIEVEMENTS:
+            art.draw(canvas, item, 192)
+            self.assertTrue(canvas.find_all())
+        self.assertEqual(len(art.images), len(ACHIEVEMENTS))
+        store.path.write_bytes(b'corrupt record')
+        view.refresh()
+        self.window.update()
+        self.assertIn('Could not read', view.summary.get())
+        self.assertEqual(view.rows, {})
+        self.assertIsNone(view.selected)
+        view.window.destroy()
+
+    def test_clip_open_uses_safe_path_without_game_launch(self):
+        from re4pc.achievement_media import media_path
+        from re4pc.achievements import AchievementStore, Progress
+        media = self.folder / 'achievement-media'
+        media.mkdir(parents=True)
+        (media / 'unlock-fixture.mp4').write_bytes(b'synthetic fixture; external opener mocked')
+        store = AchievementStore(self.folder)
+        store.update(Progress(story=(True,) + (False,) * 21))
+        store.attach_media(['village'], {'clip': 'unlock-fixture.mp4'})
+        view = self.app.achievements()
+        with patch('subprocess.Popen') as opened, patch.object(self.app, 'start') as start:
+            view.open_capture('unlock-fixture.mp4')
+        self.assertEqual(opened.call_args.args[0], ['xdg-open', str(media_path(self.folder, 'unlock-fixture.mp4'))])
+        start.assert_not_called()
+        with patch('tkinter.messagebox.showerror') as error, patch('subprocess.Popen') as opened:
+            view.open_capture('../escape.mp4')
+        error.assert_called_once()
+        opened.assert_not_called()
+        view.window.destroy()
+
+    def test_every_catalog_entry_locked_unlocked_and_artwork_cache(self):
+        from re4pc.achievements import ACHIEVEMENTS, AchievementStore, Progress
+        from tkinter import ttk
+        store = AchievementStore(self.folder)
+        stamp = 1791833528000000000
+        store._write(Progress(), {item.id: stamp for item in ACHIEVEMENTS})
+        view = self.app.achievements()
+        self.window.update()
+        for item in ACHIEVEMENTS:
+            view.select(item.id)
+            labels = widget_texts(view.detail.content)
+            self.assertIn('EARNED', labels)
+            self.assertIn(item.title, labels)
+            self.assertTrue(any(text.startswith('Completion recorded:') for text in labels))
+            self.assertIsNotNone(view.art.images[(item.id, 72)])
+            self.assertTrue(any(key[0] == item.id and key[1] >= 192 and image is not None for key, image in view.art.images.items()))
+        photos = dict(view.art.images)
+        store._write(Progress(), {})
+        view.refresh()
+        self.window.update()
+        for item in ACHIEVEMENTS:
+            view.select(item.id)
+            labels = widget_texts(view.detail.content)
+            self.assertIn('LOCKED', labels)
+            self.assertIn(item.description, labels)
+            self.assertFalse(any(text.startswith('Completion recorded:') for text in labels))
+            self.assertIs(view.art.images[(item.id, 72)], photos[(item.id, 72)])
+            for key in photos:
+                if key[0] == item.id:
+                    self.assertIs(view.art.images[key], photos[key])
+        view.window.destroy()
+        self.assertEqual(view.art.images, {})
+
+    def test_launcher_close_checks_unsaved_settings(self):
+        view = self.app.settings()
+        view.editors['window_height'].set('720')
+        with patch('tkinter.messagebox.askyesno', return_value=False) as ask:
+            self.app.close()
+        ask.assert_called_once()
+        self.assertTrue(self.window.winfo_exists())
+        self.assertTrue(view.window.winfo_exists())
+        view.window.destroy()
+
+
+class FinalCaseFileTests(LauncherGuiFixture):
+    def backup_view(self, items=None):
+        import json
+        with patch.object(self.app, 'start'):
+            view = self.app.backups()
+        if items is None:
+            items = [{'id': str(index)*64, 'created_ns': 1791822484000000000-index*60000000000,
+                      'label': label, 'files': {'slot': {'bytes': 3}}}
+                     for index, label in enumerate(('manual', 'saved', 'before-save'))]
+        self.app.last_output = json.dumps(items)
+        view.load(0)
+        self.window.update()
+        return view, items
+
+    def test_sliders_sync_entries_keyboard_and_invalid_input_remains_visible(self):
+        view = self.app.settings()
+        self.window.update()
+        for key, value in (('sensitivity', 2.3), ('controller_sensitivity', 1.8), ('stick_dead_zone', .32)):
+            slider = view.sliders[key]
+            slider.set(value)
+            self.assertEqual(float(view.editors[key].get()), value)
+            view.editors[key].set(str(value+.1))
+            self.assertAlmostEqual(slider.value(), value+.1)
+            slider.focus_force()
+            slider.event_generate('<Right>')
+            self.window.update()
+            self.assertGreater(float(view.editors[key].get()), value+.1)
+        view.editors['sensitivity'].set('nan')
+        with patch('re4pc.settings.Settings.save') as save:
+            view.save()
+        save.assert_not_called()
+        self.assertEqual(view.editors['sensitivity'].get(), 'nan')
+        self.assertTrue(view.fields['sensitivity'][2].winfo_ismapped())
+        view.window.destroy()
+
+    def test_backup_keyboard_selection_retention_empty_error_and_busy_states(self):
+        view, items = self.backup_view()
+        self.assertEqual(view.selected, items[0]['id'])
+        view.rows[items[0]['id']].focus_force()
+        view.rows[items[0]['id']].event_generate('<Down>')
+        self.window.update()
+        self.assertEqual(view.selected, items[1]['id'])
+        view.load(0)
+        self.window.update()
+        self.assertEqual(view.selected, items[1]['id'])
+        self.assertIn('Game save', widget_texts(view.detail.content))
+        self.app.child = Mock()
+        view.busy_changed()
+        for button in (view.create_button, view.import_button, view.export_button, view.restore_button, view.delete_button):
+            self.assertTrue(button.instate(['disabled']))
+        with patch.object(self.app, 'start') as start:
+            view.create()
+            view.delete()
+        start.assert_not_called()
+        self.app.child = None
+        view.busy_changed()
+        self.assertFalse(view.export_button.instate(['disabled']))
+        self.app.last_output = 'not json'
+        view.load(0)
+        self.assertIn('Could not read', view.notice)
+        self.assertEqual(view.selected, items[1]['id'])
+        self.app.last_output = '[]'
+        view.load(0)
+        self.assertIsNone(view.selected)
+        self.assertTrue(view.restore_button.instate(['disabled']))
+        self.assertIn('No snapshots yet', view.notice)
+        view.window.destroy()
+
+    def test_backup_routes_preserve_root_and_confirmation_and_refresh_on_success(self):
+        view, items = self.backup_view()
+        identity = view.selected
+        root = self.app.game_path()
+        self.app.game.set('/another installation')
+        with patch.object(self.app, 'start') as start:
+            view.create()
+            self.assertEqual(start.call_args.args, ('backup', '--game', root))
+            with patch('tkinter.filedialog.askopenfilename', return_value='/tmp/import with spaces.zip'):
+                view.import_backup()
+            self.assertEqual(start.call_args.args, ('import-backup', '/tmp/import with spaces.zip', '--game', root))
+            with patch('tkinter.filedialog.asksaveasfilename', return_value='/tmp/export with spaces.zip'):
+                view.export()
+            self.assertEqual(start.call_args.args, ('export-backup', identity, '/tmp/export with spaces.zip', '--game', root))
+            for method, command in ((view.restore, 'restore-backup'), (view.delete, 'delete-backup')):
+                start.reset_mock()
+                with patch('tkinter.messagebox.askyesno', return_value=False):
+                    method()
+                start.assert_not_called()
+                with patch('tkinter.messagebox.askyesno', return_value=True):
+                    method()
+                self.assertEqual(start.call_args.args, (command, identity, '--game', root))
+                callback = start.call_args.kwargs['on_complete']
+                callback(1)
+                self.assertIn('failed', view.notice)
+                callback(0)
+                self.assertEqual(start.call_args.args, ('backups', '--game', root))
+        view.window.destroy()
+
+    def test_three_windows_keep_back_and_footer_actions_visible_at_minimum(self):
+        with patch.object(self.app, 'start'):
+            backup = self.app.backups()
+        views = (self.app.settings(), self.app.achievements(), backup)
+        for view in views:
+            width, height = (600, 420) if view is views[1] else (640, 520)
+            view.window.geometry(f'{width}x{height}')
+            self.window.update()
+            for button, _ in view.chrome.footer_buttons:
+                self.assertTrue(button.winfo_ismapped())
+                self.assertGreater(len(button.find_all()), 0)
+                self.assertLess(button.winfo_y()+button.winfo_height(), height)
+            self.assertTrue(view.chrome.back.winfo_ismapped())
+            if view is backup:
+                for button, pane in ((view.create_button, view.catalog), (view.import_button, view.catalog),
+                                     (view.export_button, view.detail), (view.restore_button, view.detail),
+                                     (view.delete_button, view.detail)):
+                    # No selected row in this fixture; empty-state detail actions
+                    # are disabled, while creating and importing remain visible.
+                    if pane is view.catalog:
+                        self.assertTrue(button.winfo_ismapped())
+                        self.assertLessEqual(button.winfo_rooty()+button.winfo_height(),
+                                             pane.canvas.winfo_rooty()+pane.canvas.winfo_height())
+            view.window.destroy()
+
+    def test_selected_backup_actions_are_visible_at_minimum(self):
+        view, _ = self.backup_view()
+        view.window.geometry('640x520')
+        self.window.update()
+        for button in (view.export_button, view.restore_button, view.delete_button):
+            self.assertTrue(button.winfo_ismapped())
+            self.assertLessEqual(button.winfo_rooty()+button.winfo_height(),
+                                 view.detail.canvas.winfo_rooty()+view.detail.canvas.winfo_height())
+        view.window.destroy()

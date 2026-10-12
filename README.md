@@ -8,7 +8,7 @@ Play the original ARM32 Android engine in a Linux desktop window with mouse and 
 
 You supply the APK. The repository contains the host, importer, synthetic tests and documentation; it never downloads the game. Imported libraries, resources, saves and captures stay outside the checkout. No Android installation is required.
 
-[Setup](#setup-and-play) · [Linux app and desktop shortcut](#linux-app-and-desktop-shortcut) · [Controls](#controls) · [How the port was made](#how-the-port-was-made) · [How it works](#how-it-works) · [Español](#español)
+[Setup](#setup-and-play) · [Graphical launcher](#graphical-launcher) · [Desktop shortcut](#linux-app-and-desktop-shortcut) · [Portable builds](#portable-builds) · [Controls](#controls) · [Save backups](#save-backups) · [Development](#development-and-testing) · [Español](#español)
 
 ## Gameplay gallery
 
@@ -21,28 +21,60 @@ Reference screenshots of the original **Resident Evil 4: Mobile Edition**, hoste
 
 ## Status and limitations
 
-Linux x86_64 is the first target. Shared guest memory requires a mapping below 4 GiB, and the renderer requires desktop OpenGL compatibility functions. Windows, macOS, ARM64 Linux, controllers, resizing and fullscreen are not implemented.
+Linux x86_64 is the target. Shared guest memory requires a mapping below 4 GiB, and the renderer requires desktop OpenGL compatibility functions. Controllers, resizing, HiDPI and borderless fullscreen are implemented. Windows, macOS and ARM64 Linux are outside this release.
 
 The title, English menus, original video and audio, and village gameplay have been exercised in visible desktop tests. ARM translation and Python import calls impose substantial overhead, especially during level loading; this is not yet a performance-equivalent native x86 port. A full campaign playthrough has not been validated. See [VALIDATION.md](VALIDATION.md) for the recorded checks and limitations.
 
+Gameplay and presentation run at **20 Hz**, matching the original engine's mission clock. Higher rates also speed up game logic, so 30/60 FPS modes are unavailable. Controller checks use SDL virtual devices; physical controllers and vendor graphics drivers still need validation. The latest repacked AppImage and portable archive also need fresh clean-OS GUI/engine qualification before a fully validated binary release.
+
 ## Setup and play
 
-Requires Linux **x86_64**, Python 3.10 or later with `venv`, a C compiler, `pkg-config`, SDL2 development headers, desktop OpenGL with a compatibility profile, and FFmpeg. Run it from your desktop session, with your normal display and audio device available.
+Source setup requires Linux **x86_64**, Python 3.10 or later with `venv` and Tk, a C compiler, `pkg-config`, SDL2 development headers, desktop OpenGL with a compatibility profile, and FFmpeg. Portable releases bundle the application dependencies and need the host's graphics drivers. Run from your desktop session with your normal display and audio device available.
 
-On Arch Linux, install `python gcc pkgconf sdl2-compat ffmpeg mesa`. On Debian/Ubuntu, install `python3-venv build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg`.
+On Arch Linux, install `python tk gcc pkgconf sdl2-compat ffmpeg mesa`. On Debian/Ubuntu, install `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg`.
 
 ```bash
 git clone https://github.com/aurelioochoa/re4mepc.git
 cd re4mepc
 ./setup.sh
+./re4pc.sh launcher
+```
+
+Choose **Import APK** in the launcher, select your compatible APK and an unused destination folder, then choose **Play** when import completes. To import and run directly from the command line instead:
+
+```bash
 ./re4pc.sh import '/path/to/Resident Evil 4.apk'
 ./re4pc.sh check
 ./re4pc.sh run
 ```
 
+## Graphical launcher
+
+![The RE4 Mobile case-file launcher with an aged parchment, distressed red 4, pinned village photograph, Play button and native installation controls](docs/launcher-preview.png)
+
+Open the launcher with `./re4pc.sh launcher` or `make launcher`. The native desktop UI pairs an aged parchment case file with a pinned village photograph, a distressed red numeral and a textured Play button. Top navigation and the full settings and backup rows support mouse and keyboard activation. Progress and Stop appear during operations. [Artwork prompts and provenance](docs/launcher-assets.md) document the generated assets.
+
+1. **Import APK** restores your game into a new folder. The launcher suggests an unused destination and switches to it only after import succeeds.
+2. **Browse** selects an existing imported installation. Play becomes available when the expected files are present; the engine performs full validation when it starts.
+3. **Play** opens the game window. The launcher shows the running state and provides **Stop** to end the active operation.
+
+**Settings & controls** configures display options, sensitivity and keyboard, mouse or controller bindings for the next game launch. Sliders and numeric fields stay synchronized; each section scrolls so every binding remains reachable. **Save backups** creates snapshots and imports, exports, restores or deletes selected snapshots while the game is stopped. Restore keeps a recovery copy; deleting a snapshot preserves current saves. The [case-file windows](docs/dialogs.md) share generated parchment, seals and inventory artwork and support keyboard navigation at smaller sizes. **Diagnostics** starts a game session with profile, statistics and runtime log files.
+
+**Achievements** shows 21 local achievements with icons, progress, weapon purchase/tune-up goals and a Platinum for earning all other achievements. Saved mission completion and S ranks award them automatically; play once to recover progress from existing saves. **Settings & controls → Achievements** configures unlock screenshots or silent replay clips. Captures appear in the achievement gallery; records are included in save backups, while media stays in the installation's `achievement-media` folder. See the [achievement list, captures and historical research](docs/achievements.md).
+
+The main window has no console panel. Progress, completion and failures appear in its status area; **View logs** opens optional session output in a separate window. Applications-menu and desktop shortcuts open without a terminal. Direct CLI runs continue to print terminal logs.
+
+Use `./re4pc.sh launcher --game '/external/re4/game'` for a custom installation. See [desktop and release usage](docs/desktop-release.md) for save locations, diagnostics and standalone packages.
+
 ## Linux app and desktop shortcut
 
-After setup and importing your game, build the native helpers and install an executable launcher and applications-menu entry with the APK's original icon:
+After setup, install an executable launcher and applications-menu entry with the generated application icon:
+
+```bash
+make desktop
+```
+
+An existing installed icon is preserved. To use the APK's original icon instead:
 
 ```bash
 make desktop DESKTOP_ARGS="--apk '/path/to/Resident Evil 4.apk'"
@@ -57,14 +89,14 @@ make desktop DESKTOP_ARGS="--icon '/path/to/re4-cover.png'"
 Launch **Resident Evil 4 Mobile** from your applications menu, or run `~/.local/bin/re4mepc` from any directory. To also place a double-click shortcut on your desktop:
 
 ```bash
-make desktop DESKTOP_ARGS="--desktop --apk '/path/to/Resident Evil 4.apk'"
+make desktop DESKTOP_ARGS="--desktop"
 ```
 
 The desktop folder follows `xdg-user-dir DESKTOP`, including localized folder names. Your desktop may require **Allow Launching** or **Trust this launcher** on first use. If no desktop folder is configured, omit `--desktop` to use the applications menu.
 
-This installs a small executable script that runs the host from this checkout and its `.venv`; keep both in place. It is not a standalone binary. A terminal opens alongside the game for status and errors, and runtime logs append to `~/.local/state/re4mepc/logs/desktop.log`. Launch options still work, for example `~/.local/bin/re4mepc --skip-videos`.
+The source installer opens the [graphical launcher](#graphical-launcher) from this checkout and its `.venv`; keep both in place. Reopening an installed source launcher picks up UI changes from the checkout. Standalone AppImage and portable builds require a fresh `make package` build to include application changes; see [release usage](docs/desktop-release.md).
 
-The menu entry and a byte-for-byte copy of the chosen PNG are stored under `~/.local/share/applications/re4mepc.desktop` and `~/.local/share/re4mepc/icons/re4mepc.png`, respecting `XDG_DATA_HOME`. Logs respect `XDG_STATE_HOME`. Icons are kept locally and are never added to the repository. Subsequent `make desktop` calls reuse the installed icon. If you move the checkout, run the installer again at its new location. For a custom game location, include `--game /external/re4/game` in `DESKTOP_ARGS`.
+The menu entry and a byte-for-byte copy of the chosen PNG are stored under `~/.local/share/applications/re4mepc.desktop` and `~/.local/share/re4mepc/icons/re4mepc.png`, respecting `XDG_DATA_HOME`. Diagnostic files respect `XDG_STATE_HOME`. APK-derived and custom icons stay local; generated launcher assets are included in the repository. Subsequent `make desktop` calls reuse the installed icon unless you specify `--apk` or `--icon`. If you move the checkout, run the installer again at its new location. For a custom game location, include `--game /external/re4/game` in `DESKTOP_ARGS`.
 
 ```bash
 make uninstall-desktop                         # Remove menu entry, executable and icon
@@ -72,6 +104,33 @@ make uninstall-desktop DESKTOP_ARGS="--desktop" # Also remove the desktop shortc
 ```
 
 Uninstalling the launcher preserves the checkout, imported game, saves and logs.
+
+## Portable builds
+
+Build a standalone Linux x86_64 AppImage and portable archive from source with Docker available:
+
+```bash
+./setup.sh
+make package
+```
+
+The Ubuntu 22.04 builder bundles Python/Tk, SDL2, FFmpeg, Python dependencies and the native helpers. Initial packaging needs network access. The outputs are `dist/re4mepc-linux-x86_64.AppImage`, `dist/re4mepc-linux-x86_64.tar.gz` and `dist/SHA256SUMS`. They contain the host and launcher; import your own compatible APK on first use.
+
+To launch a locally built AppImage:
+
+```bash
+chmod +x dist/re4mepc-linux-x86_64.AppImage
+./dist/re4mepc-linux-x86_64.AppImage
+```
+
+If FUSE is unavailable, append `--appimage-extract-and-run`. For the portable archive:
+
+```bash
+tar -xzf dist/re4mepc-linux-x86_64.tar.gz -C /path/to/extract
+/path/to/extract/re4mepc/AppRun
+```
+
+Both formats open the launcher with no arguments and accept the same CLI commands as `./re4pc.sh`. They use external XDG locations for game data, settings and backups, so replacing application files preserves your installation. Host graphics drivers and system runtime libraries remain required. See [package requirements and validation](docs/desktop-release.md) and [current package evidence](VALIDATION.md#package-evidence-and-remaining-release-gate).
 
 ## Controls
 
@@ -90,9 +149,15 @@ F12 closes the window. PC gameplay controls are enabled by default; the cursor i
 | E / Enter / Space | Context action; Enter / Space advance story text |
 | Escape | Status menu |
 | Tab | Release / capture cursor; click to recapture |
+| F3 | Toggle diagnostics |
+| Alt+Enter | Toggle borderless fullscreen |
 | F12 | Close the host |
 
-Menus use normal mouse clicks. Mobile confirmation sliders require dragging the arrow across the button. For the original mouse-as-touch controls, launch `./re4pc.sh run --controls touch`.
+To pick up ammo or another ground item, press Space to select it, then press Space again to take it.
+
+PC mode hides the movement pad and gun, knife, and lower-weapon touch buttons. Contextual actions (pickups, doors, ladders, and other interactions), companion commands, scope controls, status displays, and menus remain visible.
+
+Menus use normal mouse clicks. Mobile confirmation sliders require dragging the arrow across the button. For the original mouse-as-touch controls and their full interface, launch `./re4pc.sh run --controls touch`.
 
 Mouse look uses 0.15 degrees per pixel, with vertical movement limited to
 45 degrees up or down. Holding and releasing aim preserves the vertical look
@@ -101,6 +166,37 @@ game window to recapture it.
 
 Un-aimed mouse look rotates the third-person camera around its native target.
 The engine checks walls against that same camera orbit before rendering.
+
+SDL2 controllers use these default bindings:
+
+| Controller input | Action |
+| --- | --- |
+| Left stick | Forward/backward and tank turns |
+| Right stick | Look; move the touch cursor in menus |
+| Left / right trigger | Aim / fire |
+| A | Context action; hold to drag the menu cursor |
+| X / Y | Reload / knife |
+| Start | Status menu |
+| D-pad | Menu navigation |
+| B | Native menu confirmation |
+
+Use **Settings & controls** to remap inputs and adjust mouse sensitivity, controller sensitivity, invert Y and stick dead zone. Tab, F3 and F12 are reserved. Explicit `run` options override saved settings, for example `./re4pc.sh run --window-mode fullscreen --controller-sensitivity 2`. Resizing and HiDPI preserve the original 800 × 480 image with letterboxing.
+
+## Save backups
+
+The host snapshots the complete save set before startup and around native saves, retaining the ten latest distinct sets. **Save backups** in the launcher supports manual snapshots, import, export, restore and deletion while the game is stopped. Restore verifies file hashes and preserves a recovery copy of your current saves.
+
+The same operations are available in the CLI:
+
+```bash
+./re4pc.sh backup
+./re4pc.sh backups
+./re4pc.sh export-backup SNAPSHOT_ID '/path/to/save-backup.zip'
+./re4pc.sh import-backup '/path/to/save-backup.zip'
+./re4pc.sh restore-backup SNAPSHOT_ID
+```
+
+Replace `SNAPSHOT_ID` with an ID from `backups`; add `--game /external/re4/game` for another installation. Snapshots include achievement records but exclude imported resources, caches and achievement media. Copy the installation's `achievement-media/` folder separately when moving captures. See [save storage and recovery](docs/desktop-release.md).
 
 ## How the port was made
 
@@ -137,7 +233,9 @@ The engine sees 32-bit addresses. The host maps a 256 MiB region below 4 GiB int
 
 When the engine calls an imported function, an ARM trampoline routes that call to a Python or native C implementation. Rendering calls reach desktop OpenGL; file calls operate on the imported data and save directories; JNI media requests reach the FFmpeg/SDL2 media layer. The host then returns control to the ARM engine. Android's Java application and operating system are replaced by this limited set of services.
 
-The frame loop polls desktop events, applies queued input and camera changes, calls `native_onDrawFrame`, updates movie playback and swaps the window. It targets 45 frames per second when processing allows. ARM execution and host callbacks still cost time, so loading and gameplay speed depend on this compatibility layer.
+The frame loop polls desktop events, applies queued input and camera changes, calls `native_onDrawFrame`, updates audio/movie playback and swaps the window. It caps updates at **20 FPS**, matching the engine's mission clock (20 updates per game second). Each draw advances game logic, so uncapping this engine also accelerates movement, combat and timers. The previous 45 FPS target could run gameplay too fast.
+
+Frame pacing uses absolute deadlines to avoid accumulating sleep drift, and discards missed deadlines after loading stalls so gameplay does not rush to catch up. FFmpeg audio decoding and movie-process cleanup run on workers; first-use sounds play once ready, and stopping or replacing a sound cancels its pending playback. Decoded audio is cached locally, including movie audio. Register arguments are read in batches and paletted textures expand through Pillow's native routines. Initial resource loading still executes inside the ARM engine and can take several seconds; sustained engine frames above 50 ms still slow gameplay. Higher rendering rates require separating and auditing the original engine's update and draw paths.
 
 | Responsibility | Source |
 | --- | --- |
@@ -147,8 +245,14 @@ The frame loop polls desktop events, applies queued input and camera changes, ca
 | C runtime, files and ARM math helpers | [bionic.py](re4pc/bionic.py), [eabi.py](re4pc/eabi.py) |
 | GLES rendering and texture conversion | [graphics.py](re4pc/graphics.py), [textures.py](re4pc/textures.py) |
 | Keyboard, touch routing and gameplay mouse controls | [input.py](re4pc/input.py), [pc_controls.py](re4pc/pc_controls.py) |
+| Native game cadence and frame pacing | [timing.py](re4pc/timing.py) |
 | FFmpeg audio/movie decoding and SDL2 mixing | [media.py](re4pc/media.py), [audio.c](native/audio.c) |
 | Fast memory imports | [fast.py](re4pc/fast.py), [fast.c](native/fast.c) |
+| Desktop launcher and settings | [launcher.py](re4pc/launcher.py), [settings.py](re4pc/settings.py) |
+| Named actions and controller routing | [actions.py](re4pc/actions.py), [controllers.py](re4pc/controllers.py) |
+| Save snapshots and native save boundaries | [backups.py](re4pc/backups.py), [save_boundary.py](re4pc/save_boundary.py) |
+| Local achievements and unlock captures | [achievements.py](re4pc/achievements.py), [achievement_media.py](re4pc/achievement_media.py) |
+| Runtime diagnostics and portable packaging | [diagnostics.py](re4pc/diagnostics.py), [packaging.py](re4pc/packaging.py) |
 
 ## Data locations and supported engine
 
@@ -161,11 +265,15 @@ symlinks, are never overwritten.
 | --- | --- |
 | Imported libraries and resources | `~/.local/share/re4mepc/game` |
 | User saves | `~/.local/share/re4mepc/game/saves` |
+| Achievement screenshots and clips | `~/.local/share/re4mepc/game/achievement-media` |
+| Desktop settings | `~/.config/re4mepc/settings.json` |
+| Save snapshots | `~/.local/state/re4mepc/backups/<installation-path-hash>` |
 | Decoded audio cache | `~/.local/share/re4mepc/game/cache/audio` |
+| Experimental converted-texture cache | `~/.cache/re4mepc/textures` |
 | Test game copies, captures and measurements | `~/.local/state/re4mepc/logs` |
 
-Absolute `XDG_DATA_HOME` and `XDG_STATE_HOME` values replace
-`~/.local/share` and `~/.local/state`. Empty or relative values use the defaults.
+Absolute `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` values replace
+`~/.local/share`, `~/.config`, `~/.local/state` and `~/.cache`, respectively. Empty or relative values use the defaults.
 Explicit paths remain available:
 
 ```bash
@@ -199,6 +307,7 @@ Run `make` to list the available commands. The synthetic suite needs no APK; tes
 | Command | Purpose |
 | --- | --- |
 | `make build` | Compile the native memory and audio helpers |
+| `make launcher` | Open the graphical launcher with optional logs |
 | `make desktop` | Build helpers and install the per-user executable and app shortcut |
 | `make uninstall-desktop` | Remove the installed launcher and icon; preserve game data |
 | `make run` / `make dev` | Launch the game with live terminal logs |
@@ -207,6 +316,7 @@ Run `make` to list the available commands. The synthetic suite needs no APK; tes
 | `make check-game` | Validate the imported libraries and resources |
 | `make visible-test` | Exercise startup, video, menus, rendering, audio and save/load |
 | `make controls-test` | Exercise gameplay controls and camera behavior |
+| `make package` | Build the Linux x86_64 AppImage and portable archive |
 | `make clean` / `make distclean` | Remove build caches / also remove `.venv` |
 
 <details>
@@ -240,6 +350,14 @@ To capture a bounded run and its measurements:
 ```bash
 ./re4pc.sh run --frames 600 --screenshot /tmp/frame.png --stats /tmp/stats.json
 ```
+
+Statistics include the native update rate (`engine_hz`), missed frame deadlines
+(`frame_overruns`), elapsed run time, and mean/maximum engine frame time.
+F3 toggles the in-game diagnostics overlay. `--profile /tmp/profile.jsonl`
+records detailed timing. Converted texture caching is experimental and disabled
+by default; use `--cache` to compare it with the default `--no-cache` path.
+See [metrics and benchmark definitions](docs/diagnostics.md) and the
+[rendering audit](docs/render-audit.md) for measurement limits and the 20 Hz gate.
 
 </details>
 
@@ -305,7 +423,7 @@ CI installs host dependencies, builds the C helpers, runs synthetic tests and
 audits the complete fetched history. It needs no APK, game saves or game
 captures. Binary distribution packages containing the game are not produced.
 
-The README banner is generated fan artwork at `docs/readme-banner.png`. Its exact path and reviewed SHA-256 are included in the publication allowlist; altered or additional binary images are rejected. The previous SVG remains available at `docs/readme-banner.svg`. References and generation prompts are recorded in [Banner artwork](docs/banner-artwork.md). The gameplay gallery links to external reference screenshots; game assets and local captures remain outside the repository.
+The publication allowlist records exact paths and reviewed SHA-256 values for the generated README banner, launcher artwork and host-only launcher, settings and achievements previews. Altered or unreviewed binary images are rejected. The previous banner SVG remains at `docs/readme-banner.svg`. References and prompts are recorded in [Banner artwork](docs/banner-artwork.md) and [Launcher artwork](docs/launcher-assets.md). The gameplay gallery links to external reference screenshots; imported game assets and gameplay captures stay outside the repository.
 
 </details>
 
@@ -319,21 +437,35 @@ Debes proporcionar tu propio APK compatible. El proyecto no descarga ni incluye 
 
 ### Instalación y ejecución
 
-Necesitas Linux **x86_64**, Python 3.10 o posterior con `venv`, un compilador de C, `pkg-config`, las cabeceras de desarrollo de SDL2, OpenGL de escritorio con perfil de compatibilidad y FFmpeg. Ejecuta el juego desde una sesión de escritorio con pantalla y audio disponibles.
+Necesitas Linux **x86_64**, Python 3.10 o posterior con `venv` y Tk, un compilador de C, `pkg-config`, las cabeceras de desarrollo de SDL2, OpenGL de escritorio con perfil de compatibilidad y FFmpeg. Ejecuta el juego desde una sesión de escritorio con pantalla y audio disponibles.
 
-- **Arch Linux:** instala `python gcc pkgconf sdl2-compat ffmpeg mesa`.
-- **Debian/Ubuntu:** instala `python3-venv build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg`.
+- **Arch Linux:** instala `python tk gcc pkgconf sdl2-compat ffmpeg mesa`.
+- **Debian/Ubuntu:** instala `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg`.
 
 ```bash
 git clone https://github.com/aurelioochoa/re4mepc.git
 cd re4mepc
 ./setup.sh
+./re4pc.sh launcher
+```
+
+En el launcher, elige **Import APK**, selecciona tu APK y una carpeta nueva, y pulsa **Play** cuando termine la importación. **Browse** permite elegir una instalación existente. Para importar y ejecutar desde la terminal:
+
+```bash
 ./re4pc.sh import '/ruta/a/Resident Evil 4.apk'
 ./re4pc.sh check
 ./re4pc.sh run
 ```
 
-Para crear una aplicación en el menú de Linux con el icono original del APK, ejecuta `make desktop DESKTOP_ARGS="--apk '/ruta/al/juego.apk'"` después de instalar e importar el juego. Añade `--desktop` para crear también un acceso directo en el escritorio, o usa `--icon '/ruta/a/portada.png'` para elegir una imagen PNG. El ejecutable `~/.local/bin/re4mepc` utiliza este repositorio y su `.venv`; conserva ambos en su ubicación. Para quitar los accesos e icono, usa `make uninstall-desktop DESKTOP_ARGS="--desktop"`; el juego y las partidas se conservan.
+El launcher presenta un expediente con pergamino, una fotografía de la aldea e ilustraciones generadas. **View logs** abre los registros de la sesión cuando los necesitas. **Settings & controls** configura la pantalla, las sensibilidades y los controles de teclado, ratón y mando; **Save backups** gestiona las partidas con el juego detenido; **Diagnostics** inicia una sesión con archivos de diagnóstico. El progreso y los errores aparecen en la ventana principal.
+
+**Achievements** muestra 21 logros locales con progreso, fechas, objetivos de compra y mejora de armas y un Platino al obtener los otros 20. Los logros de misiones y rangos se recuperan al cargar partidas existentes; las compras y mejoras cuentan desde que este launcher las observa. En **Settings & controls → Achievements** puedes elegir capturas de pantalla o clips silenciosos. Las copias de seguridad incluyen los registros, pero los archivos de `achievement-media/` se deben copiar aparte. Consulta la [lista de logros](docs/achievements.md).
+
+Ejecuta `make desktop` para crear una aplicación en el menú de Linux con el icono generado, o conservar el icono ya instalado. Usa `make desktop DESKTOP_ARGS="--apk '/ruta/al/juego.apk'"` para elegir el icono original del APK, o `--icon '/ruta/a/portada.png'` para usar otra imagen PNG. Añade `--desktop` para crear también un acceso directo en el escritorio. Estos accesos abren el launcher sin una terminal.
+
+El ejecutable `~/.local/bin/re4mepc` utiliza este repositorio y su `.venv`; conserva ambos en su ubicación. Para quitar los accesos e icono, usa `make uninstall-desktop DESKTOP_ARGS="--desktop"`; el juego y las partidas se conservan.
+
+`make package` crea un AppImage y un archivo portátil para Linux x86_64 con Docker y una base Ubuntu 22.04. Incluyen las dependencias de la aplicación; debes importar tu propio APK. Ambos abren el launcher sin argumentos y conservan los datos externos al actualizar. Los paquetes recompuestos más recientes aún necesitan repetir la validación gráfica en sistemas limpios. Consulta [Portable builds](#portable-builds) y la [documentación de distribución](docs/desktop-release.md).
 
 La importación verifica las dos bibliotecas y todos los recursos necesarios antes de instalar los datos. Solo se admite el motor con los hashes indicados en [Data locations and supported engine](#data-locations-and-supported-engine). Un APK reempaquetado puede funcionar si conserva esas bibliotecas y los recursos completos. El importador no sobrescribe destinos existentes, aunque estén vacíos.
 
@@ -352,9 +484,13 @@ La importación verifica las dos bibliotecas y todos los recursos necesarios ant
 | E / Enter / Espacio | Acción contextual; Enter / Espacio avanzan el texto |
 | Escape | Menú de estado |
 | Tab | Liberar / capturar el cursor; hacer clic para capturarlo de nuevo |
+| F3 | Mostrar / ocultar los diagnósticos |
+| Alt+Enter | Alternar la pantalla completa sin bordes |
 | F12 | Cerrar la ventana |
 
 Los menús usan clics normales. Para confirmar con un deslizador móvil, arrastra la flecha de un extremo al otro. Enter, Espacio, Escape o un clic omiten el vídeo en reproducción. Al perder el foco, la ventana libera las teclas y el cursor.
+
+Para recoger munición u otro objeto del suelo, pulsa Espacio para seleccionarlo y vuelve a pulsarlo para recogerlo. Los mandos usan el stick izquierdo para moverse y girar, el derecho para mirar, los gatillos para apuntar y disparar, A para interactuar, X para recargar, Y para el cuchillo y Start para el menú de estado. En los menús, mueve el cursor con el stick derecho y mantén A para arrastrar; B confirma. Puedes cambiar las asignaciones en **Settings & controls**.
 
 El juego inicia en inglés. `./re4pc.sh run --language saved` conserva el idioma guardado por el juego; esta opción no añade una traducción al español. Para usar el ratón como pantalla táctil, ejecuta `./re4pc.sh run --controls touch`.
 
@@ -366,16 +502,20 @@ Al arrancar, el host valida los datos, carga y enlaza las bibliotecas en una reg
 
 En cada fotograma, SDL2 recoge las entradas, el puente aplica los controles y ajustes de cámara, el motor ejecuta `native_onDrawFrame`, el host actualiza el vídeo y presenta la imagen. El ratón modifica la órbita de la cámara antes de las comprobaciones de colisión del propio motor.
 
+El ritmo se limita a **20 Hz**, porque cada dibujo también actualiza la lógica del juego. Subirlo acelera el movimiento, el combate y los temporizadores; los modos de 30/60 FPS permanecen deshabilitados. La carga de recursos puede causar pausas, y fotogramas que tardan más de 50 ms ralentizan el juego.
+
 ### Datos, pruebas y limitaciones
 
 Por defecto, los datos están en `~/.local/share/re4mepc/game`, las partidas en su subdirectorio `saves` y la caché de audio en `cache/audio`. Los registros y capturas de pruebas están en `~/.local/state/re4mepc/logs`. Se respetan `XDG_DATA_HOME` y `XDG_STATE_HOME` cuando contienen rutas absolutas. Puedes indicar otra ubicación con `--output` al importar y `--game` al comprobar o ejecutar.
+
+Los ajustes se guardan en `~/.config/re4mepc/settings.json` y las copias de seguridad en `~/.local/state/re4mepc/backups`, separadas por instalación. Se respeta también `XDG_CONFIG_HOME`. Con el juego detenido, `./re4pc.sh backup` crea una copia y `./re4pc.sh backups` muestra sus IDs; `restore-backup ID` restaura una copia tras verificarla y conservar una copia de recuperación.
 
 - `make check` compila los helpers y ejecuta pruebas sintéticas sin necesitar el juego.
 - `make verify` añade la auditoría de fuentes e historial Git.
 - `make check-game` valida tu importación.
 - `make visible-test` y `make controls-test` abren una ventana real y usan copias aisladas con partidas propias.
 
-Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La campaña completa sigue sin validarse. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Windows, macOS, Linux ARM64, mandos, redimensionado y pantalla completa no están implementados. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
+Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La campaña completa sigue sin validarse. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Los mandos, el redimensionado, HiDPI y la pantalla completa sin bordes están implementados. Windows, macOS y Linux ARM64 quedan fuera de esta versión. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
 
 El código del host tiene licencia MIT; esa licencia excluye los datos originales del juego, las marcas y las dependencias de terceros.
 

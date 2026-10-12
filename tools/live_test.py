@@ -5,13 +5,13 @@ import ctypes as C
 import struct
 import select
 import sys
-import time
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
 from re4pc.game import Game
 from re4pc.paths import game_dir, isolated_game, test_output
 from re4pc.bionic import float_in
 from re4pc.bionic import signed
+from re4pc.timing import FramePacer
 
 parser=argparse.ArgumentParser()
 parser.add_argument('--game',type=Path,default=game_dir())
@@ -23,10 +23,10 @@ game=Game(isolated_game(args.game,output),skip_videos=args.skip_videos)
 print('Test artifacts:',output,flush=True)
 pending=[]
 running=True
+pacer=FramePacer()
 try:
     print('VISIBLE_TEST_READY: enter JSON actions (click, key, screenshot, skip_video, stats, quit)',flush=True)
     while running:
-        start=time.monotonic()
         if select.select([sys.stdin],[],[],0)[0]:
             line=sys.stdin.readline()
             if not line: break
@@ -74,7 +74,7 @@ try:
                 elif action=='stats':
                     stats={'frames':game.frames,'draws':game.graphics.draws,'textures':game.graphics.textures,'inputs':game.input_events,
                            'audio_nonzero_samples':game.media.audio.re4_audio_measure(1),'videos':game.media.videos_played,
-                           'recent_engine_ms':round(sum(game.frame_times[-100:])/max(1,len(game.frame_times[-100:]))*1000,2),
+                           'recent_engine_ms':round(sum(list(game.frame_times)[-100:])/max(1,min(100,len(game.frame_times)))*1000,2),
                            'gl_messages':sorted(game.graphics.debug_messages)}
                     print('LIVE_STATS',json.dumps(stats),flush=True)
                     if command.get('path'): Path(command['path']).write_text(json.dumps(stats,indent=2)+'\n')
@@ -97,6 +97,6 @@ try:
             if not game.event(event):running=False
         if not running:break
         game.frame();game.graphics.swap()
-        time.sleep(max(0,1/45-(time.monotonic()-start)))
+        pacer.wait()
 finally:
     game.close()

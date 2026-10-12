@@ -52,3 +52,18 @@ def isolated_game(source, output):
         shutil.rmtree(fixture)
         raise
     return fixture
+
+
+def native_library(name):
+    """Resolve helpers beside application code in source and staged releases."""
+    if name not in ('libre4audio.so', 'libre4fast.so'):
+        raise ValueError('Unknown native helper')
+    return Path(__file__).resolve().parent.parent / 'build' / name
+
+
+def ffmpeg_binary():
+    """Prefer the bundled decoder while leaving source installs on PATH."""
+    application = Path(__file__).resolve().parent.parent
+    bundled = application.parent.parent / 'bin/ffmpeg'
+    packaged = application.parent.name == 'lib' and application.parent.parent.name == 'usr'
+    return str(bundled) if packaged and bundled.is_file() else 'ffmpeg'

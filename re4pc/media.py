@@ -1,17 +1,19 @@
 """Decode original game audio via FFmpeg and play it using SDL's audio device."""
 import ctypes as C
 from .runtime_log import log
+from .paths import native_library, ffmpeg_binary
 import hashlib
 import subprocess
 import queue
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 class Media:
     def __init__(self, root, sdl, graphics=None):
         self.root, self.sdl = Path(root).resolve(), sdl
-        native = Path(__file__).resolve().parent.parent / 'build' / 'libre4audio.so'
+        native = native_library('libre4audio.so')
         self.audio = C.CDLL(str(native))
         self.audio.re4_audio_open.restype = C.c_int
         self.audio.re4_audio_load.argtypes = (C.c_int, C.c_void_p, C.c_size_t, C.c_int)
@@ -26,6 +28,7 @@ class Media:
         self.decoded = {}
         self.audio_sources = {}
         self.audio_ready = set()
+        self.audio_volumes = {}
         self.cache = self.root / "cache" / "audio"
         self.cache.mkdir(parents=True, exist_ok=True)
         self.loaded = 0
@@ -37,6 +40,15 @@ class Media:
         self.video_frame = None
         self.videos_played = 0
         self.skip_videos = False
+        self.decoder = ThreadPoolExecutor(max_workers=2, thread_name_prefix='re4-audio')
+        self.cleanup = ThreadPoolExecutor(max_workers=1, thread_name_prefix='re4-video-cleanup')
+        self.decoding = {}
+        self.pending_audio = {}
+        self.paused_audio = set()
+        self.video_audio = None
+        self.video_volume = 1.0
+        self.video_started = None
+        self.retired_videos = []
 
     def audio_service(self, name, args, arm):
         if name in ('init', 'term'):
@@ -56,45 +68,92 @@ class Media:
                 raise ValueError(f'Invalid audio range: {offset}+{length} in {path}')
             loop = bool(args[4]) if bgm else False
             self.audio_sources[slot] = (path, offset, length, loop)
+            self.pending_audio.pop(slot, None)
+            self.paused_audio.discard(slot)
+            self.audio_volumes[slot] = 1.0
+            self.audio.re4_audio_control(slot, 4, 1.0)
             self.audio_ready.discard(slot)
             self.loaded += 1
-            if bgm: self.prepare_audio(slot)
+            # The engine registers hundreds of SEs but plays only a handful
+            # in a menu. Avoid decoding the entire bank ahead of a movie/BGM.
+            if bgm: self.queue_audio(path, offset, length)
             return 1
         if name in ('playBGM', 'playSE'):
-            self.prepare_audio(slot)
-            self.audio.re4_audio_play(slot, 1.0 if bgm else args[1])
+            volume = 1.0 if bgm else args[1]
+            if self.prepare_audio(slot) and slot not in self.paused_audio:
+                self.audio.re4_audio_play(slot, volume)
+            else:
+                pending = self.pending_audio.setdefault(slot, [])
+                # Match the mixer's finite voice count; a slow decoder must
+                # not accumulate an unlimited queue of repeated effects.
+                if bgm: pending.clear()
+                if len(pending) < 32: pending.append(volume)
             return 0
         for prefix, operation in (('stop',0),('pause',1),('restart',2),('setVolume',3),('term',4)):
             if name.startswith(prefix):
+                if operation in (0, 4): self.pending_audio.pop(slot, None)
+                if operation == 1: self.paused_audio.add(slot)
+                elif operation in (0, 2, 4): self.paused_audio.discard(slot)
+                if operation == 4:
+                    self.audio_ready.discard(slot)
+                    self.audio_sources.pop(slot, None)
+                    self.audio_volumes.pop(slot, None)
+                elif operation == 3:
+                    self.audio_volumes[slot] = args[1]
                 self.audio.re4_audio_control(slot, operation, args[1] if operation==3 else 1.0)
                 return 0
         raise RuntimeError('Unknown audio operation: ' + name)
 
+    def queue_audio(self, path, offset, length, video=False):
+        key = (str(path), offset, length, video)
+        if key not in self.decoding:
+            self.decoding[key] = self.decoder.submit(self.decode_audio, path, offset, length, video)
+        return key
+
+    def decode_audio(self, path, offset, length, video=False):
+        # Workers only read resources/decode PCM; SDL and guest state stay on
+        # the main thread. File input for movies permits FFmpeg to seek.
+        with path.open('rb') as stream:
+            stream.seek(offset)
+            source = stream.read(length)
+        cached = self.cache / (hashlib.sha256(source).hexdigest() + '.f32')
+        if cached.is_file(): return cached.read_bytes()
+        result = subprocess.run([ffmpeg_binary(),'-v','error','-threads','1','-i',str(path) if video else 'pipe:0',
+            '-vn','-f','f32le','-ac','2','-ar','44100','pipe:1'],
+            input=None if video else source, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=30)
+        if result.returncode or (not video and not result.stdout):
+            raise RuntimeError('Audio decode: '+result.stderr.decode(errors='replace'))
+        # Two resources can contain identical encoded bytes. Atomic replace
+        # prevents another worker/process from reading a partial cache file.
+        import tempfile
+        with tempfile.NamedTemporaryFile(dir=self.cache, suffix='.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(result.stdout)
+        try: temporary.replace(cached)
+        finally: temporary.unlink(missing_ok=True)
+        return result.stdout
+
     def prepare_audio(self, slot):
-        if slot in self.audio_ready: return
+        if slot in self.audio_ready: return True
         path, offset, length, loop = self.audio_sources[slot]
-        key = (str(path), offset, length)
-        if key not in self.decoded:
-            with path.open('rb') as stream:
-                stream.seek(offset)
-                source = stream.read(length)
-            cached = self.cache / (hashlib.sha256(source).hexdigest() + '.f32')
-            if cached.is_file():
-                data = cached.read_bytes()
-            else:
-                result = subprocess.run(['ffmpeg','-v','error','-i','pipe:0','-f','f32le',
-                    '-ac','2','-ar','44100','pipe:1'],input=source,stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,timeout=30)
-                if result.returncode or not result.stdout:
-                    raise RuntimeError('Audio decode: '+result.stderr.decode(errors='replace'))
-                data = result.stdout
-                cached.write_bytes(data)
-            self.decoded[key] = data
+        key = self.queue_audio(path, offset, length)
+        future = self.decoding[key]
+        if not future.done(): return False
+        if key not in self.decoded: self.decoded[key] = future.result()
         data = self.decoded[key]
-        buffer = C.create_string_buffer(data)
+        buffer = C.c_char_p(data)
         if self.audio.re4_audio_load(slot,buffer,len(data),loop):
             raise RuntimeError('Cannot load decoded audio')
+        self.audio.re4_audio_control(slot, 3, self.audio_volumes.get(slot, 1.0))
         self.audio_ready.add(slot)
+        return True
+
+    def update_audio(self):
+        for slot, volumes in list(self.pending_audio.items()):
+            if slot in self.paused_audio or not self.prepare_audio(slot): continue
+            for volume in volumes: self.audio.re4_audio_play(slot, volume)
+            del self.pending_audio[slot]
 
     def video_service(self, name, args, arm):
         if name in ('create',): return 1
@@ -112,36 +171,24 @@ class Media:
             volume = max(0.0, min(float(args[1]), 1.0))
             g = self.graphics
             filters = f'scale={g.width}:{g.height}:force_original_aspect_ratio=decrease,pad={g.width}:{g.height}:(ow-iw)/2:(oh-ih)/2'
-            result = subprocess.run(['ffmpeg','-v','error','-i',str(path),'-vn','-f','f32le',
-                '-ac','2','-ar','44100','pipe:1'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
-            if result.returncode: raise RuntimeError('Video audio decode: '+result.stderr.decode(errors='replace'))
-            if result.stdout:
-                data = C.create_string_buffer(result.stdout)
-                if self.audio.re4_audio_load(255,data,len(result.stdout),0):
-                    raise RuntimeError("Cannot load decoded video audio")
+            key = self.queue_audio(path, 0, path.stat().st_size, video=True)
+            self.video_audio = self.decoding[key]
+            self.video_volume = volume
 
             # Decode ahead on a worker: a raw frame is much larger than the
             # OS pipe, so reading only once per render tick throttles FFmpeg.
             self.video_queue = queue.Queue(maxsize=8)
             self.video_stop = threading.Event()
-            self.video = subprocess.Popen(['ffmpeg','-v','error','-i',str(path),
+            self.video = subprocess.Popen([ffmpeg_binary(),'-v','error','-threads','1','-filter_threads','1','-i',str(path),
                 '-an','-vf','fps=30,'+filters,'-pix_fmt','rgb24','-f','rawvideo','pipe:1'],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             self.video_reader = threading.Thread(target=self.read_video,
                 args=(self.video, self.video_queue, self.video_stop, g.width*g.height*3),
                 daemon=True)
             self.video_reader.start()
-            try:
-                self.video_frame = self.video_queue.get(timeout=30)
-                if self.video_frame is None:
-                    raise RuntimeError('Video decoder produced no frames: '+filename)
-            except Exception:
-                self.end_video()
-                raise
             self.video_index = 0
-            self.video_started = time.monotonic()
-            if result.stdout:
-                self.audio.re4_audio_play(255,volume)
+            self.video_started = None
+            self.video_requested = time.monotonic()
             self.videos_played += 1
             log.info('Playing video: %s',filename)
             return 1
@@ -172,6 +219,22 @@ class Media:
 
     def update_video(self):
         if self.video is None: return
+        if self.video_started is None:
+            if time.monotonic() - self.video_requested > 30:
+                raise TimeoutError('Video decoder startup timed out: '+self.video_name)
+            if not self.video_audio.done(): return
+            if self.video_frame is None:
+                try: self.video_frame = self.video_queue.get_nowait()
+                except queue.Empty: return
+                if self.video_frame is None:
+                    raise RuntimeError('Video decoder produced no frames: '+self.video_name)
+            pcm = self.video_audio.result()
+            if pcm:
+                buffer = C.c_char_p(pcm)
+                if self.audio.re4_audio_load(255, buffer, len(pcm), 0):
+                    raise RuntimeError('Cannot load decoded video audio')
+                self.audio.re4_audio_play(255, self.video_volume)
+            self.video_started = time.monotonic()
         target = int((time.monotonic()-self.video_started)*30)
         while self.video_index < target:
             try: frame = self.video_queue.get_nowait()
@@ -185,21 +248,39 @@ class Media:
             self.graphics.draw_video(self.video_frame)
 
     def end_video(self):
+        outstanding = []
+        for future in self.retired_videos:
+            if future.done(): future.result()
+            else: outstanding.append(future)
+        self.retired_videos = outstanding
         if self.video is not None:
             process,self.video = self.video,None
             self.video_stop.set()
             if process.poll() is None:
                 process.terminate()
-                try: process.wait(timeout=3)
-                except subprocess.TimeoutExpired: process.kill(); process.wait()
-            self.video_reader.join(timeout=3)
-            process.stdout.close()
+            self.retired_videos.append(self.cleanup.submit(self.reap_video, process, self.video_reader))
         self.video_queue = None
         self.video_reader = None
         self.video_stop = None
         self.video_frame = None
-        self.audio.re4_audio_control(255,0,1.0)
+        self.video_audio = None
+        self.video_started = None
+        self.audio.re4_audio_control(255,4,1.0)
+
+    @staticmethod
+    def reap_video(process, reader):
+        try: process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        reader.join(timeout=1)
+        process.stdout.close()
 
     def close(self):
-        self.end_video()
-        self.audio.re4_audio_close()
+        try:
+            self.end_video()
+        finally:
+            self.decoder.shutdown(wait=True, cancel_futures=True)
+            self.cleanup.shutdown(wait=True)
+            self.audio.re4_audio_close()
+        for future in self.retired_videos: future.result()

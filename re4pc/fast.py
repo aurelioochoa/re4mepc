@@ -1,12 +1,12 @@
 """Accelerate frequently called memory/string imports without Python transitions."""
 import ctypes as C
-from pathlib import Path
+from .paths import native_library
 
 class Fast:
     NAMES=('memcpy','memmove','memset','memcmp','strlen','strcmp','strncmp','strcpy','strncpy','wcslen')
     def __init__(self,arm):
         self.arm=arm
-        library=Path(__file__).resolve().parent.parent/'build/libre4fast.so'
+        library=native_library('libre4fast.so')
         self.lib=C.CDLL(str(library))
         self.lib.re4_fast_open.argtypes=(C.c_void_p,C.c_size_t,C.c_size_t,C.c_size_t)
         self.lib.re4_fast_open.restype=C.c_void_p

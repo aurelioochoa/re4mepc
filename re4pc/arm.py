@@ -3,6 +3,9 @@ import ctypes as C
 import io
 import struct
 from collections import Counter
+from contextlib import nullcontext
+import time
+import sys
 from elftools.elf.elffile import ELFFile
 from unicorn import Uc, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_CODE, UC_HOOK_MEM_INVALID, UcError
 from unicorn.arm_const import *
@@ -12,7 +15,12 @@ REGS = (UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3)
 class ArmRuntime:
     SIZE = 256 * 1024 * 1024
 
-    def __init__(self):
+    def __init__(self, diagnostics=None):
+        self.diagnostics = diagnostics
+        self._profile_hooks = []
+        self._profile_returns = {}
+        self._profile_stack = []
+        self._profile_names = set()
         self.libc = C.CDLL(None)
         mmap = self.libc.mmap
         mmap.argtypes = (C.c_void_p, C.c_size_t, C.c_int, C.c_int, C.c_int, C.c_long)
@@ -43,6 +51,14 @@ class ArmRuntime:
         self.uc.hook_add(UC_HOOK_MEM_INVALID, self._invalid_memory)
         self.pending_error = None
         self.fast = None
+        # Reuse the native register buffers instead of constructing four
+        # ctypes objects and crossing the FFI four times per import.
+        self._arg_registers = (C.c_int * 4)(*REGS)
+        self._arg_values = (C.c_uint32 * 4)()
+        self._arg_pointers = (C.c_void_p * 4)(*(C.addressof(self._arg_values)+4*i for i in range(4)))
+        self._callback_args = None
+        self.libc.strnlen.argtypes = (C.c_void_p,C.c_size_t)
+        self.libc.strnlen.restype = C.c_size_t
 
     def contains(self, pointer, size=1):
         return self.base <= pointer and pointer + size <= self.base + self.SIZE
@@ -70,8 +86,6 @@ class ArmRuntime:
             return ''
         self.check(pointer)
         limit = min(self.base + self.SIZE - pointer, 65536)
-        self.libc.strnlen.argtypes = (C.c_void_p,C.c_size_t)
-        self.libc.strnlen.restype = C.c_size_t
         length = self.libc.strnlen(pointer,limit)
         value = C.string_at(pointer,length)
         if length == limit:
@@ -79,17 +93,26 @@ class ArmRuntime:
         return value.decode('utf-8', 'replace')
 
     def alloc(self, size):
+        requested = size
         size = max(16, (size + 15) & ~15)
+        diagnostics = self.diagnostics
+        started = time.perf_counter() if diagnostics else 0
+        probes = 0
         for i, (pointer, available) in enumerate(self.free_blocks):
+            probes += 1
             if available >= size:
                 self.free_blocks.pop(i)
                 self.allocations[pointer] = available
+                if diagnostics:
+                    diagnostics.allocation(requested, available, probes, time.perf_counter()-started)
                 return pointer
         pointer = self.heap
         if pointer + size > self.heap_end:
             raise MemoryError('ARM heap exhausted')
         self.heap += size
         self.allocations[pointer] = size
+        if diagnostics:
+            diagnostics.allocation(requested, size, probes, time.perf_counter()-started)
         C.memset(pointer, 0, size)
         return pointer
 
@@ -99,6 +122,8 @@ class ArmRuntime:
             if size is None:
                 raise RuntimeError(f'Free of unknown allocation 0x{pointer:x}')
             self.free_blocks.append((pointer, size))
+            if self.diagnostics:
+                self.diagnostics.freed(size)
 
     def cstring(self, value):
         data = value.encode() if isinstance(value, str) else bytes(value)
@@ -107,10 +132,16 @@ class ArmRuntime:
         return pointer
 
     def args(self, count=4):
-        result = [self.uc.reg_read(reg) for reg in REGS[:min(count, 4)]]
+        if count < 0: raise ValueError('Negative argument count')
+        if self._callback_args is None:
+            status = self.uc._do_reg_read_batch(self._arg_registers, self._arg_pointers, min(count, 4))
+            if status: raise UcError(status)
+            result = list(self._arg_values[:min(count, 4)])
+        else:
+            result = self._callback_args[:min(count, 4)]
         if count > 4:
             sp = self.uc.reg_read(UC_ARM_REG_SP)
-            result += [self.u32(sp + 4 * i) for i in range(count - 4)]
+            result += struct.unpack('<'+'I'*(count-4), self.read(sp,4*(count-4)))
         return result
 
     def register(self, name, callback):
@@ -130,12 +161,24 @@ class ArmRuntime:
             name, callback = self.traps[address]
             self.last_call = name
             self.calls[name] += 1
-            result = callback(*self.args())
+            self._callback_args = self.args()
+            if self.diagnostics:
+                phase = ('graphics_upload' if name in ('glTexImage2D', 'glTexSubImage2D')
+                         else 'graphics_submission' if name.startswith('gl') else 'host_services')
+                if name.startswith('gl') and name != 'glCompressedTexImage2D':
+                    result = self.diagnostics.graphics_service(phase, name, callback, self._callback_args)
+                else:
+                    with self.diagnostics.phase(phase, operation=name):
+                        result = callback(*self._callback_args)
+            else:
+                result = callback(*self._callback_args)
             if result is not None:
                 uc.reg_write(UC_ARM_REG_R0, int(result) & 0xffffffff)
         except BaseException as error:
             self.pending_error = error
             uc.emu_stop()
+        finally:
+            self._callback_args = None
 
     def _invalid_memory(self, uc, access, address, size, value, context):
         self.pending_error = RuntimeError(
@@ -145,7 +188,12 @@ class ArmRuntime:
         return False
 
     def load(self, path, offset):
-        elf = ELFFile(io.BytesIO(path.read_bytes()))
+        with self.diagnostics.phase('file_read', operation=str(path)) if self.diagnostics else nullcontext():
+            data = path.read_bytes()
+            if self.diagnostics:
+                self.diagnostics.count('file_read_count')
+                self.diagnostics.count('file_read_bytes', len(data))
+        elf = ELFFile(io.BytesIO(data))
         if elf.elfclass != 32 or elf['e_machine'] != 'EM_ARM':
             raise ValueError(f'{path}: expected an ARM32 ELF')
         base = self.base + offset
@@ -202,7 +250,8 @@ class ArmRuntime:
         if unresolved:
             raise RuntimeError('Unimplemented imports: ' + ', '.join(sorted(unresolved)))
 
-    def call(self, address, *args, timeout=30):
+    def call(self, address, *args, timeout=30, operation=None):
+        operation = operation or (address if isinstance(address, str) else f'ARM 0x{address:x}')
         if isinstance(address, str):
             address = self.symbols[address]
         saved_sp = self.uc.reg_read(UC_ARM_REG_SP)
@@ -216,7 +265,15 @@ class ArmRuntime:
         self.uc.reg_write(UC_ARM_REG_LR, self.return_address)
         self.pending_error = None
         try:
-            self.uc.emu_start(address, self.return_address, timeout=int(timeout * 1000000))
+            with self.diagnostics.phase('native_unknown', operation=operation) if self.diagnostics else nullcontext():
+                try:
+                    self.uc.emu_start(address, self.return_address, timeout=int(timeout * 1000000))
+                    if self.pending_error:
+                        raise self.pending_error
+                finally:
+                    # A timeout/error can bypass selected functions' returns.
+                    while self._profile_stack:
+                        self._profile_stack.pop()[2].__exit__(*sys.exc_info())
         except UcError as error:
             if self.pending_error:
                 raise self.pending_error from error
@@ -231,6 +288,40 @@ class ArmRuntime:
         if self.uc.reg_read(UC_ARM_REG_PC) != self.return_address:
             raise TimeoutError(f'ARM call 0x{address:x} timed out at PC=0x{self.uc.reg_read(UC_ARM_REG_PC):x}')
         return self.uc.reg_read(UC_ARM_REG_R0)
+
+    def enable_native_profiles(self, names):
+        """Time selected ELF functions, including nested imports, only on request.
+
+        Entry/return hooks use LR and SP, so recursive calls sharing a return
+        site remain distinct. Never enable this for a baseline overhead run.
+        """
+        if not self.diagnostics or not self.diagnostics.native_hooks:
+            raise ValueError('Detailed native hooks must be explicitly enabled')
+        for name in dict.fromkeys(names):
+            if name not in self.symbols:
+                raise ValueError(f'Unknown native profiling symbol: {name}')
+        for name in dict.fromkeys(names):
+            if name in self._profile_names:
+                continue
+            address = self.symbols[name] & ~1
+            self._profile_hooks.append(self.uc.hook_add(UC_HOOK_CODE,
+                self._profile_enter, user_data=name, begin=address, end=address))
+            self._profile_names.add(name)
+
+    def _profile_enter(self, uc, address, size, name):
+        return_address = uc.reg_read(UC_ARM_REG_LR) & ~1
+        sp = uc.reg_read(UC_ARM_REG_SP)
+        phase = self.diagnostics.phase('native_parser:'+name, operation=name)
+        phase.__enter__()
+        self._profile_stack.append((return_address, sp, phase))
+        if return_address not in self._profile_returns:
+            self._profile_returns[return_address] = uc.hook_add(UC_HOOK_CODE,
+                self._profile_return, begin=return_address, end=return_address)
+
+    def _profile_return(self, uc, address, size, context):
+        sp = uc.reg_read(UC_ARM_REG_SP)
+        while self._profile_stack and self._profile_stack[-1][:2] == (address, sp):
+            self._profile_stack.pop()[2].__exit__(None, None, None)
 
     def initialize(self):
         for module in self.modules:

@@ -41,8 +41,9 @@ def configure(level='info', path=None):
 
 
 class RuntimeLog:
-    def __init__(self, interval=5):
+    def __init__(self, interval=5, diagnostics=None):
         self.interval = interval
+        self.diagnostics = diagnostics
         self.snapshot = ('startup', 0, 0, 0, False)
         self.started = self.sampled = time.monotonic()
         self.stopped = threading.Event()
@@ -55,6 +56,7 @@ class RuntimeLog:
         return self
 
     def sample(self, game):
+        self.diagnostics = getattr(game, 'diagnostics', self.diagnostics)
         state = ('video' if game.media.video is not None else
                  'story' if game.pc.story_active else
                  'gameplay' if game.pc.active else 'menu/loading')
@@ -68,10 +70,13 @@ class RuntimeLog:
             now = time.monotonic()
             state, frames, draws, inputs, captured = self.snapshot
             fps = (frames-previous_frames)/(now-previous_time)
+            active = self.diagnostics.active_operation if self.diagnostics else None
+            waiting = (' | operation=%s (%.2fs)' % (active['name'], active['seconds'])
+                       if active else ' | waiting for engine/startup' if frames == previous_frames else '')
             log.info('runtime: %s | %.1f FPS | frame=%d draws=%d inputs=%d mouse=%s%s',
                      state, fps, frames, draws, inputs,
                      'captured' if captured else 'free',
-                     ' | waiting for engine/startup' if frames == previous_frames else '')
+                     waiting)
             previous_frames, previous_time = frames, now
 
     def __exit__(self, *args):

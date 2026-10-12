@@ -71,3 +71,13 @@ class PathTests(unittest.TestCase):
             first=test_output('visible-test');second=test_output('visible-test')
             self.assertNotEqual(first,second)
             self.assertEqual(first.parent,logs_dir()/'visible-test')
+
+
+class RuntimePathTests(unittest.TestCase):
+    def test_helpers_are_application_relative_and_names_bounded(self):
+        from re4pc.paths import native_library, ffmpeg_binary
+        self.assertEqual(native_library('libre4audio.so').parent.name, 'build')
+        self.assertEqual(native_library('libre4fast.so').name, 'libre4fast.so')
+        with self.assertRaises(ValueError):
+            native_library('../outside')
+        self.assertEqual(ffmpeg_binary(), 'ffmpeg')

@@ -122,7 +122,7 @@ check: test ## Run game-free component tests
 check-game: ## Validate the user-supplied imported game
 	./re4pc.sh check $(ARGS)
 audit-source: ## Audit staged files and every Git blob, including history
-	$(PYTHON) tools/audit_source.py
+	$(PYTHON) tools/audit_source.py --worktree
 verify: check audit-source ## Compile helpers, test synthetic data and audit sources
 	@printf 'VERIFY_PASS\n'
 fmt: ## Explain formatter availability
@@ -138,7 +138,14 @@ controls-test: ## Open the game and exercise PC gameplay controls
 ##@ Cleaning
 .PHONY: clean distclean
 clean: ## Remove compiled helpers and Python caches; preserve game and saves
-	rm -f build/libre4audio.so build/libre4fast.so
+	rm -f build/libre4audio.so build/libre4fast.so build/libunicorn.so.2
 	find re4pc tests tools -type d -name __pycache__ -prune -exec rm -rf {} +
 distclean: clean ## Also remove the local Python environment
 	rm -rf .venv
+
+##@ Distribution
+.PHONY: package launcher
+package: ## Build audited Linux x86_64 AppImage and portable archive using Ubuntu 22.04 Docker
+	$(PYTHON) tools/package.py $(PACKAGE_ARGS)
+launcher: ## Open the native graphical launcher
+	$(PYTHON) -m re4pc launcher $(ARGS)

@@ -4,6 +4,7 @@ import math
 import re
 from .runtime_log import log
 import struct
+from contextlib import nullcontext
 from pathlib import Path
 from unicorn.arm_const import UC_ARM_REG_R1
 
@@ -24,8 +25,9 @@ def float_out(value):
 
 
 class Bionic:
-    def __init__(self, arm, root):
+    def __init__(self, arm, root, diagnostics=None):
         self.arm, self.root = arm, Path(root).resolve()
+        self.diagnostics = diagnostics if diagnostics is not None else getattr(arm, 'diagnostics', None)
         self.files = {}
         self.keys = {}
         self.key_next = 1
@@ -193,7 +195,10 @@ class Bionic:
         try:
             if any(flag in flags for flag in 'wa+'):
                 path.parent.mkdir(parents=True, exist_ok=True)
-            stream = path.open(flags if 'b' in flags else flags + 'b')
+            with self.diagnostics.phase('file_open', operation=str(path)) if self.diagnostics else nullcontext():
+                stream = path.open(flags if 'b' in flags else flags + 'b')
+            if self.diagnostics:
+                self.diagnostics.count('file_open_count')
         except OSError as error:
             log.debug('[file] cannot open %s: %s', name, error)
             return 0
@@ -203,24 +208,52 @@ class Bionic:
         return handle
 
     def fclose(self, handle, *_):
-        self.files.pop(handle).close()
+        stream = self.files.pop(handle)
+        with self.diagnostics.phase('file_close', operation=str(stream.name)) if self.diagnostics else nullcontext():
+            stream.close()
         return 0
 
     def fread(self, pointer, size, count, handle):
         if not size:
             return 0
-        data = self.files[handle].read(size * count)
+        stream = self.files[handle]
+        with self.diagnostics.phase('file_read', operation=str(stream.name)) if self.diagnostics else nullcontext():
+            data = stream.read(size * count)
+        if self.diagnostics:
+            self.diagnostics.count('file_read_count')
+            self.diagnostics.count('file_read_requested_bytes', size*count)
+            self.diagnostics.count('file_read_bytes', len(data))
         self.arm.write(pointer, data)
         return len(data) // size
 
     def fwrite(self, pointer, size, count, handle):
         if not size:
             return 0
-        return self.files[handle].write(self.arm.read(pointer, size * count)) // size
+        stream = self.files[handle]
+        data = self.arm.read(pointer, size*count)
+        with self.diagnostics.phase('file_write', operation=str(stream.name)) if self.diagnostics else nullcontext():
+            written = stream.write(data)
+        if self.diagnostics:
+            self.diagnostics.count('file_write_count')
+            self.diagnostics.count('file_write_bytes', written)
+        return written // size
 
     def fseek(self, handle, offset, whence, _):
-        self.files[handle].seek(signed(offset), whence)
+        stream = self.files[handle]
+        with self.diagnostics.phase('file_seek', operation=str(stream.name)) if self.diagnostics else nullcontext():
+            stream.seek(signed(offset), whence)
         return 0
+
+    def close(self):
+        """Flush every native file before releasing the installation save lock."""
+        first_error = None
+        for handle in list(self.files):
+            try:
+                self.fclose(handle)
+            except OSError as error:
+                first_error = first_error or error
+        if first_error is not None:
+            raise first_error
 
     def format(self, pointer, args):
         text, index = self.arm.string(pointer), 0

@@ -1,5 +1,6 @@
 """Build native desktop helpers against the installed SDL and Unicorn headers."""
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 import unicorn
@@ -11,5 +12,6 @@ subprocess.run(['cc','-shared','-fPIC','-O2','-Wall','-Wextra','-Werror',str(roo
 package=Path(unicorn.__file__).parent
 subprocess.run(['cc','-shared','-fPIC','-O2','-Wall','-Wextra','-Werror',str(root/'native/fast.c'),
     '-o',str(out/'libre4fast.so'),'-I'+str(package/'include'),'-L'+str(package/'lib'),
-    '-l:libunicorn.so.2','-Wl,-rpath,'+str(package/'lib')],check=True)
+    '-l:libunicorn.so.2','-Wl,-rpath,$ORIGIN'],check=True)
+shutil.copy2(package/'lib/libunicorn.so.2',out/'libunicorn.so.2')
 print('Built native audio and ARM import helpers')

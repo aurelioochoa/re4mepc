@@ -99,6 +99,8 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
         data = apk_icon(apk)
     elif installed_icon.is_file():
         data = installed_icon.read_bytes()
+    elif (root / 're4pc/ui_assets/icon.png').is_file():
+        data = (root / 're4pc/ui_assets/icon.png').read_bytes()
     else:
         raise ValueError('Choose an icon with --apk /path/to/game.apk or --icon /path/to/icon.png')
     inspect_icon(data)
@@ -108,14 +110,14 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
     if desktop is not None and not Path(desktop).is_dir():
         raise ValueError('Desktop destination must be an existing directory')
     wrapper = '#!/bin/sh\n' + 'exec ' + shlex.join([
-        str(root / 're4pc.sh'), 'run', '--game', str(game), '--log-file', str(log_file)
+        str(root / 're4pc.sh'), 'launcher', '--game', str(game)
     ]) + ' "$@"\n'
     contents = '\n'.join([
         '[Desktop Entry]', 'Version=1.0', 'Type=Application',
         'Name=Resident Evil 4 Mobile',
-        'Comment=Play Resident Evil 4 Mobile with mouse and keyboard on Linux',
+        'Comment=Play Resident Evil 4 Mobile on Linux with configurable desktop controls',
         'Exec=' + exec_value(launcher), 'TryExec=' + entry_value(launcher),
-        'Icon=' + entry_value(installed_icon), 'Terminal=true',
+        'Icon=' + entry_value(installed_icon), 'Terminal=false',
         'Categories=Game;', 'Keywords=Resident Evil;RE4;Mobile;',
         'StartupNotify=false', '',
     ])

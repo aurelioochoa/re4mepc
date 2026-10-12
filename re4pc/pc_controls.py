@@ -15,10 +15,19 @@ AIM_UNITS_PER_DEGREE = 3 * TURN / 360
 MOUSE_DEGREES_PER_PIXEL = 0.15
 PITCH_LIMIT = 45.0
 
+# Fields in the supported GM_CtrlLyt_Input layout: Pad, ActBtn_Post
+# (lower weapon), ActBtn_Gun and ActBtn_Knif. Event, Ashley, scope and
+# menu components remain visible. LYT_CmpProduct's visibility is separate
+# from its input enable flag.
+TOUCH_COMBAT_COMPONENTS = (0x04, 0x08, 0x14, 0x18)
+COMPONENT_VISIBLE = 0x51
+
 
 class PCControls:
-    def __init__(self, arm, enabled=True):
+    def __init__(self, arm, enabled=True, settings=None):
         self.arm, self.enabled = arm, enabled
+        self.sensitivity = (settings or {}).get("sensitivity", 1.0)
+        self.invert_y = (settings or {}).get("invert_y", False)
         self.keys = set()
         self.buttons = set()
         self.motion = [0, 0]
@@ -33,9 +42,13 @@ class PCControls:
         self.last_sample = {}
         self.reload_requested = False
         self.story_active = False
+        self.item_active = False
+        self.item_take_requested = False
+        self.item_take_this_frame = False
         self.look_pitch=0.0
         self.aim_base_pitch=0.0
         self.last_view={}
+        self.hud_visibility = []
 
     def install(self):
         symbol='_ZN16GM_CtrlLyt_Input5FrameEP14Bio4_FrameWork'
@@ -53,6 +66,57 @@ class PCControls:
         self.arm.uc.hook_add(UC_HOOK_CODE,self._camera,begin=look,end=look)
         aim=self.arm.symbols['_ZN18GM_CtrlMain_Player17_Set_AimStartRotXEP11GM_CtrlMainf']&~1
         self.arm.uc.hook_add(UC_HOOK_CODE,self._aim_start,begin=aim,end=aim)
+        if self.enabled:
+            item_symbol='_ZN18GM_CtrlLyt_WinItem5FrameEv'
+            item_end=(self.arm.symbols[item_symbol]&~1)+self.arm.symbol_sizes[item_symbol]-4
+            self.arm.uc.hook_add(UC_HOOK_CODE,self._item_window,begin=item_end,end=item_end)
+            draw_symbol='_ZN16GM_CtrlLyt_Input4DrawEP14Bio4_FrameWork'
+            draw=self.arm.symbols[draw_symbol]&~1
+            end=draw+self.arm.symbol_sizes[draw_symbol]-4
+            self.arm.uc.hook_add(UC_HOOK_CODE,self._hud_begin,begin=draw,end=draw)
+            self.arm.uc.hook_add(UC_HOOK_CODE,self._hud_end,begin=end,end=end)
+
+    def _item_window(self,uc,address,size,context):
+        try:
+            if not self.enabled:return
+            # WinItem::Frame retains `this` at SP+4 before its epilogue.
+            window=self.arm.u32(uc.reg_read(UC_ARM_REG_SP)+4)
+            if not self.arm.read(window+0x20,1)[0] or not self.arm.u32(window+4):return
+            self.item_active=True
+            if not self.item_take_this_frame:return
+            self.item_take_this_frame=False
+            take=self.arm.u32(window+0x14)
+            if take and self.arm.read(take+0x50,2)==b'\x01\x01':
+                # Use the same GET trigger as the native Take button. The
+                # engine still handles inventory limits and removing the item.
+                self.arm.w32(window+0x24,self.arm.u32(window+0x24)|4)
+        except BaseException as error:
+            self.arm.pending_error=error;uc.emu_stop()
+
+    def _hud_begin(self,uc,address,size,context):
+        try:
+            if not self.enabled:return
+            ctrl=uc.reg_read(UC_ARM_REG_R0)
+            if not self.arm.read(ctrl+0x40,1)[0] or not self.arm.u32(ctrl):return
+            # Mask only this draw pass. Restore the native flags afterwards
+            # so animation, input and subsequent weapon transitions retain
+            # the engine's own state, including controls already hidden.
+            for offset in TOUCH_COMBAT_COMPONENTS:
+                component=self.arm.u32(ctrl+offset)
+                if component:
+                    flag=component+COMPONENT_VISIBLE
+                    self.hud_visibility.append((flag,self.arm.read(flag,1)))
+                    self.arm.write(flag,b'\0')
+        except BaseException as error:
+            self.arm.pending_error=error;uc.emu_stop()
+
+    def _hud_end(self,uc,address,size,context):
+        try:
+            for flag,visible in self.hud_visibility:
+                self.arm.write(flag,visible)
+            self.hud_visibility.clear()
+        except BaseException as error:
+            self.arm.pending_error=error;uc.emu_stop()
 
     def _aim_start(self,uc,address,size,context):
         if self.enabled and self.active and (3 in self.buttons or 9 in self.keys or 11 in self.keys or self.aim_owned or self.knife_owned):
@@ -97,6 +161,8 @@ class PCControls:
         self.motion[:]=[0,0]
 
     def key(self, down, code):
+        if down and code==23 and code not in self.keys and self.item_active:
+            self.item_take_requested=True
         if down and code==12 and code not in self.keys:self.reload_requested=True
         if down: self.keys.add(code)
         else: self.keys.discard(code)
@@ -105,16 +171,21 @@ class PCControls:
         if down: self.buttons.add(button)
         else: self.buttons.discard(button)
 
-    def move(self, dx, dy):
-        self.motion[0]+=dx
-        self.motion[1]+=dy
+    def move(self, dx, dy, *, sensitivity=None):
+        scale = self.sensitivity if sensitivity is None else sensitivity
+        self.motion[0]+=dx*scale
+        self.motion[1]+=dy*scale*(-1 if self.invert_y else 1)
 
     def release(self):
         self.keys.clear();self.buttons.clear();self.motion[:]=[0,0]
         self.previous_scan=0
         self.reload_requested=False
+        self.item_take_requested=self.item_take_this_frame=False
 
     def begin_frame(self):
+        self.item_take_this_frame=self.item_take_requested
+        self.item_take_requested=False
+        self.item_active=False
         dx,dy=self.motion;self.motion[:]=[0,0]
         if self.active and self.player:
             obj=self.arm.u32(self.player)

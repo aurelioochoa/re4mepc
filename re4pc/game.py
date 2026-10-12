@@ -1,6 +1,7 @@
 """Original engine lifecycle and desktop input routing."""
 import json
 import time
+from collections import deque
 from pathlib import Path
 from .arm import ArmRuntime
 from .assets import validate
@@ -13,6 +14,14 @@ from .fast import Fast
 from .input import DesktopInput
 from .pc_controls import PCControls
 from .runtime_log import log
+from .timing import ENGINE_HZ, FramePacer
+from .diagnostics import Diagnostics
+from .texture_cache import TextureCache
+from .backups import SaveStore
+from .save_boundary import SaveBoundary
+from .achievements import AchievementTracker
+from .achievement_media import UnlockCapture
+from .actions import key_map, MouseBindings
 
 KEYS = {
     1073741906:19, 1073741905:20, 1073741904:21, 1073741903:22,
@@ -22,30 +31,71 @@ KEYS = {
 }
 
 class Game:
-    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language='en', controls='pc'):
-        self.root = validate(root)
-        self.arm = ArmRuntime()
-        self.bionic = Bionic(self.arm, self.root)
-        self.graphics = Graphics(self.arm, width, height, hidden)
-        self.jni = JNI(self.arm, self.root, width, height, trace)
-        self.media = Media(self.root, self.graphics.sdl, self.graphics)
-        self.media.skip_videos = skip_videos
-        self.jni.media = self.media
+    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language='en', controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True):
+        self.initialized = False
+        self.telemetry = telemetry
+        self.diagnostics = Diagnostics(profile=profile, native_hooks=bool(native_profiles)) if diagnostics else None
+        if telemetry:
+            telemetry.diagnostics = self.diagnostics
+        self.overlay = False
+        self.settings = settings or {}
+        self.startup_started = time.monotonic()
+        from contextlib import nullcontext
+        self.phase = self.diagnostics.phase if self.diagnostics else lambda *args, **kwargs: nullcontext()
+        try:
+            with self.phase('startup_validation'):
+                self.root = validate(root)
+            self.save_store = SaveStore(self.root)
+            self.save_store.acquire(running=True)
+        except BaseException:
+            self.close()
+            raise
+        try:
+            # Native startup may migrate old save formats before normal Save.
+            # Preserve the entire previous set before any initializer executes.
+            with self.phase('save_backup', 'snapshot before native startup'):
+                self.save_store.snapshot('before-startup')
+            with self.phase('startup_host'):
+                self.arm = ArmRuntime(diagnostics=self.diagnostics)
+                self.bionic = Bionic(self.arm, self.root)
+                self.graphics = Graphics(self.arm, width, height, hidden, logical_size=(800, 480))
+                self.graphics.diagnostics = self.diagnostics
+                self.graphics.controller.configure(self.settings)
+                if self.settings.get('window_mode') == 'fullscreen':
+                    self.graphics.toggle_fullscreen()
+                self.graphics.texture_cache = TextureCache(cache_dir, enabled=cache, diagnostics=self.diagnostics)
+                self.jni = JNI(self.arm, self.root, 800, 480, trace)
+                self.media = Media(self.root, self.graphics.sdl, self.graphics)
+                self.media.skip_videos = skip_videos
+                self.jni.media = self.media
+            self._initialize(language, controls, native_profiles)
+        except BaseException:
+            self.close()
+            raise
+        self.startup_seconds = time.monotonic() - self.startup_started
+
+    def _initialize(self, language, controls, native_profiles):
         self.language=language
         self.frames = 0
         self.input_events = 0
         self.touch_previous = (0, 0)
         self.key_sources = {}
         self.key_routes = {}
+        self.keymap = key_map(self.settings)
+        self.mouse_bindings = MouseBindings(self.settings)
+        self.story_keys = set()
         self.desktop_input = DesktopInput(self.touch, self.key,lambda down,button:self.pc.button(down,button))
         self.skipping_touch = False
         self.pc = PCControls(self.arm,controls=='pc')
+        self.pc.sensitivity = self.settings.get('sensitivity', 1.0)
+        self.pc.invert_y = self.settings.get('invert_y', False)
         self.mouse_captured=False
         self.mouse_released=False
         self.save_verified = False
-        self.frame_times = []
-        self.initialized = False
-        try:
+        self.engine_seconds = 0.0
+        self.max_engine_seconds = 0.0
+        self.frame_times = deque(maxlen=200)
+        with self.phase('startup_linking'):
             log.info('Loading and linking original ARM libraries')
             mce = self.arm.load(self.root / 'lib/libmc_eruption_for_android_jni.so', 0)
             bio = self.arm.load(self.root / 'lib/libbio4af.so', 2 * 1024 * 1024)
@@ -53,6 +103,11 @@ class Game:
             self.fast=Fast(self.arm)
             self.arm.relocate()
             self.pc.install()
+            self.achievements = AchievementTracker(self.arm, self.root)
+            self.unlock_capture = UnlockCapture(self.root, self.achievements.store, self.settings)
+            self.save_boundary = SaveBoundary(self.arm, self.save_store, self.achievements.capture)
+            if native_profiles:
+                self.arm.enable_native_profiles(native_profiles)
             self.arm.initialize()
             for module in (mce,bio):
                 target = module['base'] + next(s['st_value'] for s in module['symbols'].iter_symbols() if s.name=='JNI_OnLoad')
@@ -62,13 +117,10 @@ class Game:
             self.jni.native('native_onCreate', self.jni.activity)
             self.jni.native('native_onStart')
             self.jni.native('native_onResume')
-            self.jni.native('native_onSurfaceCreated', self.jni.activity, self.jni.activity, width, height, 0)
-            self.jni.native('native_onSurfaceChanged', self.jni.activity, width, height)
+            self.jni.native('native_onSurfaceCreated', self.jni.activity, self.jni.activity, 800, 480, 0)
+            self.jni.native('native_onSurfaceChanged', self.jni.activity, 800, 480)
             self.initialized = True
-            log.info('Engine ready; WASD move, RMB aim, LMB fire, R reload, Tab cursor, F12 quit')
-        except BaseException:
-            self.close()
-            raise
+            log.info('Engine ready; %d FPS native cadence; WASD move, RMB aim, LMB fire, R reload, Tab cursor, F12 quit',ENGINE_HZ)
 
     def touch(self, action, x, y):
         methods = {'down':'native_onTouchBegan','move':'native_onTouchMoved','up':'native_onTouchEnded'}
@@ -78,7 +130,7 @@ class Game:
         self.input_events += 1
 
     def key(self, down, code):
-        mapped = KEYS[code]
+        mapped = getattr(self, 'keymap', KEYS)[code]
         sources = self.key_sources.setdefault(mapped, set())
         if down:
             if sources:
@@ -86,8 +138,11 @@ class Game:
                 return
             sources.add(code)
             # Keep the release on the same route even if a menu opens.
-            self.key_routes[mapped] = self.pc.enabled and self.pc.active
+            self.key_routes[mapped] = self.pc.enabled and (self.pc.active or
+                (mapped==23 and self.pc.item_active))
         else:
+            if code not in sources:
+                return
             sources.discard(code)
             if sources:
                 return
@@ -102,25 +157,52 @@ class Game:
     def event(self, event):
         kind = event[0]
         if kind=='quit': return False
+        controller = getattr(getattr(self, 'graphics', None), 'controller', None)
+        if kind=='controller_look':
+            if self.pc.active:
+                self.pc.move(*event[1:], sensitivity=1.0)
+            return True
+        if kind.startswith('controller_') and controller:
+            if self.pc.active and kind in ('controller_button', 'controller_axis'):
+                self.mouse_released = False
+            controller.gameplay = self.pc.active
+            controller.process(event)
+            return True
+        if kind=='fullscreen':
+            self.graphics.toggle_fullscreen()
+            return True
         if kind=='key':
             down,key = event[1:]
+            mapped_code = getattr(self, 'keymap', KEYS).get(key)
             if key==1073741893 and down: return False  # F12
+            if key==1073741884 and down:  # F3
+                self.overlay = not self.overlay
+                return True
             if key==9 and down:
                 self.mouse_released=not self.mouse_released
                 self.desktop_input.release()
+                if controller: controller.release()
+                if getattr(self, 'mouse_bindings', None): self.mouse_bindings.release()
                 self.pc.release()
                 return True
-            if self.media.video is not None and down and key in (13,27,32):
+            if self.media.video is not None and down and mapped_code in (66,32,23):
                 self.media.end_video()
                 return True
-            if self.pc.story_active and key in (13,32):
+            story_keys = getattr(self, 'story_keys', set())
+            if key in story_keys or (down and self.pc.story_active and mapped_code in (66,23) and not (
+                    mapped_code==23 and self.pc.enabled and (
+                        self.pc.item_active or self.key_routes.get(23,False)))):
+                if down: story_keys.add(key)
+                else: story_keys.discard(key)
+                self.story_keys = story_keys
                 self.desktop_input.enqueue(('touch',down,742,416))
                 return True
-            if key in KEYS: self.desktop_input.enqueue(('key',down,key))
+            if key in getattr(self, 'keymap', KEYS): self.desktop_input.enqueue(('key',down,key))
         elif kind=='touch':
             down,x,y = event[1:]
             if self.mouse_captured:
-                self.desktop_input.enqueue(('mouse_button',down,1))
+                mapped = self.mouse_bindings.event(down,1)
+                if mapped: self.desktop_input.enqueue(mapped)
             elif down and self.pc.enabled and self.pc.active and self.mouse_released:
                 self.mouse_released=False
             elif down and self.media.video is not None:
@@ -132,36 +214,121 @@ class Game:
         elif kind=='motion':
             if not self.mouse_captured and not self.skipping_touch: self.desktop_input.enqueue(event)
         elif kind=='mouse_button':
-            if self.pc.active and not self.mouse_released:self.desktop_input.enqueue(event)
+            if self.pc.active and not self.mouse_released:
+                mapped = self.mouse_bindings.event(*event[1:])
+                if mapped: self.desktop_input.enqueue(mapped)
         elif kind=='mouse_delta':
             if self.mouse_captured:self.pc.move(*event[1:])
         elif kind=='focus_lost':
+            if controller: controller.release()
+            if getattr(self, 'mouse_bindings', None): self.mouse_bindings.release()
             self.desktop_input.release()
             self.pc.release()
             self.mouse_released=True
             self.skipping_touch=False
         return True
 
+    def configure_controls(self, settings):
+        """Release using the old bindings before applying a remap."""
+        from .settings import validate as validate_settings
+        settings = validate_settings(settings)
+        self.graphics.controller.release()
+        self.mouse_bindings.release()
+        self.desktop_input.release()
+        self.desktop_input.flush()
+        self.pc.release()
+        self.story_keys.clear()
+        self.keymap = key_map(settings)
+        self.mouse_bindings.configure(settings)
+        self.graphics.controller.configure(settings)
+        self.pc.sensitivity = settings['sensitivity']
+        self.pc.invert_y = settings['invert_y']
+        self.settings = settings
+
     def frame(self):
         start=time.monotonic()
-        self.desktop_input.flush()
-        self.pc.begin_frame()
-        result=self.jni.native('native_onDrawFrame',self.jni.activity)
-        if result==1: self.jni.native('native_setStereoHard',self.jni.activity,0)
-        self.media.update_video()
+        self.graphics.begin_frame()
+        with self.phase('input'):
+            controller = getattr(self.graphics, 'controller', None)
+            if controller:
+                for event in controller.tick(1 / ENGINE_HZ, gameplay=self.pc.active):
+                    self.event(event)
+            self.desktop_input.flush()
+            self.pc.begin_frame()
+        with self.phase('native_frame', 'native_onDrawFrame'):
+            result=self.jni.native('native_onDrawFrame',self.jni.activity)
+            if result==1: self.jni.native('native_setStereoHard',self.jni.activity,0)
+        with self.phase('media_audio'):
+            self.media.update_audio()
+        with self.phase('media_video'):
+            self.media.update_video()
+        unlocks = tuple(self.achievements.new_unlocks)
+        self.achievements.new_unlocks.clear()
+        self.unlock_capture.tick(self.graphics.capture_image, unlocks)
+        self.graphics.draw_controller_cursor()
         capture=self.pc.active and not self.mouse_released and self.media.video is None
         if capture != self.mouse_captured:
             self.desktop_input.release()
-            if self.graphics.sdl.SDL_SetRelativeMouseMode(int(capture)):
-                raise RuntimeError('Cannot capture mouse: '+self.graphics.sdl.SDL_GetError().decode())
+            self.mouse_bindings.release()
+            if controller: controller.release()
+            with self.phase('input_capture', 'SDL_SetRelativeMouseMode'):
+                if self.graphics.sdl.SDL_SetRelativeMouseMode(int(capture)):
+                    raise RuntimeError('Cannot capture mouse: '+self.graphics.sdl.SDL_GetError().decode())
             self.mouse_captured=capture
             log.info('Mouse %s', 'captured for gameplay' if capture else 'released')
         self.frames += 1
         if self.frames==3 and self.language=='en':
             user=self.arm.symbols['_ZZN13Bio4_UserData11GetInstanceEvE4inst']
             self.arm.call('_ZN13Bio4_UserData9SetLangIdEh',user,1)
-        self.frame_times.append(time.monotonic()-start)
+        elapsed = time.monotonic()-start
+        self.engine_seconds += elapsed
+        self.max_engine_seconds = max(self.max_engine_seconds, elapsed)
+        self.frame_times.append(elapsed)
+        if self.diagnostics:
+            self.diagnostics.frame(elapsed)
         if getattr(self,'telemetry',None): self.telemetry.sample(self)
+        if self.overlay and self.diagnostics:
+            with self.phase('diagnostics_overlay'):
+                self.graphics.draw_overlay(self.diagnostics.overlay_lines(self), self.diagnostics.graph())
+
+    def present(self):
+        with self.phase('swap'):
+            self.graphics.swap()
+        if self.diagnostics:
+            self.diagnostics.presentation()
+
+    def statistics(self, pacer=None, elapsed=None):
+        """Legacy fields retain their meanings; new fields have a versioned schema."""
+        stats = {'schema_version': 2,
+                 'frames':self.frames,'presentations':self.graphics.presentations,
+                 'draw_calls':self.graphics.draws,'texture_uploads':self.graphics.textures,
+                 'input_events':self.input_events,'audio_loads':self.media.loaded,'audio_decoded':len(self.media.decoded),'videos_played':self.media.videos_played,
+                 'heap_bytes':self.arm.heap-(self.arm.base+16*1024*1024),
+                 'native_import_calls':self.fast.calls(),
+                 'audio_output_frames':self.media.audio.re4_audio_measure(0),
+                 'audio_nonzero_samples':self.media.audio.re4_audio_measure(1),
+                 'gl_messages':sorted(self.graphics.debug_messages),
+                 'save_roundtrip_verified':self.save_verified,
+                 'successful_saves':self.save_boundary.completed,'failed_saves':self.save_boundary.failed,
+                 'engine_hz':ENGINE_HZ, 'presentation_hz':ENGINE_HZ,
+                 'frame_overruns':pacer.overruns if pacer else 0,
+                 'startup_seconds':round(self.startup_seconds, 6),
+                 'elapsed_seconds':round(elapsed if elapsed is not None else time.monotonic()-self.startup_started,3),
+                 'max_engine_ms':round(self.max_engine_seconds*1000,2),
+                 'mean_engine_ms':round(self.engine_seconds/max(self.frames,1)*1000,2)}
+        from .assets import COMPATIBLE_LIBRARIES
+        stats['engine_hashes'] = COMPATIBLE_LIBRARIES
+        stats['graphics'] = {'renderer':self.graphics.renderer, 'version':self.graphics.version,
+                             'logical_size':[self.graphics.width,self.graphics.height],
+                             'window_size':self.graphics.window_size, 'drawable_size':self.graphics.drawable_size}
+        import resource
+        stats['peak_process_rss_bytes_since_process_start'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+        stats['settings'] = self.settings
+        stats['diagnostics'] = self.diagnostics.metrics() if self.diagnostics else {'enabled':False}
+        stats['texture_cache'] = self.graphics.texture_cache.metrics()
+        stats['pending_audio_decodes'] = sum(not future.done() for future in self.media.decoding.values())
+        stats['pending_audio_requests'] = len(self.media.pending_audio)
+        return stats
 
     def verify_save_roundtrip(self):
         """Verify the engine's own serialization using the current test save."""
@@ -192,13 +359,15 @@ class Game:
             for entry in json.loads(Path(script).read_text()):
                 scheduled.setdefault(entry['frame'], []).append(entry)
         running=True
+        pacer = FramePacer()
+        run_started = time.monotonic()
         try:
             while running and (not frames or self.frames < frames):
-                start=time.monotonic()
-                for event in self.graphics.events():
-                    if replay_only and event[0] != 'quit' and event != ('key',True,1073741893):
-                        continue
-                    if not self.event(event): running=False
+                with self.phase('input_poll'):
+                    for event in self.graphics.events():
+                        if replay_only and event[0] != 'quit' and event != ('key',True,1073741893):
+                            continue
+                        if not self.event(event): running=False
                 if not running: break
                 captures = []
                 for entry in scheduled.get(self.frames,[]):
@@ -217,35 +386,52 @@ class Game:
                         print('[test]',entry['text'],flush=True)
                         self.graphics.sdl.SDL_SetWindowTitle(self.graphics.window,entry['text'].encode())
                     elif entry['action']=='screenshot': captures.append(entry['path'])
+                    elif entry['action']=='event':
+                        if not self.event(tuple(entry['event'])): running=False
+                    elif entry['action']=='resize':
+                        width, height = entry['width'], entry['height']
+                        if not (240 <= width <= 16384 and 240 <= height <= 16384):
+                            raise ValueError('Invalid replay window size')
+                        import ctypes as C
+                        self.graphics.signature('SDL_SetWindowSize', None, C.c_void_p, C.c_int, C.c_int)
+                        self.graphics.sdl.SDL_SetWindowSize(self.graphics.window, width, height)
+                        self.graphics.update_drawable()
                     else: raise ValueError('Unknown scripted input action')
                 self.frame()
                 for path in captures: self.graphics.screenshot(path)
                 if screenshot and frames and self.frames==frames: self.graphics.screenshot(screenshot)
-                self.graphics.swap()
-                time.sleep(max(0,1/45-(time.monotonic()-start)))
+                self.present()
+                with self.phase('pacing'):
+                    pacer.wait()
             if screenshot and (not frames or self.frames < frames):
                 self.frame()
                 self.graphics.screenshot(screenshot)
-            stats = {'frames':self.frames,'draw_calls':self.graphics.draws,'texture_uploads':self.graphics.textures,
-                     'input_events':self.input_events,'audio_loads':self.media.loaded,'audio_decoded':len(self.media.decoded),'videos_played':self.media.videos_played,
-                     'heap_bytes':self.arm.heap-(self.arm.base+16*1024*1024),
-                     'native_import_calls':self.fast.calls(),
-                     'audio_output_frames':self.media.audio.re4_audio_measure(0),
-                     'audio_nonzero_samples':self.media.audio.re4_audio_measure(1),
-                     'gl_messages':sorted(self.graphics.debug_messages),
-                     'save_roundtrip_verified':self.save_verified,
-                     'mean_engine_ms':round(sum(self.frame_times)/max(len(self.frame_times),1)*1000,2)}
+            stats = self.statistics(pacer, time.monotonic()-run_started)
             log.info('Final statistics: %s',json.dumps(stats))
             return stats
         finally:
             self.close()
 
     def close(self):
+        if getattr(self, '_closed', False):
+            return
+        self._closed = True
+        if getattr(self, 'unlock_capture', None):
+            self.unlock_capture.close()
         if self.initialized:
             for method in ('native_onPause','native_onStop','native_onDestroy'):
                 try: self.jni.native(method)
                 except Exception as error: log.warning('[shutdown] %s', error)
             self.initialized=False
-        if getattr(self,'media',None): self.media.close()
-        if getattr(self,'graphics',None): self.graphics.close()
-        if getattr(self,'arm',None) and self.arm.uc is not None: self.arm.close()
+        # Attempt every cleanup even if flushing a save or reaping media fails.
+        for name, callback in (
+                ('save transaction', getattr(getattr(self,'save_boundary',None),'abort',None)),
+                ('files', getattr(getattr(self,'bionic',None),'close',None)),
+                ('media', getattr(getattr(self,'media',None),'close',None)),
+                ('graphics', getattr(getattr(self,'graphics',None),'close',None)),
+                ('arm', getattr(getattr(self,'arm',None),'close',None)),
+                ('saves', getattr(getattr(self,'save_store',None),'close',None)),
+                ('diagnostics', getattr(getattr(self,'diagnostics',None),'close',None))):
+            if callback:
+                try: callback()
+                except Exception as error: log.warning('[shutdown %s] %s',name,error)

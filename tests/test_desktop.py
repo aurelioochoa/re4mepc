@@ -55,12 +55,12 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(icon.read_bytes(), self.icon.read_bytes())
         shortcut = desktop / entry.name
         self.assertEqual(entry.read_bytes(), shortcut.read_bytes())
+        self.assertIn('Terminal=false', entry.read_text())
         self.assertTrue(os.access(shortcut, os.X_OK))
-        result = subprocess.run([str(launcher), '--width', '900'], cwd='/', text=True,
+        result = subprocess.run([str(launcher), '--help'], cwd='/', text=True,
                                 capture_output=True, check=True)
         self.assertEqual(result.stdout.splitlines(), [
-            'run', '--game', str(game), '--log-file',
-            str(self.home / 'state with spaces/re4mepc/logs/desktop.log'), '--width', '900',
+            'launcher', '--game', str(game), '--help',
         ])
         if shutil.which('desktop-file-validate'):
             subprocess.run(['desktop-file-validate', str(entry)], check=True, capture_output=True)
@@ -122,3 +122,11 @@ class DesktopTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'existing directory'):
             install(self.root, icon=self.icon, desktop=self.home / 'absent')
         self.assertFalse(any(path.exists() for path in locations()))
+
+    def test_generated_default_icon_is_used_without_an_apk(self):
+        bundled = self.root / 're4pc/ui_assets/icon.png'
+        bundled.parent.mkdir(parents=True)
+        bundled.write_bytes(png(128))
+        _, entry, icon = install(self.root)
+        self.assertEqual(icon.read_bytes(), bundled.read_bytes())
+        self.assertIn('Terminal=false', entry.read_text())

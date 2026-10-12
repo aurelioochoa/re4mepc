@@ -10,12 +10,14 @@ from pathlib import Path
 def check_gameplay(game, output=None):
     assert game.pc.active, 'Start a mission and dismiss story text first'
     from re4pc.paths import test_output
+    from re4pc.timing import FramePacer
     output=test_output('pc-controls',output)
     sdl=game.graphics.sdl
     sdl.SDL_PushEvent.argtypes=(C.c_void_p,)
     sdl.SDL_GetWindowID.argtypes=(C.c_void_p,)
     expected=[]
     evidence={}
+    pacer=FramePacer()
 
     def push(kind, value=0, dx=0, dy=0):
         if not expected:
@@ -57,7 +59,7 @@ def check_gameplay(game, output=None):
             for event in events:
                 if event==('quit',) or event==('key',True,1073741893):
                     raise RuntimeError('Visible test interrupted')
-            game.frame();game.graphics.swap();time.sleep(1/45)
+            game.frame();game.graphics.swap();pacer.wait()
 
     def capture(name):
         game.frame();game.graphics.screenshot(output/(name+'.png'));game.graphics.swap()
@@ -97,6 +99,35 @@ def check_gameplay(game, output=None):
     game.mouse_released=False
     advance(45)
     assert game.mouse_captured,'Gameplay did not capture cursor'
+    # Exercise the original mission clock rather than inferring its rate
+    # from host FPS. This fixture has private saves/resources.
+    mission=game.arm.call('_ZN13GM_MisConduct8Get_InstEv')
+    params=game.arm.call('_ZN12GM_CtrlParam8Get_InstEv')
+    limit_get='_ZN12GM_CtrlParam16Get_MisLimitTimeEv'
+    limit_set='_ZN12GM_CtrlParam16Set_MisLimitTimeEs'
+    old_limit=game.arm.call(limit_get,params)
+    old_ticks=game.arm.u32(mission)
+    old_enabled=game.arm.read(mission+0x10,1)
+    total_get='_ZN12GM_CtrlParam15Get_MisTotalSecEv'
+    before_total=game.arm.call(total_get,params)
+    try:
+        game.arm.call(limit_set,params,120)
+        game.arm.w32(mission,0)
+        game.arm.write(mission+0x10,b'\x01')
+        started=time.monotonic()
+        advance(20)
+        elapsed=time.monotonic()-started
+        remaining=game.arm.call(limit_get,params)
+        total=game.arm.call(total_get,params)
+        assert remaining==119,('Native mission clock did not advance one second in 20 updates',remaining)
+        assert total==before_total+1,('Native elapsed game time',before_total,total)
+        assert elapsed>=0.9,('Host accelerated gameplay',elapsed)
+        evidence['native_clock']={'updates':20,'game_seconds':120-remaining,'wall_seconds':round(elapsed,3)}
+        print('CONTROL_PASS native_clock',json.dumps(evidence['native_clock']),flush=True)
+    finally:
+        game.arm.call(limit_set,params,old_limit)
+        game.arm.w32(mission,old_ticks)
+        game.arm.write(mission+0x10,old_enabled)
     capture('before')
     # Collision traces use the camera object's eye/target, so the rendered
     # view must use those same vectors throughout a sustained mouse sweep.
@@ -229,7 +260,10 @@ def check_gameplay(game, output=None):
         evidence[name]={'native_trigger':flag}
         print('CONTROL_PASS',name,flush=True)
     push(0x300,ord('x'));advance(45)
-    assert game.pc.last_sample['aiming'],'X did not aim'
+    assert game.pc.last_sample['aiming'], ('X did not aim', {'state':state(),
+        'active':game.pc.active, 'story':game.pc.story_active,
+        'item':game.pc.item_active, 'keys':sorted(game.pc.keys),
+        'sample':game.pc.last_sample})
     ammo=bullets();push(0x300,ord('z'));push(0x301,ord('z'));advance(35)
     assert bullets()==ammo-1,'Z did not fire exactly once'
     push(0x301,ord('x'));advance(45)
@@ -263,39 +297,43 @@ if __name__=='__main__':
     import argparse
     sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
     from re4pc.game import Game
+    from re4pc.timing import FramePacer
     from re4pc.paths import game_dir, isolated_game, test_output
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--game',type=Path,default=game_dir())
     parser.add_argument('--output',type=Path)
+    parser.add_argument('--hidden',action='store_true',help='Render a hidden SDL window for injected-event replay; does not certify physical cursor capture')
     args=parser.parse_args()
     output=test_output('pc-controls',args.output)
     test_root=isolated_game(args.game,output)
     print('Test artifacts:',output,flush=True)
-    game=Game(test_root,skip_videos=True)
+    game=Game(test_root,skip_videos=True,hidden=args.hidden)
     try:
         from unicorn import UC_HOOK_CODE
         from unicorn.arm_const import UC_ARM_REG_R0
         ui=set()
+        ui_hooks=[]
         title=[0]
         story_selected=False
+        pacer=FramePacer()
         def observe(uc,address,size,context,name):
             ui.add(name)
             if 'Task_Title5Frame' in name:title[0]=uc.reg_read(UC_ARM_REG_R0)
         for symbol,address in game.arm.symbols.items():
             if ('Bio4_CTTask_' in symbol or 'GM_Task_Mis_' in symbol) and '5FrameEPv' in symbol:
-                game.arm.uc.hook_add(UC_HOOK_CODE,lambda uc,a,s,c,name=symbol: observe(uc,a,s,c,name),begin=address&~1,end=address&~1)
+                ui_hooks.append(game.arm.uc.hook_add(UC_HOOK_CODE,lambda uc,a,s,c,name=symbol: observe(uc,a,s,c,name),begin=address&~1,end=address&~1))
         def frames(count):
             for _ in range(count):
                 for event in game.graphics.events():
                     if event==('quit',) or event==('key',True,1073741893):raise RuntimeError('Test interrupted')
-                ui.clear();game.frame();game.graphics.swap();time.sleep(1/45)
+                ui.clear();game.frame();game.graphics.swap();pacer.wait()
             game.graphics.screenshot(output/'pc-navigation.png')
         def click(x,y):
             game.event(('touch',True,x,y));frames(4)
             game.event(('touch',False,x,y));frames(150)
             game.frame();game.graphics.screenshot(output/'pc-navigation.png');game.graphics.swap()
             print('NAV',x,y,'frame',game.frames,'active',game.pc.active,'story',game.pc.story_active,flush=True)
-        frames(600)
+        frames(200)
         # Isolated fixture: clear the tutorial and select story mission 2.
         user=game.arm.symbols['_ZZN13Bio4_UserData11GetInstanceEvE4inst']
         game.arm.call('_ZN13Bio4_UserData19SetMissionClearFlagEllb',user,0,0,1)
@@ -316,14 +354,15 @@ if __name__=='__main__':
                 click(60,240) if story_selected else click(400,200)
                 story_selected=True
             elif 'MissionSelectMercenary' in current:click(400,110)
-            elif 'TitleTop' in current:click(400,100)
+            elif 'TitleTop' in current:click(400,128)
             elif 'Task_Title5Frame' in current:
                 step=game.arm.u32(title[0]+8)
                 print('TITLE_STEP',step,flush=True)
                 if step==1:click(400,390)
-                elif step==4:click(400,100)
+                elif step==4:click(400,128)
                 else:frames(150)
             elif 'GameMain' in current or 'Mis_Main' in current:click(60,416)
             else:frames(150)
+        for hook in ui_hooks: game.arm.uc.hook_del(hook)
         check_gameplay(game,output)
     finally:game.close()

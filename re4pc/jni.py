@@ -241,5 +241,5 @@ class JNI:
 
     def native(self, name, *args):
         address, signature = self.natives[name]
-        result = self.arm.call(address, self.env, self.activity, *args)
+        result = self.arm.call(address, self.env, self.activity, *args, operation=name)
         return result

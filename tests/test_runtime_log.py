@@ -80,3 +80,20 @@ class RuntimeLogTests(unittest.TestCase):
         self.assertEqual(runtime.snapshot, ('gameplay', 12, 42, 3, True))
         with runtime:
             self.assertIsNone(runtime.thread)
+
+    def test_loading_heartbeat_identifies_current_blocking_operation(self):
+        from re4pc.diagnostics import Diagnostics
+        diagnostics=Diagnostics()
+        arrived=threading.Event();records=[]
+        class Capture(logging.Handler):
+            def emit(self,record):
+                records.append(record.getMessage());arrived.set()
+        handler=Capture();old_level=log.level
+        log.setLevel(logging.INFO);log.addHandler(handler)
+        try:
+            with diagnostics.phase('file_read','large resource.bin'):
+                with RuntimeLog(.01,diagnostics=diagnostics):
+                    self.assertTrue(arrived.wait(1))
+            self.assertIn('operation=large resource.bin',records[0])
+        finally:
+            log.removeHandler(handler);log.setLevel(old_level)

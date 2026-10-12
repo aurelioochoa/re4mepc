@@ -54,7 +54,7 @@ class DesktopInput:
                 if down == (button in self.buttons_down):continue
                 if down:self.buttons_down.add(button)
                 else:self.buttons_down.remove(button)
-                self.button(down,button)
+                if self.button is not None:self.button(down,button)
                 changed.add(identifier)
 
     def release(self):

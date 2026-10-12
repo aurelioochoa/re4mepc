@@ -23,6 +23,119 @@ class Registers:
     def reg_write(self, reg, value): self.values[reg] = value
 
 
+class ItemPickupTests(unittest.TestCase):
+    def setUp(self):
+        self.arm = Memory()
+        self.pc = PCControls(self.arm)
+        self.uc = Registers()
+        self.uc.reg_write(UC_ARM_REG_SP, 6000)
+        self.arm.w32(6004, 100)
+        self.arm.w32(100+4, 1000)
+        self.arm.write(100+0x20, b'\x01')
+        self.arm.w32(100+0x14, 2000)
+        self.arm.write(2000+0x50, b'\x01\x01')
+
+    def frame(self):
+        self.pc.begin_frame()
+        self.arm.w32(100+0x24, 0)
+        self.pc._item_window(self.uc, 0, 0, None)
+        return self.arm.u32(100+0x24)
+
+    def test_first_press_selects_and_second_press_takes_once(self):
+        self.pc.key(True, 23)
+        self.assertEqual(self.frame(), 0)
+        self.assertTrue(self.pc.item_active)
+        # Opening the window while Space is held must not confirm it.
+        self.pc.key(True, 23)
+        self.assertEqual(self.frame(), 0)
+        self.pc.key(False, 23)
+        self.pc.key(True, 23)
+        self.assertEqual(self.frame(), 4)
+        self.assertEqual(self.frame(), 0)
+
+    def test_disabled_or_hidden_take_button_does_not_confirm(self):
+        self.frame()
+        for flags in (b'\0\x01', b'\x01\0', b'\0\0'):
+            self.arm.write(2000+0x50, flags)
+            self.pc.key(True, 23)
+            self.assertEqual(self.frame(), 0)
+            self.pc.key(False, 23)
+
+    def test_focus_release_cancels_pending_take(self):
+        self.frame()
+        self.pc.key(True, 23)
+        self.pc.release()
+        self.assertEqual(self.frame(), 0)
+
+    def test_closed_window_does_not_leave_a_take_request_for_next_item(self):
+        self.frame()
+        self.pc.key(True, 23)
+        self.arm.write(100+0x20, b'\0')
+        self.assertEqual(self.frame(), 0)
+        self.assertFalse(self.pc.item_active)
+        self.arm.write(100+0x20, b'\x01')
+        self.assertEqual(self.frame(), 0)
+
+    def test_touch_mode_does_not_change_item_input(self):
+        self.pc.enabled = False
+        self.pc.item_take_this_frame = True
+        self.arm.w32(100+0x24, 8)
+        self.pc._item_window(self.uc, 0, 0, None)
+        self.assertEqual(self.arm.u32(100+0x24), 8)
+        self.assertFalse(self.pc.item_active)
+
+
+class TouchHUDTests(unittest.TestCase):
+    def setUp(self):
+        self.arm = Memory()
+        self.pc = PCControls(self.arm)
+        self.uc = Registers()
+        self.uc.reg_write(UC_ARM_REG_R0, 100)
+        self.arm.w32(100, 1000)
+        self.arm.write(100+0x40, b'\x01')
+        # Pad, lower weapon, event, companion, gun, knife, scope, menu.
+        self.components = {}
+        for index, offset in enumerate(range(4, 0x24, 4)):
+            component = 2000+index*100
+            self.components[offset] = component
+            self.arm.w32(100+offset, component)
+            self.arm.write(component+0x50, b'\x01\x01')
+
+    def test_draw_hides_movement_and_combat_but_preserves_interactions(self):
+        before = bytes(self.arm.data)
+        self.pc._hud_begin(self.uc, 0, 0, None)
+        for offset, component in self.components.items():
+            self.assertEqual(self.arm.read(component+0x51, 1),
+                             b'\0' if offset in (4, 8, 0x14, 0x18) else b'\x01')
+            self.assertEqual(self.arm.read(component+0x50, 1), b'\x01')
+        self.pc._hud_end(self.uc, 0, 0, None)
+        self.assertEqual(bytes(self.arm.data), before)
+        self.assertEqual(self.pc.hud_visibility, [])
+
+    def test_native_hidden_flags_and_missing_components_are_preserved(self):
+        self.arm.write(self.components[0x14]+0x51, b'\0')
+        self.arm.w32(100+0x18, 0)
+        before = bytes(self.arm.data)
+        for _ in range(3):
+            self.pc._hud_begin(self.uc, 0, 0, None)
+            self.pc._hud_end(self.uc, 0, 0, None)
+            self.assertEqual(bytes(self.arm.data), before)
+
+    def test_touch_mode_and_uninitialized_layout_are_unchanged(self):
+        for condition in ('touch', 'disabled', 'no_layout'):
+            if condition == 'touch': self.pc.enabled = False
+            elif condition == 'disabled':
+                self.pc.enabled = True
+                self.arm.write(100+0x40, b'\0')
+            else:
+                self.arm.write(100+0x40, b'\x01')
+                self.arm.w32(100, 0)
+            before = bytes(self.arm.data)
+            self.pc._hud_begin(self.uc, 0, 0, None)
+            self.pc._hud_end(self.uc, 0, 0, None)
+            self.assertEqual(bytes(self.arm.data), before)
+
+
 class MouseControlTests(unittest.TestCase):
     def setUp(self):
         self.arm = Memory()
@@ -230,3 +343,20 @@ class MouseControlTests(unittest.TestCase):
         self.pc._update(uc,0,0,None)
         self.assertTrue(self.pc.aim_owned)
         self.assertEqual(self.pc.last_sample['trig'],0x10)
+
+
+class ConfigurableCameraTests(unittest.TestCase):
+    def test_controller_scale_bypasses_mouse_sensitivity_but_retains_inversion(self):
+        pc=PCControls(Memory(),settings={'sensitivity':2,'invert_y':True})
+        pc.move(4,5,sensitivity=1.0)
+        self.assertEqual(pc.motion,[4,-5])
+
+    def test_sensitivity_and_inversion_apply_once_to_mouse_delta(self):
+        arm=Memory()
+        pc=PCControls(arm,settings={'sensitivity':2,'invert_y':True})
+        pc.move(4,5)
+        self.assertEqual(pc.motion,[8,-10])
+        pc.move(-1,-2)
+        self.assertEqual(pc.motion,[6,-6])
+        pc.release()
+        self.assertEqual(pc.motion,[0,0])

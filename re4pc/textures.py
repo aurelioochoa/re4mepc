@@ -1,5 +1,8 @@
 """Decode OES paletted textures that desktop OpenGL does not accept."""
-import struct
+from PIL import Image
+
+HIGH_NIBBLE = bytes(value >> 4 for value in range(256))
+LOW_NIBBLE = bytes(value & 15 for value in range(256))
 
 
 def palette_texture(internal_format, width, height, level, data):
@@ -36,10 +39,14 @@ def palette_texture(internal_format, width, height, level, data):
         length = (count*bits+7)//8
         if offset+length > len(data): raise ValueError('Truncated OES texture indices')
         indices = data[offset:offset+length]
-        if bits == 8:
-            pixels = b''.join(palette[index] for index in indices)
-        else:
-            pixels = b''.join(palette[(indices[i//2] >> (4 if i%2==0 else 0))&15] for i in range(count))
+        if bits == 4:
+            expanded = bytearray(length * 2)
+            expanded[0::2] = indices.translate(HIGH_NIBBLE)
+            expanded[1::2] = indices.translate(LOW_NIBBLE)
+            indices = bytes(expanded[:count])
+        image = Image.frombytes('P', (w,h), indices)
+        image.putpalette(b''.join(palette), rawmode='RGBA')
+        pixels = image.convert('RGBA').tobytes()
         images.append((mip,w,h,pixels))
         offset += length
     return images

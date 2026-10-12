@@ -4,10 +4,10 @@ import json
 import argparse
 import struct
 import sys
-import time
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
 from re4pc.game import Game
+from re4pc.timing import FramePacer
 
 from re4pc.paths import game_dir, isolated_game, test_output
 parser=argparse.ArgumentParser(description=__doc__)
@@ -17,6 +17,7 @@ args=parser.parse_args()
 output=test_output('input-probe',args.output)
 game=Game(isolated_game(args.game,output),skip_videos=True)
 sdl=game.graphics.sdl
+pacer=FramePacer()
 sdl.SDL_PushEvent.argtypes=(C.c_void_p,)
 sdl.SDL_GetWindowSize.argtypes=(C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_int))
 sdl.SDL_GL_GetDrawableSize.argtypes=sdl.SDL_GetWindowSize.argtypes
@@ -33,7 +34,7 @@ def push(kind,x=400,y=390,code=None):
 
 def frame():
     for event in game.graphics.events():game.event(event)
-    game.frame();game.graphics.swap();time.sleep(1/45)
+    game.frame();game.graphics.swap();pacer.wait()
 
 try:
     for _ in range(250):frame()
