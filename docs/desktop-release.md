@@ -34,8 +34,9 @@ F12 quit. Held input is released on focus loss, device removal and remapping.
 
 Default controllers use left-stick tank movement, right-stick look, triggers
 for aim/fire, A action, X reload, Y knife, Start status, and D-pad navigation.
-In menus A holds the virtual touch cursor and the right stick moves it, including
-confirmation sliders; B delivers native confirm. All devices share named
+In PC menus the right stick moves the cursor, A clicks the current selection,
+and B confirms through a verified native action or a bounded slider gesture.
+In touch mode A holds the virtual cursor for dragging. All devices share named
 actions, with independent physical sources and press-selected release routes.
 Bindings use SDL keycodes, button numbers, and controller names in settings.
 Tab, F3 and F12 are reserved. Explicit run options override saved settings.
@@ -112,3 +113,54 @@ open Tk, execute 160 engine ticks from a separately mounted user fixture, and
 exercise XDG settings/backups while switching formats. These checks validate a
 software OpenGL compatibility driver; physical displays, hardware controllers
 and vendor-specific driver combinations remain additional coverage.
+
+## Immutable candidate qualification — 2026-10-12
+
+The candidate pair includes desktop menu routing, achievement gallery exports
+and optional portable save/media bundles. Both formats pass clean Ubuntu 22.04,
+Ubuntu 24.04 and Arch containers on these exact bytes:
+
+| Artifact | SHA-256 |
+|---|---|
+| AppImage | eb2df02f95cad7867e064b005dcf133696a55444c4760637238ddaa10d051bfe |
+| Portable tar.gz | f74498acb580e01588e1c7c9188206ab8faf2977984a534d9ba7e37f00bf08ab |
+
+| Target | Validation image ID |
+|---|---|
+| Ubuntu 22.04 | sha256:705fc84ae7baab3d57accf2c14e45d1dd8a315030205f8392e266fecdae67911 |
+| Ubuntu 24.04 | sha256:9699cd9ecace73586e6dd9ceb95b997b20aaac3cf07efa9b556e4618227184d7 |
+| Arch | sha256:2a24a58daccac5b7367731701581511825de12140723e6f75fda1957b74e54f4 |
+
+The checks open both Tk launchers and run 160 engine ticks per format with
+llvmpipe, Xvfb and dummy audio. They verify shared settings/backups, gallery
+selection and media deduplication, PNG/MP4 bundle import followed by explicit
+Restore, and legacy save-only roundtrips. Paths contain spaces. Python and a
+compiler are absent from the host image. The Arch validator initially lacked
+`cmp`; adding the test utility `diffutils` allowed the same artifacts to pass.
+
+Upgrade checks retain the preceding portable build's settings and snapshot
+while switching to either candidate format. The preceding AppImage hash is
+`fb7200de0f1ab5afd7639f16a082120434949ab1854db4503293b81bcb8fbf43`;
+the preceding tar.gz hash is
+`a4aa2099d64b8600611078e2a7db17f62d4043e1c478f88a990c83ff1d9dbca2`.
+Both old artifacts are frozen inputs, although only the old portable format
+creates the upgrade state. Hash checks reject artifact changes during validation.
+
+Evidence and artifacts are external under
+`~/.local/state/re4mepc/roadmap-20261012/work/evidence/`, in
+`candidate-packages`, `package-validation` and `package-validation-arch`.
+Reproduce with:
+
+```bash
+.venv/bin/python tools/validate_package.py \
+  --dist /external/candidate-packages --previous-dist /external/preceding-packages \
+  --output /external/package-validation
+```
+
+These are automated smoke-qualified candidates. The full release gate remains
+incomplete: natural campaign progression, physical controller hot-plug, audible
+speaker output, physical display/HiDPI checks and package execution on hardware
+drivers still need evidence. Source desktop checks cover resizing, fullscreen,
+focus/cursor capture and SDL virtual-controller disconnect. Available hardware
+is AMD RX 6700S/680M; Intel and NVIDIA hardware and a physical controller are
+unavailable. Repacking invalidates all qualification attached to these hashes.
