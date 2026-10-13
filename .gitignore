@@ -23,6 +23,8 @@
 !/docs/settings-minimum-preview.png
 !/docs/achievements-preview.png
 !/docs/achievements-minimum-preview.png
+!/docs/backups-preview.png
+!/docs/backups-minimum-preview.png
 # Generated launcher artwork; game resources remain ignored.
 !/re4pc/ui_assets/forest.png
 !/re4pc/ui_assets/icon.png
@@ -31,6 +33,11 @@
 !/re4pc/ui_assets/case-file.png
 !/re4pc/ui_assets/numeral-4.png
 !/re4pc/ui_assets/paper.png
+!/re4pc/ui_assets/resident-evil-wordmark.png
+!/re4pc/ui_assets/case-paper-v2.png
+!/re4pc/ui_assets/case-seal.png
+!/re4pc/ui_assets/paperclip.png
+!/re4pc/ui_assets/ribbon-spools.png
 !/re4pc/ui_assets/achievement-village.png
 !/re4pc/ui_assets/achievement-gigante.png
 !/re4pc/ui_assets/achievement-ashley.png

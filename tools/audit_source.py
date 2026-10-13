@@ -14,7 +14,7 @@ TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'VALIDATION.md',
              'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
              'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md',
              'docs/render-audit.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
-             'docs/dialogs.md'}
+             'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md'}
 # Only reviewed artwork (generated or supplied by the user) and host UI screenshots may be binary.
 # New versions require visual review and an explicit SHA-256 update.
 DOCUMENTATION_IMAGES = {
@@ -102,13 +102,13 @@ SOURCE_FILES = {
               'launcher', 'launcher_ui', 'case_dialog', 'packaging', 'diagnostics', 'texture_cache', 'achievements', 'achievement_media'),
     'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
               'migrate_local', 'probe_input', 'test_components',
-              'test_pc_controls', 'test_visible', 'package', 'benchmark', 'audit_render', 'validate_package', 'preview_dialogs'),
+              'test_pc_controls', 'test_visible', 'package', 'benchmark', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow'),
     'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_desktop', 'test_graphics',
               'test_input', 'test_key_routing', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',
               'test_actions', 'test_controllers', 'test_settings', 'test_backups',
               'test_save_boundary', 'test_launcher', 'test_packaging', 'test_diagnostics',
-              'test_texture_cache', 'test_cli', 'test_benchmark', 'test_achievements', 'test_achievement_media'),
+              'test_texture_cache', 'test_cli', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_rea_workflow'),
 }
 PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c'} | {
     f'{folder}/{name}.py' for folder, names in SOURCE_FILES.items() for name in names}

@@ -12,6 +12,8 @@ import platform
 import shutil
 import statistics
 import struct
+import hashlib
+import subprocess
 from contextlib import nullcontext
 import sys
 import time
@@ -25,6 +27,26 @@ from re4pc.paths import game_dir, isolated_game, test_output
 from re4pc.runtime_log import configure
 from re4pc.settings import validate as validate_settings
 from re4pc.timing import FramePacer
+
+
+def source_identity(root=None):
+    """Bind measurements to the actual source bytes, including local changes."""
+    root = Path(root or Path(__file__).resolve().parent.parent)
+    from re4pc.packaging import APPLICATION_MODULES
+    paths = [root/'re4pc'/name for name in APPLICATION_MODULES]
+    paths += [root/'native/audio.c', root/'native/fast.c', root/'tools/benchmark.py']
+    digest = hashlib.sha256()
+    for path in sorted(paths):
+        digest.update(path.relative_to(root).as_posix().encode() + b'\0')
+        digest.update(path.read_bytes())
+    try:
+        revision = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'],
+                                           stderr=subprocess.DEVNULL, text=True).strip()
+        dirty = bool(subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'],
+                                            stderr=subprocess.DEVNULL))
+    except (OSError, subprocess.CalledProcessError):
+        revision, dirty = None, None
+    return {'revision': revision, 'dirty': dirty, 'runtime_source_sha256': digest.hexdigest()}
 
 
 def quantiles(values):
@@ -54,6 +76,8 @@ def resume_document(path, hardware, configuration):
         raise ValueError('Resume requires the same schema and reference hardware')
     if document.get('configuration', configuration) != configuration:
         raise ValueError('Resume requires the same benchmark configuration')
+    if 'source' in document and document['source'] != source_identity():
+        raise ValueError('Resume requires the same source revision and bytes')
     records = document['records']
     keys = [case_key(case) for case in records]
     if len(keys) != len(set(keys)):
@@ -313,6 +337,7 @@ def main():
                      'compare_diagnostics':args.compare_diagnostics, 'native_profiles':args.native_profile,
                      'python_profile':args.python_profile}
     document = {'schema_version':1, 'hardware':hardware, 'configuration':configuration,
+                'source':source_identity(),
                 'cache_definition':'application caches; OS page cache uncontrolled', 'records':[]}
     if args.resume:
         if args.compare_diagnostics or args.python_profile or args.native_profile:
