@@ -28,6 +28,7 @@ DEFAULT_CURSOR = {'title': (400, 390), 'title_top': (400, 128), 'difficulty': (4
                   'confirmation': (240, 320), 'notice': (742, 416), 'data_reset': (400, 405),
                   'mission': (400, 200), 'mission_description': (60, 240), 'mission_prepare': (60, 416),
                   'inventory': (350, 120)}
+CANCEL_CURSOR = {'inventory': (60, 340), 'inventory_submenu': (600, 265)}
 DIRECTIONS = {19, 20, 21, 22}
 MENU_CODES = DIRECTIONS | {23, 66, 32}
 PHASE_FIELDS = {'title': (8,4), 'title_top': (8,4), 'difficulty': (0x20,1),
@@ -122,8 +123,8 @@ class MenuControls:
             self.touch('up', *self.touch_position)
             self.touch_down = False
 
-    def _click(self):
-        x, y = map(round, self.cursor)
+    def _click(self, position=None):
+        x, y = map(round, self.cursor if position is None else position)
         self.gesture.extend((('down', x, y), None, ('up', x, y)))
 
     def key(self, down, code):
@@ -142,6 +143,8 @@ class MenuControls:
         if code == 32:
             if self.state == 'data_reset':
                 self.native_request = ('reset_cancel', code)
+            elif self.state in CANCEL_CURSOR:
+                self._click(CANCEL_CURSOR[self.state])
             else:
                 # Cancel remains the engine's real key callback; Game routes
                 # this code natively when the menu has no verified cancel.
@@ -161,7 +164,7 @@ class MenuControls:
         self.confirmations += 1
 
     def routes(self, code):
-        return self.active and code in MENU_CODES and (code != 32 or self.state == 'data_reset')
+        return self.active and code in MENU_CODES and (code != 32 or self.state == 'data_reset' or self.state in CANCEL_CURSOR)
 
     def _component_enabled(self, component):
         return bool(component and self.arm.read(component + 0x50, 2) == b'\x01\x01')
@@ -236,5 +239,6 @@ class MenuControls:
         settings = self.settings
         confirm = 'Confirm slider' if self.state == 'confirmation' else 'Continue' if self.state in ('title_top', 'difficulty', 'notice', 'mission_description') else 'Click'
         directions = ','.join(binding_label(settings, action) for action in ('forward', 'backward', 'left', 'right'))
-        return (f"{binding_label(settings, 'confirm')}: {confirm}   {binding_label(settings, 'action')}: Click   {binding_label(settings, 'status')}: Back",
+        back = f"   {binding_label(settings, 'status')}: Back" if self.routes(32) else ''
+        return (f"{binding_label(settings, 'confirm')}: {confirm}   {binding_label(settings, 'action')}: Click{back}",
                 f"{directions}: {'Difficulty / cursor' if self.state == 'difficulty' else 'Cursor'}   Right stick: Cursor")

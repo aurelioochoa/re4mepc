@@ -11,6 +11,22 @@ from re4pc.input import DesktopInput
 
 
 class MenuControlTests(unittest.TestCase):
+    def test_inventory_cancel_clicks_verified_button_once_and_preserves_cursor(self):
+        for state,position in (('inventory',(60,340)),('inventory_submenu',(600,265))):
+            self.menu.cancel()
+            self.touch.reset_mock()
+            self.menu.state=state
+            self.menu.cursor[:]=[350,120]
+            self.assertTrue(self.menu.routes(32))
+            for _ in range(20):
+                self.menu.key(True,32)
+                self.menu.tick()
+            self.assertEqual(self.touch.call_args_list,[unittest.mock.call('down',*position),unittest.mock.call('up',*position)])
+            self.assertEqual(self.menu.cursor,[350,120])
+        self.menu.state='notice'
+        self.assertFalse(self.menu.routes(32))
+        self.assertNotIn('Back',self.menu.hints()[0])
+
     def test_pending_native_title_action_waits_for_scene_and_can_be_cancelled(self):
         self.menu.state = 'title_top'
         self.arm.u32.side_effect = lambda pointer: {104:44,108:4,180:55}.get(pointer,0)

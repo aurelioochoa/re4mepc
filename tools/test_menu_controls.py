@@ -1,6 +1,7 @@
 """Visible keyboard/controller menu replay on a fresh, isolated engine fixture."""
 import argparse
 import ctypes as C
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -9,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from re4pc.game import Game
 from re4pc.paths import game_dir, isolated_game, test_output
 from re4pc.timing import FramePacer
+from tools.benchmark import source_identity
+from unicorn.arm_const import UC_ARM_REG_PC, UC_ARM_REG_LR, UC_ARM_REG_R4
 
 
 def check(game, output, device):
@@ -160,9 +163,16 @@ def check(game, output, device):
     tap('action')
     wait('inventory_submenu')
     game.graphics.screenshot(output/(device+'-inventory-action.png'))
+    tap('status')
+    wait('inventory')
+    tap('status')
+    wait('gameplay')
     game.verify_save_roundtrip()
-    report = {'device': device, 'states': samples, 'difficulty': [initial, changed, restored],
+    report = {'device': device, 'source':source_identity(),
+              'driver_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+              'states': samples, 'difficulty': [initial, changed, restored],
               'held_confirmation_once': True, 'focus_and_disconnect_cancel': True,
+              'inventory_back_to_gameplay':True,
               'save_roundtrip': game.save_verified, 'engine_hz': 20,
               'fixture': 'tutorial clear and mission selection set synthetically; no campaign claim'}
     (output/(device+'-evidence.json')).write_text(json.dumps(report, indent=2)+'\n')
@@ -184,6 +194,11 @@ def main():
     except BaseException:
         game.graphics.screenshot(output/'failure.png')
         (output/'failure-state.json').write_text(json.dumps({'menu': game.menu.state,
+            'source':source_identity(), 'tick':game.frames,
+            'guest_base':hex(game.arm.base), 'menu_task':hex(game.menu.task),
+            'pc':hex(game.arm.uc.reg_read(UC_ARM_REG_PC)),
+            'lr':hex(game.arm.uc.reg_read(UC_ARM_REG_LR)),
+            'r4':hex(game.arm.uc.reg_read(UC_ARM_REG_R4)),
             'pc_active': game.pc.active, 'story_active': game.pc.story_active, 'item_active': game.pc.item_active,
             'gl_messages': sorted(game.graphics.debug_messages)},indent=2)+'\n')
         raise
