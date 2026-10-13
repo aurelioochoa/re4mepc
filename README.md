@@ -540,4 +540,3 @@ The source written for this host is MIT licensed. The license excludes original
 game data, trademarks and third-party dependencies. Interoperability names,
 symbols, offsets and hashes identify the supported engine; executable test
 snippets are hand-written synthetic fixtures and host ABI trampolines.
-
