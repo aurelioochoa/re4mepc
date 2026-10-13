@@ -26,6 +26,19 @@ class VideoOverlayTests(unittest.TestCase):
             gl = graphics.gl
             gl.glClearColor(0.0, 0.0, 0.0, 1.0)
             gl.glClear(0x4000)
+            # Menu texturing on another unit used to silently modulate host
+            # overlays. The overlay must disable every unit and restore them.
+            textures = (C.c_uint * 2)()
+            gl.glGenTextures(2, textures)
+            red = C.create_string_buffer(bytes((255, 0, 0, 255)))
+            for unit in range(2):
+                gl.glActiveTexture(0x84c0 + unit)
+                gl.glBindTexture(0x0de1, textures[unit])
+                gl.glTexImage2D(0x0de1, 0, 0x1908, 1, 1, 0, 0x1908, 0x1401, C.addressof(red))
+                gl.glTexParameterf(0x0de1, 0x2801, 0x2600)
+                gl.glTexParameterf(0x0de1, 0x2800, 0x2600)
+                gl.glEnable(0x0de1)
+            gl.glActiveTexture(0x84c0)
             # Simulate state left by a menu/fade and a texture upload.
             gl.glColorMask(0, 0, 0, 0)
             gl.glDrawBuffer.argtypes = (C.c_uint,)
@@ -57,6 +70,10 @@ class VideoOverlayTests(unittest.TestCase):
                 gl.glGetIntegerv(parameter, C.byref(value))
                 self.assertEqual(value.value, expected)
             self.assertEqual(gl.glGetError(), 0)
+            gl.glIsEnabled.argtypes, gl.glIsEnabled.restype = (C.c_uint,), C.c_uint
+            for unit in range(2):
+                gl.glActiveTexture(0x84c0 + unit)
+                self.assertTrue(gl.glIsEnabled(0x0de1))
         finally:
             if graphics:
                 graphics.close()

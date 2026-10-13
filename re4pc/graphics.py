@@ -365,6 +365,19 @@ class Graphics:
         x,y = map(round,self.controller.cursor)
         self._draw_pixels(sprite.tobytes(),rgba=True,size=(17,17),position=(x-8,y-8))
 
+    def draw_menu_hints(self, lines, cursor):
+        from PIL import Image, ImageDraw
+        panel = Image.new('RGBA', (self.width, 36), (0, 0, 0, 190))
+        ImageDraw.Draw(panel).multiline_text((8, 3), '\n'.join(lines), fill='white', spacing=2)
+        self._draw_pixels(panel.tobytes(), rgba=True, size=panel.size, position=(0, self.height-36))
+        sprite = Image.new('RGBA', (17, 17))
+        draw = ImageDraw.Draw(sprite)
+        draw.ellipse((1, 1, 15, 15), fill=(0, 0, 0, 180), outline='white', width=2)
+        draw.line((0, 8, 16, 8), fill='white')
+        draw.line((8, 0, 8, 16), fill='white')
+        x, y = map(round, cursor)
+        self._draw_pixels(sprite.tobytes(), rgba=True, size=sprite.size, position=(x-8, y-8))
+
     def _draw_pixels(self, data, rgba=False, size=None, position=(0,0)):
         gl = self.gl
         # Preserve the engine's fixed-function state around the video overlay.
@@ -374,6 +387,16 @@ class Graphics:
         gl.glPushClientAttrib.argtypes = (C.c_uint,)
         gl.glPushClientAttrib(0x00000001)  # GL_CLIENT_PIXEL_STORE_BIT
         for cap in (0x0b71,0x0b50,0x0be2,0x0b60,0x0b90,0x0de1,0x0bc0,0x0c11): gl.glDisable(cap)
+        # Rasterized pixels still pass through fixed-function texturing. The
+        # engine can leave several units enabled, which modulates UI pixels
+        # with a native texture even after disabling the current unit.
+        active, units = C.c_int(), C.c_int()
+        gl.glGetIntegerv(0x84e0, C.byref(active))
+        gl.glGetIntegerv(0x84e2, C.byref(units))
+        for unit in range(max(1, units.value)):
+            gl.glActiveTexture(0x84c0 + unit)
+            gl.glDisable(0x0de1)
+        gl.glActiveTexture(active.value)
         # A menu/fade pass can leave writes masked off. Movies are an opaque
         # desktop overlay and must not inherit that engine state.
         gl.glColorMask(1,1,1,1)

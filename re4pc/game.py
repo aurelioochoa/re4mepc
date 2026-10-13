@@ -22,6 +22,7 @@ from .save_boundary import SaveBoundary
 from .achievements import AchievementTracker
 from .achievement_media import UnlockCapture
 from .actions import key_map, MouseBindings
+from .menu_controls import MenuControls
 
 KEYS = {
     1073741906:19, 1073741905:20, 1073741904:21, 1073741903:22,
@@ -87,6 +88,9 @@ class Game:
         self.desktop_input = DesktopInput(self.touch, self.key,lambda down,button:self.pc.button(down,button))
         self.skipping_touch = False
         self.pc = PCControls(self.arm,controls=='pc')
+        self.menu = MenuControls(self.arm, self.touch, enabled=controls=='pc',
+                                 cursor=self.graphics.controller.cursor, settings=self.settings)
+        self.graphics.controller.menu_actions = controls=='pc'
         self.pc.sensitivity = self.settings.get('sensitivity', 1.0)
         self.pc.invert_y = self.settings.get('invert_y', False)
         self.mouse_captured=False
@@ -103,6 +107,7 @@ class Game:
             self.fast=Fast(self.arm)
             self.arm.relocate()
             self.pc.install()
+            self.menu.install()
             self.achievements = AchievementTracker(self.arm, self.root)
             self.unlock_capture = UnlockCapture(self.root, self.achievements.store, self.settings)
             self.save_boundary = SaveBoundary(self.arm, self.save_store, self.achievements.capture)
@@ -138,15 +143,18 @@ class Game:
                 return
             sources.add(code)
             # Keep the release on the same route even if a menu opens.
-            self.key_routes[mapped] = self.pc.enabled and (self.pc.active or
-                (mapped==23 and self.pc.item_active))
+            menu = getattr(self, 'menu', None)
+            self.key_routes[mapped] = ('menu' if menu and menu.routes(mapped) else
+                self.pc.enabled and (self.pc.active or (mapped==23 and self.pc.item_active)))
         else:
             if code not in sources:
                 return
             sources.discard(code)
             if sources:
                 return
-        if self.key_routes.get(mapped, False):
+        if self.key_routes.get(mapped) == 'menu':
+            self.menu.key(down, mapped)
+        elif self.key_routes.get(mapped, False):
             self.pc.key(down, mapped)
         else:
             self.jni.native('native_onKeyDown' if down else 'native_onKeyUp',mapped,self.jni.activity)
@@ -156,13 +164,17 @@ class Game:
 
     def event(self, event):
         kind = event[0]
-        if kind=='quit': return False
+        if kind=='quit':
+            if getattr(self, 'menu', None): self.menu.cancel()
+            return False
         controller = getattr(getattr(self, 'graphics', None), 'controller', None)
         if kind=='controller_look':
             if self.pc.active:
                 self.pc.move(*event[1:], sensitivity=1.0)
             return True
         if kind.startswith('controller_') and controller:
+            if kind == 'controller_removed' and getattr(self, 'menu', None):
+                self.menu.cancel()
             if self.pc.active and kind in ('controller_button', 'controller_axis'):
                 self.mouse_released = False
             controller.gameplay = self.pc.active
@@ -190,6 +202,7 @@ class Game:
                 return True
             story_keys = getattr(self, 'story_keys', set())
             if key in story_keys or (down and self.pc.story_active and mapped_code in (66,23) and not (
+                    getattr(self, 'menu', None) and self.menu.routes(mapped_code)) and not (
                     mapped_code==23 and self.pc.enabled and (
                         self.pc.item_active or self.key_routes.get(23,False)))):
                 if down: story_keys.add(key)
@@ -199,6 +212,9 @@ class Game:
                 return True
             if key in getattr(self, 'keymap', KEYS): self.desktop_input.enqueue(('key',down,key))
         elif kind=='touch':
+            if getattr(self, 'menu', None) and self.menu.active:
+                self.menu.cancel()
+                self.menu.cursor[:] = event[2:]
             down,x,y = event[1:]
             if self.mouse_captured:
                 mapped = self.mouse_bindings.event(down,1)
@@ -212,6 +228,8 @@ class Game:
                 if not down: self.skipping_touch = False
             else: self.desktop_input.enqueue(event)
         elif kind=='motion':
+            if getattr(self, 'menu', None) and self.menu.active:
+                self.menu.cursor[:] = event[1:]
             if not self.mouse_captured and not self.skipping_touch: self.desktop_input.enqueue(event)
         elif kind=='mouse_button':
             if self.pc.active and not self.mouse_released:
@@ -220,6 +238,7 @@ class Game:
         elif kind=='mouse_delta':
             if self.mouse_captured:self.pc.move(*event[1:])
         elif kind=='focus_lost':
+            if getattr(self, 'menu', None): self.menu.cancel()
             if controller: controller.release()
             if getattr(self, 'mouse_bindings', None): self.mouse_bindings.release()
             self.desktop_input.release()
@@ -238,6 +257,8 @@ class Game:
         self.desktop_input.flush()
         self.pc.release()
         self.story_keys.clear()
+        self.menu.cancel()
+        self.menu.settings = settings
         self.keymap = key_map(settings)
         self.mouse_bindings.configure(settings)
         self.graphics.controller.configure(settings)
@@ -254,9 +275,12 @@ class Game:
                 for event in controller.tick(1 / ENGINE_HZ, gameplay=self.pc.active):
                     self.event(event)
             self.desktop_input.flush()
+            self.menu.tick()
             self.pc.begin_frame()
         with self.phase('native_frame', 'native_onDrawFrame'):
+            self.menu.begin_observation()
             result=self.jni.native('native_onDrawFrame',self.jni.activity)
+            self.menu.end_observation()
             if result==1: self.jni.native('native_setStereoHard',self.jni.activity,0)
         with self.phase('media_audio'):
             self.media.update_audio()
@@ -266,6 +290,8 @@ class Game:
         self.achievements.new_unlocks.clear()
         self.unlock_capture.tick(self.graphics.capture_image, unlocks)
         self.graphics.draw_controller_cursor()
+        if self.menu.active and self.media.video is None:
+            self.graphics.draw_menu_hints(self.menu.hints(), self.menu.cursor)
         capture=self.pc.active and not self.mouse_released and self.media.video is None
         if capture != self.mouse_captured:
             self.desktop_input.release()
@@ -413,6 +439,9 @@ class Game:
             self.close()
 
     def close(self):
+        if getattr(self, 'menu', None):
+            try: self.menu.cancel()
+            except Exception as error: log.warning('[shutdown input] %s', error)
         if getattr(self, '_closed', False):
             return
         self._closed = True

@@ -19,6 +19,7 @@ class ControllerInput:
         self.cursor = [400.0, 240.0]
         self.touch_sources = set()
         self.gameplay = False
+        self.menu_actions = False
         if sdl is not None:
             signatures = {'SDL_NumJoysticks': (C.c_int, ()),
                           'SDL_IsGameController': (C.c_int, (C.c_int,)),
@@ -59,7 +60,7 @@ class ControllerInput:
             self.buttons[source] = action
             # Menus can contain touch-only confirmation sliders. The action
             # button holds a virtual cursor; B/confirm retains keyboard menus.
-            if not self.gameplay and action == 'action':
+            if not self.gameplay and not self.menu_actions and action == 'action':
                 if not self.touch_sources:
                     self._queue([('touch', True, *map(round, self.cursor))], source)
                 self.touch_sources.add(source)
