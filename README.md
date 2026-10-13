@@ -25,7 +25,11 @@ Linux x86_64 is the target. Shared guest memory requires a mapping below 4 GiB, 
 
 The title, English menus, original video and audio, and village gameplay have been exercised in visible desktop tests. ARM translation and Python import calls impose substantial overhead, especially during level loading; this is not yet a performance-equivalent native x86 port. A full campaign playthrough has not been validated. See [VALIDATION.md](VALIDATION.md) for the recorded checks and limitations.
 
-Gameplay and presentation run at **20 Hz**, matching the original engine's mission clock. Higher rates also speed up game logic, so 30/60 FPS modes are unavailable. Controller checks use SDL virtual devices; physical controllers and vendor graphics drivers still need validation. The latest repacked AppImage and portable archive also need fresh clean-OS GUI/engine qualification before a fully validated binary release.
+Gameplay and presentation run at **20 Hz**, matching the original engine's mission clock. Higher rates also speed up game logic, so 30/60 FPS modes are unavailable. Independent rendering research has not established a safe boundary.
+
+The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013) is **not fully campaign-qualified**. Its exact AppImage/archive hashes pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke checks, AMD RX 6700S/680M startup checks, and input-only first-mission/inventory/save replays. Final source verification passes 294 component tests and the source/history audit. Physical controllers, display/HiDPI, audible speakers and extended driver gameplay remain unverified; Intel/NVIDIA hardware was unavailable.
+
+Mission completion is deferred to the user's later playtest. The final two-hour soak was stopped after its preserved 2,880.043-second checkpoint and remains incomplete. An intermittent native difficulty-initialization exception remains unresolved. No loading optimization met the performance gate, and the earlier keyboard-aim failure was not reproduced or claimed fixed. See the [qualification summary](docs/qualification-summary.md), [campaign checklist](docs/campaign-coverage.md) and [measured roadmap results](docs/roadmap-results.md).
 
 ## Setup and play
 
@@ -60,7 +64,7 @@ Open the launcher with `./re4pc.sh launcher` or `make launcher`. The native desk
 
 **Settings & controls** configures display options, sensitivity and keyboard, mouse or controller bindings for the next game launch. Sliders and numeric fields stay synchronized; each section scrolls so every binding remains reachable. **Save backups** creates snapshots and imports, exports, restores or deletes selected snapshots while the game is stopped. Restore keeps a recovery copy; deleting a snapshot preserves current saves. The [case-file windows](docs/dialogs.md) share generated parchment, seals and inventory artwork and support keyboard navigation at smaller sizes. **Diagnostics** starts a game session with profile, statistics and runtime log files.
 
-**Achievements** shows 21 local achievements with icons, progress, weapon purchase/tune-up goals and a Platinum for earning all other achievements. Saved mission completion and S ranks award them automatically; play once to recover progress from existing saves. **Settings & controls → Achievements** configures unlock screenshots or silent replay clips. Captures appear in the achievement gallery; records are included in save backups, while media stays in the installation's `achievement-media` folder. See the [achievement list, captures and historical research](docs/achievements.md).
+**Achievements** shows 21 local achievements with icons, progress, weapon purchase/tune-up goals and a Platinum for earning all other achievements. Saved mission completion and S ranks award them automatically; play once to recover progress from existing saves. **Settings & controls → Achievements** configures unlock screenshots or silent replay clips. Captures appear in the achievement gallery, where **Export selected** and **Export all** create ZIPs with original PNG/MP4 files and achievement metadata. Shared files are deduplicated and missing captures are listed. Records are included in save backups; to transfer their referenced media too, enable the unchecked **Include achievement media** option during backup export. See the [achievement list, captures and historical research](docs/achievements.md).
 
 The main window has no console panel. Progress, completion and failures appear in its status area; **View logs** opens optional session output in a separate window. Applications-menu and desktop shortcuts open without a terminal. Direct CLI runs continue to print terminal logs.
 
@@ -107,6 +111,8 @@ Uninstalling the launcher preserves the checkout, imported game, saves and logs.
 
 ## Portable builds
 
+Download the AppImage or portable archive from the [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013). It also provides **SHA256SUMS** and the authored qualification summary. Download both packages alongside SHA256SUMS to check the complete pair with `sha256sum -c SHA256SUMS`, or check your chosen package's hash against the [qualification summary](docs/qualification-summary.md). These packages contain no game data and are not fully campaign-qualified.
+
 Build a standalone Linux x86_64 AppImage and portable archive from source with Docker available:
 
 ```bash
@@ -130,7 +136,7 @@ tar -xzf dist/re4mepc-linux-x86_64.tar.gz -C /path/to/extract
 /path/to/extract/re4mepc/AppRun
 ```
 
-Both formats open the launcher with no arguments and accept the same CLI commands as `./re4pc.sh`. They use external XDG locations for game data, settings and backups, so replacing application files preserves your installation. Host graphics drivers and system runtime libraries remain required. See [package requirements and validation](docs/desktop-release.md) and [current package evidence](VALIDATION.md#package-evidence-and-remaining-release-gate).
+Both formats open the launcher with no arguments and accept the same CLI commands as `./re4pc.sh`. They use external XDG locations for game data, settings and backups, so replacing application files preserves your installation. Host graphics drivers and system runtime libraries remain required. See [package requirements and validation](docs/desktop-release.md) and [current qualification summary](docs/qualification-summary.md).
 
 ## Controls
 
@@ -147,7 +153,7 @@ F12 closes the window. PC gameplay controls are enabled by default; the cursor i
 | R | Reload |
 | Hold F, then left mouse / Z | Ready knife, then slash |
 | E / Enter / Space | Context action; Enter / Space advance story text |
-| Escape | Status menu |
+| Escape | Open status; cancel inventory submenu or return to gameplay |
 | Tab | Release / capture cursor; click to recapture |
 | F3 | Toggle diagnostics |
 | Alt+Enter | Toggle borderless fullscreen |
@@ -157,7 +163,7 @@ To pick up ammo or another ground item, press Space to select it, then press Spa
 
 PC mode hides the movement pad and gun, knife, and lower-weapon touch buttons. Contextual actions (pickups, doors, ladders, and other interactions), companion commands, scope controls, status displays, and menus remain visible.
 
-In PC mode, Enter/B continues through recognized menus and confirms the difficulty slider once per press. WASD/D-pad or the right stick moves the menu cursor; Space/A clicks it, including inventory items and their context menus. Current bindings appear on screen. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work. See [desktop menu controls](docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `./re4pc.sh run --controls touch`.
+In PC mode, Enter/B continues through recognized menus and confirms the difficulty slider once per press. WASD/D-pad or the right stick moves the menu cursor; Space/A clicks it, including inventory items and their context menus. Escape/Start cancels a recognized inventory submenu, then returns from inventory to gameplay. Current bindings appear on screen. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work. See [desktop menu controls](docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `./re4pc.sh run --controls touch`.
 
 Mouse look uses 0.15 degrees per pixel, with vertical movement limited to
 45 degrees up or down. Holding and releasing aim preserves the vertical look
@@ -176,7 +182,7 @@ SDL2 controllers use these default bindings:
 | Left / right trigger | Aim / fire |
 | A | Context action; click the menu cursor |
 | X / Y | Reload / knife |
-| Start | Status menu |
+| Start | Open status; cancel inventory submenu or return to gameplay |
 | D-pad | Menu navigation |
 | B | Continue or confirm the recognized slider |
 
@@ -196,7 +202,16 @@ The same operations are available in the CLI:
 ./re4pc.sh restore-backup SNAPSHOT_ID
 ```
 
-Replace `SNAPSHOT_ID` with an ID from `backups`; add `--game /external/re4/game` for another installation. Snapshots include achievement records but exclude imported resources, caches and achievement media. Copy the installation's `achievement-media/` folder separately when moving captures. See [save storage and recovery](docs/desktop-release.md).
+Replace `SNAPSHOT_ID` with an ID from `backups`; add `--game /external/re4/game` for another installation. Ordinary snapshots and save-only exports include achievement records but exclude imported resources, caches and media. For a portable save-and-media bundle, add `--include-media`; it exports media referenced by the selected snapshot and fails if a referenced file is missing. Import validates the bundle before publishing an inactive snapshot; use **Restore** to activate it. Identical existing media is reused, while conflicting contents are rejected.
+
+```bash
+./re4pc.sh export-backup SNAPSHOT_ID '/path/to/save-and-media.zip' --include-media
+./re4pc.sh import-backup '/path/to/save-and-media.zip'
+./re4pc.sh export-achievements '/path/to/selected-captures.zip' --achievement village --achievement gigante
+./re4pc.sh export-achievements '/path/to/all-captures.zip'
+```
+
+Gallery export reports missing captures and deduplicates shared files. Portable bundles allow up to 1 GiB of referenced media and 4,096 media files. See [portable captures](docs/portable-captures.md) and [save storage and recovery](docs/desktop-release.md).
 
 ## How the port was made
 
@@ -459,13 +474,13 @@ En el launcher, elige **Import APK**, selecciona tu APK y una carpeta nueva, y p
 
 El launcher presenta un expediente con pergamino, una fotografía de la aldea e ilustraciones generadas. **View logs** abre los registros de la sesión cuando los necesitas. **Settings & controls** configura la pantalla, las sensibilidades y los controles de teclado, ratón y mando; **Save backups** gestiona las partidas con el juego detenido; **Diagnostics** inicia una sesión con archivos de diagnóstico. El progreso y los errores aparecen en la ventana principal.
 
-**Achievements** muestra 21 logros locales con progreso, fechas, objetivos de compra y mejora de armas y un Platino al obtener los otros 20. Los logros de misiones y rangos se recuperan al cargar partidas existentes; las compras y mejoras cuentan desde que este launcher las observa. En **Settings & controls → Achievements** puedes elegir capturas de pantalla o clips silenciosos. Las copias de seguridad incluyen los registros, pero los archivos de `achievement-media/` se deben copiar aparte. Consulta la [lista de logros](docs/achievements.md).
+**Achievements** muestra 21 logros locales con progreso, fechas, objetivos de compra y mejora de armas y un Platino al obtener los otros 20. Los logros de misiones y rangos se recuperan al cargar partidas existentes; las compras y mejoras cuentan desde que este launcher las observa. En **Settings & controls → Achievements** puedes elegir capturas de pantalla o clips silenciosos. **Export selected** y **Export all** exportan las capturas con sus metadatos y deduplican archivos compartidos. Las copias normales incluyen los registros; activa **Include achievement media** al exportar para incluir los archivos referenciados. Importa el paquete y usa **Restore** para activar la partida. Consulta la [lista de logros](docs/achievements.md).
 
 Ejecuta `make desktop` para crear una aplicación en el menú de Linux con el icono generado, o conservar el icono ya instalado. Usa `make desktop DESKTOP_ARGS="--apk '/ruta/al/juego.apk'"` para elegir el icono original del APK, o `--icon '/ruta/a/portada.png'` para usar otra imagen PNG. Añade `--desktop` para crear también un acceso directo en el escritorio. Estos accesos abren el launcher sin una terminal.
 
 El ejecutable `~/.local/bin/re4mepc` utiliza este repositorio y su `.venv`; conserva ambos en su ubicación. Para quitar los accesos e icono, usa `make uninstall-desktop DESKTOP_ARGS="--desktop"`; el juego y las partidas se conservan.
 
-`make package` crea un AppImage y un archivo portátil para Linux x86_64 con Docker y una base Ubuntu 22.04. Incluyen las dependencias de la aplicación; debes importar tu propio APK. Ambos abren el launcher sin argumentos y conservan los datos externos al actualizar. Los paquetes recompuestos más recientes aún necesitan repetir la validación gráfica en sistemas limpios. Consulta [Portable builds](#portable-builds) y la [documentación de distribución](docs/desktop-release.md).
+`make package` crea un AppImage y un archivo portátil para Linux x86_64 con Docker y una base Ubuntu 22.04. Incluyen las dependencias de la aplicación; debes importar tu propio APK. Ambos abren el launcher sin argumentos y conservan los datos externos al actualizar. La [preversión experimental](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013) pasa pruebas automatizadas en Ubuntu 22.04, Ubuntu 24.04 y Arch, y pruebas de inicio en AMD RX 6700S/680M. No está completamente validada para la campaña. Consulta los hashes y el alcance en el [resumen de calificación](docs/qualification-summary.md). Consulta [Portable builds](#portable-builds) y la [documentación de distribución](docs/desktop-release.md).
 
 La importación verifica las dos bibliotecas y todos los recursos necesarios antes de instalar los datos. Solo se admite el motor con los hashes indicados en [Data locations and supported engine](#data-locations-and-supported-engine). Un APK reempaquetado puede funcionar si conserva esas bibliotecas y los recursos completos. El importador no sobrescribe destinos existentes, aunque estén vacíos.
 
@@ -482,13 +497,13 @@ La importación verifica las dos bibliotecas y todos los recursos necesarios ant
 | R | Recargar |
 | Mantener F y pulsar botón izquierdo / Z | Preparar el cuchillo y atacar |
 | E / Enter / Espacio | Acción contextual; Enter / Espacio avanzan el texto |
-| Escape | Menú de estado |
+| Escape | Abrir estado; cancelar submenú de inventario o volver al juego |
 | Tab | Liberar / capturar el cursor; hacer clic para capturarlo de nuevo |
 | F3 | Mostrar / ocultar los diagnósticos |
 | Alt+Enter | Alternar la pantalla completa sin bordes |
 | F12 | Cerrar la ventana |
 
-En modo PC, Enter/B continúa en los menús reconocidos y confirma el deslizador con una sola pulsación. WASD/D-pad o el stick derecho mueve el cursor; Espacio/A selecciona objetos y opciones del inventario. También puedes usar el ratón. Enter, Espacio, Escape o un clic omiten el vídeo en reproducción. Al perder el foco, la ventana libera las teclas y el cursor.
+En modo PC, Enter/B continúa en los menús reconocidos y confirma el deslizador con una sola pulsación. WASD/D-pad o el stick derecho mueve el cursor; Espacio/A selecciona objetos y opciones del inventario. Escape/Start cancela el submenú del inventario y permite volver al juego. También puedes usar el ratón. Enter, Espacio, Escape o un clic omiten el vídeo en reproducción. Al perder el foco, la ventana libera las teclas y el cursor.
 
 Para recoger munición u otro objeto del suelo, pulsa Espacio para seleccionarlo y vuelve a pulsarlo para recogerlo. Los mandos usan el stick izquierdo para moverse y girar, el derecho para mirar, los gatillos para apuntar y disparar, A para interactuar, X para recargar, Y para el cuchillo y Start para el menú de estado. En los menús, mueve el cursor con el stick derecho o D-pad y pulsa A para seleccionar; B continúa o confirma el deslizador. Puedes cambiar las asignaciones en **Settings & controls**.
 
@@ -515,7 +530,7 @@ Los ajustes se guardan en `~/.config/re4mepc/settings.json` y las copias de segu
 - `make check-game` valida tu importación.
 - `make visible-test` y `make controls-test` abren una ventana real y usan copias aisladas con partidas propias.
 
-Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La campaña completa sigue sin validarse. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Los mandos, el redimensionado, HiDPI y la pantalla completa sin bordes están implementados. Windows, macOS y Linux ARM64 quedan fuera de esta versión. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
+Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La finalización de misiones queda para una prueba posterior del usuario. La campaña completa sigue sin validarse; la prueba final de dos horas se detuvo tras 2.880,043 segundos y permanece incompleta. Sigue sin resolverse una excepción intermitente al inicializar el menú de dificultad. Las pruebas finales de fuentes pasan 294 casos; faltan las comprobaciones físicas de mando, pantalla/HiDPI y altavoces. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Los mandos, el redimensionado, HiDPI y la pantalla completa sin bordes están implementados. Windows, macOS y Linux ARM64 quedan fuera de esta versión. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
 
 El código del host tiene licencia MIT; esa licencia excluye los datos originales del juego, las marcas y las dependencias de terceros.
 
@@ -526,5 +541,3 @@ game data, trademarks and third-party dependencies. Interoperability names,
 symbols, offsets and hashes identify the supported engine; executable test
 snippets are hand-written synthetic fixtures and host ABI trampolines.
 
-
-The [roadmap results](docs/roadmap-results.md) record reproducible performance and REA evidence, desktop menu checks, portable capture formats and remaining qualification gates. Achievements provides **Export selected** and **Export all**. Backup export offers an unchecked **Include achievement media** option; import accepts both save-only ZIPs and portable media bundles. See [portable captures](docs/portable-captures.md) for CLI commands, limits and restore behavior. Natural campaign qualification remains incomplete, and simulation/presentation stay at 20 Hz.
