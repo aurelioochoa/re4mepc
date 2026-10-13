@@ -102,7 +102,7 @@ SOURCE_FILES = {
               'launcher', 'launcher_ui', 'case_dialog', 'packaging', 'diagnostics', 'texture_cache', 'achievements', 'achievement_media'),
     'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
               'migrate_local', 'probe_input', 'test_components',
-              'test_pc_controls', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session'),
+              'test_pc_controls', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session', 'probe_render'),
     'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_desktop', 'test_graphics',
               'test_input', 'test_key_routing', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',

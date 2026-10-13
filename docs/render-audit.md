@@ -53,3 +53,49 @@ no lifecycle/teleport reset contract, and no replay-equivalence evidence for
 camera/animation/object transforms at equal simulation ticks. These unresolved
 requirements prevent qualifying 30 FPS or experimental 60 FPS. The other
 milestones continue under the original cadence.
+
+## REA and isolated draw observation — 2026-10-12
+
+REA 6.4.0 with Ghidra 12.1.4/JDK 21 produced dossiers for
+`GM_MisConduct::Draw`, `GM_CtrlMain::Draw`, `GM_TaskManager::Render` and
+`ERP_Camera::Set_LookAt_Bind`. The verified mapping translates ELF addresses
+through the measured Ghidra image base; see [REA workflow](rea-workflow.md).
+The task manager's Render traverses tasks through their virtual render slot.
+The mission draw's interaction-message and event-button writes are retained
+as coupling evidence. The camera routine constructs its bound look-at view;
+that static relationship alone proves no animation or collision snapshot contract.
+
+`tools/probe_render.py` observes real entry arguments through Unicorn hooks,
+then invokes one extra draw in a discarded fixture after settling gameplay.
+It never guesses task pointers. Each candidate gets a fresh installation.
+Before/after full guest-memory comparisons cover writes by native helpers as
+well as Unicorn instructions; instruction write events are capped at 4,096.
+Host import counts and graphics submission effects are recorded separately.
+
+| Extra native call | Changed guest pages (4 KiB) | Additional host draw calls | Changes in selected gameplay fields |
+|---|---:|---:|---|
+| GM_MisConduct::Draw | 4 | 7 | None observed |
+| GM_CtrlMain::Draw | 40 | 19 | None observed |
+| GM_TaskManager::Render | 40 | 19 | None observed |
+
+At equal simulation ticks, the selected fields are stage, position, player state,
+mission ticks/seconds, ammunition, input-controller bytes and save/achievement
+file hashes. No candidate changes those fields in this stationary scenario.
+Changed memory pages include stack/scratch data and do not by themselves prove
+simulation corruption. Conversely, equality of selected fields does not prove
+collision, damage, interaction, object lifecycle or host-resource equivalence.
+The fixture unlocks/selects missions synthetically and is not campaign evidence.
+
+```bash
+.venv/bin/python tools/probe_render.py --output /external/render-probe
+```
+
+Raw dossiers, memory-effect addresses and captures stay outside the checkout,
+under the roadmap evidence directory in `dossiers` and `render-probe`.
+The feasibility result is **blocked by demonstrated draw-side interaction
+coupling and an unproven state boundary**. A development rendering prototype
+was not built because its prerequisite boundary has not been established.
+Interpolation requires separate camera/animation snapshots and reset behavior
+for stage changes, destroyed objects and teleports; those remain unresolved.
+This audit closes the research milestone with limitations and leaves the
+shipping presentation rate at 20 Hz.
