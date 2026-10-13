@@ -70,6 +70,7 @@ def argument_parser():
     run.add_argument('--stats', type=Path, help='Write versioned statistics with preserved legacy fields')
     run.add_argument('--profile', type=Path, help='Detailed versioned JSONL timing trace')
     run.add_argument('--native-profile', action='append', default=[], metavar='SYMBOL', help='Opt-in native symbol timing (perturbs execution)')
+    run.add_argument('--profile-imports', action='store_true', help='Opt-in dispatch and service-body profiling (perturbs execution)')
     cache = run.add_mutually_exclusive_group()
     cache.add_argument('--cache', action='store_true', help='Enable experimental persistent converted-texture cache')
     cache.add_argument('--no-cache', action='store_false', dest='cache', help='Compute textures without conversion caching (default)')
@@ -117,7 +118,7 @@ def main(argv=None):
                 parser.error('--frames must be nonnegative')
             if not math.isfinite(args.log_interval) or args.log_interval < 0:
                 parser.error('--log-interval must be a finite nonnegative number')
-            if args.no_diagnostics and (args.profile or args.native_profile):
+            if args.no_diagnostics and (args.profile or args.native_profile or args.profile_imports):
                 parser.error('Profiles require diagnostics')
             settings = Settings.load(overrides={
                 'window_width': args.width, 'window_height': args.height,
@@ -132,7 +133,7 @@ def main(argv=None):
                     args.trace_jni, args.skip_videos, args.language, args.controls,
                     settings=settings, profile=args.profile, native_profiles=args.native_profile,
                     cache=args.cache, cache_dir=args.cache_dir, telemetry=telemetry,
-                    diagnostics=not args.no_diagnostics)
+                    diagnostics=not args.no_diagnostics, import_profile=args.profile_imports)
                 stats = game.run(args.frames, args.screenshot, args.script)
             if args.stats: write_json(args.stats, stats)
             log.info('Game stopped after %d ticks; mean frame work %.2f ms', stats['frames'], stats['mean_engine_ms'])

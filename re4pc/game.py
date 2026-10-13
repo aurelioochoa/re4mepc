@@ -31,10 +31,10 @@ KEYS = {
 }
 
 class Game:
-    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language='en', controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True):
+    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language='en', controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True, import_profile=False):
         self.initialized = False
         self.telemetry = telemetry
-        self.diagnostics = Diagnostics(profile=profile, native_hooks=bool(native_profiles)) if diagnostics else None
+        self.diagnostics = Diagnostics(profile=profile, native_hooks=bool(native_profiles), import_hooks=import_profile) if diagnostics else None
         if telemetry:
             telemetry.diagnostics = self.diagnostics
         self.overlay = False

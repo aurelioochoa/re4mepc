@@ -14,6 +14,29 @@ class FakeClock:
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_import_dispatch_services_and_unresolved_engine_partition_exclusively(self):
+        clock = FakeClock()
+        diagnostics = Diagnostics(clock=clock, import_hooks=True)
+        with diagnostics.phase('native_frame'):
+            clock.now += 2
+            with diagnostics.phase('import_dispatch', 'fread'):
+                clock.now += 1
+                with diagnostics.phase('host_services', 'fread'):
+                    clock.now += 3
+                    with diagnostics.phase('file_read'):
+                        clock.now += 5
+                clock.now += 2
+            clock.now += 4
+        metrics = diagnostics.metrics()
+        costs = {(r['phase'], r['operation']): r['seconds'] for r in metrics['import_operations']}
+        self.assertEqual(costs, {('import_dispatch', 'fread'): 3, ('host_services', 'fread'): 3})
+        self.assertEqual(metrics['import_attribution']['unresolved_engine_seconds'], 6)
+        self.assertEqual(sum(p['seconds'] for p in metrics['phases'].values()), 17)
+        plain = Diagnostics(clock=clock)
+        plain.graphics_service('graphics_submission', 'glFinish', lambda: None, [])
+        self.assertEqual(plain.metrics()['import_operations'], [])
+        self.assertFalse(plain.metrics()['import_hooks_enabled'])
+
     def test_graphics_fast_service_partitions_parent_and_restores_operation_on_failure(self):
         clock = FakeClock()
         diagnostics = Diagnostics(clock=clock)

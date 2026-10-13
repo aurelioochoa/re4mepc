@@ -47,7 +47,8 @@ class ArmRuntime:
         self.modules = []
         self.calls = Counter()
         self.last_call = ''
-        self.uc.hook_add(UC_HOOK_CODE, self._trap, begin=self.trap_next, end=self.trap_end)
+        trap = self._trap_profile if diagnostics and diagnostics.import_hooks else self._trap
+        self.uc.hook_add(UC_HOOK_CODE, trap, begin=self.trap_next, end=self.trap_end)
         self.uc.hook_add(UC_HOOK_MEM_INVALID, self._invalid_memory)
         self.pending_error = None
         self.fast = None
@@ -179,6 +180,18 @@ class ArmRuntime:
             uc.emu_stop()
         finally:
             self._callback_args = None
+
+    def _trap_profile(self, uc, address, size, context):
+        diagnostics = self.diagnostics
+        if diagnostics is None:
+            return self._trap(uc, address, size, context)
+        phase = diagnostics.phase('import_dispatch', operation=self.traps[address][0])
+        phase.__enter__()
+        try:
+            self._trap(uc, address, size, context)
+        finally:
+            error = self.pending_error
+            phase.__exit__(type(error) if error else None, error, None)
 
     def _invalid_memory(self, uc, access, address, size, value, context):
         self.pending_error = RuntimeError(

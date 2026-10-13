@@ -55,6 +55,12 @@ def quantiles(values):
             for name, ratio in (('p50', .5), ('p95', .95), ('p99', .99))} if values else {}
 
 
+def phase_delta(after, before):
+    return {name: {'seconds': record['seconds'] - before.get(name, {}).get('seconds', 0),
+                   'calls': record['calls'] - before.get(name, {}).get('calls', 0)}
+            for name, record in after.items()}
+
+
 def checkpoint(path, document):
     """Publish a whole completed case; never leave partial JSON on interruption."""
     temporary = path.with_suffix('.json.tmp')
@@ -248,7 +254,7 @@ def overhead_probe(game, replay, repetitions=5, ticks=40):
 
 
 def run_case(root, output, mode, diagnostics, gameplay_ticks, transition=None, python_profile=False,
-             native_destination=None, probe=False, native_profiles=(), expected_graphics=None):
+             native_destination=None, probe=False, native_profiles=(), expected_graphics=None, import_profile=False):
     cache = output / 'textures'
     if mode == 'cold':
         shutil.rmtree(cache, ignore_errors=True)
@@ -259,14 +265,16 @@ def run_case(root, output, mode, diagnostics, gameplay_ticks, transition=None, p
     profiler = cProfile.Profile() if python_profile else None
     if profiler: profiler.enable()
     game = Game(root, hidden=True, skip_videos=True, cache=mode != 'disabled', cache_dir=cache,
-                diagnostics=diagnostics, settings=validate_settings({}), native_profiles=native_profiles)
+                diagnostics=diagnostics, settings=validate_settings({}), native_profiles=native_profiles, import_profile=import_profile)
     replay = Replay(game)
     replay.output = output
     try:
         if expected_graphics and (game.graphics.renderer, game.graphics.version) != expected_graphics:
             raise ValueError('Active graphics driver differs from the reference benchmark')
         startup = time.monotonic()-started
+        startup_phases = game.diagnostics.metrics()['phases'] if game.diagnostics else {}
         loading = replay.village()
+        loading_phases = game.diagnostics.metrics()['phases'] if game.diagnostics else {}
         loading_work = replay.work[:]
         replay.close()  # Selective navigation hooks don't burden gameplay samples.
         replay.work.clear()
@@ -278,6 +286,7 @@ def run_case(root, output, mode, diagnostics, gameplay_ticks, transition=None, p
         replay.advance(gameplay_ticks-gameplay_ticks//2)
         game.event(('key', False, ord('a')))
         gameplay_work = quantiles(replay.work)
+        gameplay_phases = game.diagnostics.metrics()['phases'] if game.diagnostics else {}
         transition_result = {'verified': False, 'reason': 'No stage-transition replay supplied'}
         if transition:
             entries = json.loads(Path(transition).read_text())
@@ -300,8 +309,11 @@ def run_case(root, output, mode, diagnostics, gameplay_ticks, transition=None, p
         stats = game.statistics(replay.pacer)
         return {'startup_seconds': startup, 'title_to_village_seconds': loading,
                 'loading_max_work_ms': max(loading_work), 'gameplay_work_ms': gameplay_work,
+                'loading_work_ms': quantiles(loading_work),
+                'loading_phases': phase_delta(loading_phases, startup_phases),
+                'gameplay_phases': phase_delta(gameplay_phases, loading_phases),
                 'mode': mode, 'diagnostics_enabled': diagnostics, 'transition': transition_result,
-                'profiled': bool(python_profile or native_profiles), 'overhead_probe':overhead, 'stats': stats}
+                'profiled': bool(python_profile or native_profiles or import_profile), 'overhead_probe':overhead, 'stats': stats}
     finally:
         replay.close()
         game.close()
@@ -319,6 +331,7 @@ def main():
     parser.add_argument('--modes', nargs='+', choices=('disabled', 'cold', 'warm'), default=['disabled', 'cold', 'warm'])
     parser.add_argument('--compare-diagnostics', action='store_true')
     parser.add_argument('--python-profile', action='store_true')
+    parser.add_argument('--profile-imports', action='store_true')
     parser.add_argument('--transition-script', type=Path, help='JSON frame/event replay; must change native loaded-stage ID')
     parser.add_argument('--native-transition', type=int, help='Synthetic audited stage-change fixture (stage 0..21); natural door route remains unverified')
     parser.add_argument('--overhead-probe', action='store_true', help='First case: five interleaved gameplay windows per diagnostics mode')
@@ -335,12 +348,12 @@ def main():
     configuration = {'gameplay_ticks':args.gameplay_ticks, 'native_transition':args.native_transition,
                      'transition_script':str(args.transition_script) if args.transition_script else None,
                      'compare_diagnostics':args.compare_diagnostics, 'native_profiles':args.native_profile,
-                     'python_profile':args.python_profile}
+                     'python_profile':args.python_profile, 'import_profile':args.profile_imports}
     document = {'schema_version':1, 'hardware':hardware, 'configuration':configuration,
                 'source':source_identity(),
                 'cache_definition':'application caches; OS page cache uncontrolled', 'records':[]}
     if args.resume:
-        if args.compare_diagnostics or args.python_profile or args.native_profile:
+        if args.compare_diagnostics or args.python_profile or args.native_profile or args.profile_imports:
             parser.error('Resume qualification runs without detailed profiling or diagnostics comparison')
         document = resume_document(output/'results.json', hardware, configuration)
     records = document['records']
@@ -362,7 +375,7 @@ def main():
                 case = run_case(root, output, mode, diagnostic_mode, args.gameplay_ticks,
                                 args.transition_script, args.python_profile and not records,
                                 args.native_transition, args.overhead_probe and not records, args.native_profile,
-                                expected_graphics)
+                                expected_graphics, args.profile_imports)
                 if expected_graphics is None:
                     expected_graphics = case['stats']['graphics']['renderer'], case['stats']['graphics']['version']
                 case['repetition'] = repetition + 1

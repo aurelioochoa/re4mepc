@@ -36,6 +36,11 @@ class _Phase:
         owner._seconds[self.name] += exclusive
         owner._counts[self.name] += 1
         owner._maximum[self.name] = max(owner._maximum[self.name], elapsed)
+        if owner.import_hooks and self.operation and self.name in (
+                'import_dispatch', 'host_services', 'graphics_upload', 'graphics_submission'):
+            key = (self.name, self.operation)
+            owner._operation_seconds[key] += exclusive
+            owner._operation_counts[key] += 1
         if owner._stack:
             parent = owner._stack[-1]
             parent.children += elapsed
@@ -53,12 +58,16 @@ class Diagnostics:
     """Phase scopes belong to the runtime/GL thread; the heartbeat may read them."""
     SCHEMA_VERSION = 1
 
-    def __init__(self, profile=None, native_hooks=False, frame_capacity=240, clock=None):
+    def __init__(self, profile=None, native_hooks=False, frame_capacity=240, clock=None, import_hooks=False):
         if frame_capacity < 1:
             raise ValueError('Frame capacity must be positive')
         self.clock = clock or time.perf_counter
         self.started = self.clock()
         self.native_hooks = native_hooks
+        self.import_hooks = import_hooks
+        if import_hooks:
+            self.graphics_service = self._profile_graphics_service
+        self._operation_seconds, self._operation_counts = Counter(), Counter()
         self._stack = []
         self._active = None
         self._seconds, self._counts, self._maximum = Counter(), Counter(), Counter()
@@ -110,6 +119,10 @@ class Diagnostics:
                 self._maximum[name] = elapsed
             if self._stack:
                 self._stack[-1].children += elapsed
+
+    def _profile_graphics_service(self, name, operation, callback, arguments):
+        with self.phase(name, operation):
+            return callback(*arguments)
 
     @contextmanager
     def operation(self, name):
@@ -196,7 +209,17 @@ class Diagnostics:
             'guest_live_bytes': self.live_memory, 'guest_peak_bytes': self.peak_memory,
             'allocator_search_seconds': self._seconds['allocator_search'],
             'allocator_max_search_probes': self._maximum['allocator_search_probes'],
-            'native_hooks_enabled': bool(self.native_hooks), 'trace_error': self.trace_error}
+            'native_hooks_enabled': bool(self.native_hooks), 'trace_error': self.trace_error,
+            'import_hooks_enabled': bool(self.import_hooks),
+            'import_attribution': {
+                'dispatch': 'Python trap after symbol lookup, excluding nested service scopes; C/FFI hook entry remains unresolved',
+                'service_bodies': 'exclusive host_services, graphics_submission and graphics_upload; nested I/O and conversions are separate phases',
+                'unresolved_engine_seconds': self._seconds['native_unknown'] + self._seconds['native_frame'],
+                'unresolved_includes': 'Unicorn execution, C native helpers and uninstrumented C/FFI dispatch; no static timing estimate'},
+            'import_operations': [{'phase': phase, 'operation': operation, 'seconds': seconds,
+                                   'calls': self._operation_counts[(phase, operation)]}
+                                  for (phase, operation), seconds in sorted(self._operation_seconds.items(),
+                                      key=lambda item: (-item[1], item[0]))]}
 
     def overlay_lines(self, game):
         values = self.metrics()

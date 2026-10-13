@@ -107,3 +107,32 @@ The overhead probe temporarily disables instrumentation. Its first case's
 diagnostic counters, rates and allocation accounting therefore cover enabled
 windows only; use subsequent fully instrumented cases for phase/memory totals.
 The current top-level frame and presentation counts cover the complete run.
+
+Loading investigations can use `--profile-imports` on `run` or the benchmark.
+This selects a separate Unicorn trap wrapper at initialization. Default traps
+and the normal GL timing fast path retain their original dispatch path. Detailed
+import profiling attributes exclusive `import_dispatch` time separately from
+`host_services`, `graphics_submission`, `graphics_upload`, and nested I/O or
+conversion phases. It ranks operation costs by measured exclusive time; C/FFI
+hook entry, native memory/string helpers and unhooked engine work remain
+unresolved. Static REA decompilation never supplies timing estimates.
+
+Benchmark cases retain all legacy fields and add loading/gameplay phase deltas
+and loading work percentiles. Each report binds measurements to the source
+revision, dirty status and runtime-source checksum. `profiled` includes Python,
+selected native functions and import dispatch profiling. Resume refuses those
+samples for qualification.
+
+`tools/compare_dispatch.py` runs two batches of five paired, unprofiled cases for
+one bounded argument-marshalling candidate. It compares the worst loading frame
+and gameplay p95, alternates pair order, retains raw cases and requires at least
+10% improvement exceeding the baseline range. Timing eligibility never changes
+source automatically or substitutes for controls, saves, rendering, mission
+clock and diagnostics checks. No candidate is shipped solely on its profiler
+cost. The rejected-experiment report remains external.
+
+Native helper builds now stage every output before replacing directory entries.
+A failed compile retains previous helpers, and processes already holding a
+library keep its old inode. This prevents verification/builds from truncating
+live mapped libraries. It does not establish the cause of every native failure;
+one transient visible-title exception remains in the external evidence.
