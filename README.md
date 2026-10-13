@@ -24,36 +24,52 @@ The title, English menus, original video and audio, and village gameplay have be
 
 Gameplay and presentation run at **20 Hz**, matching the original engine's mission clock. Higher rates also speed up game logic, so 30/60 FPS modes are unavailable. Independent rendering research has not established a safe boundary.
 
-The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013) is **not fully campaign-qualified**. Its exact AppImage/archive hashes pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke checks, AMD RX 6700S/680M startup checks, and input-only first-mission/inventory/save replays. The current source passes 307 component tests and the source/history audit; the published prerelease’s qualification is recorded separately. Physical controllers, display/HiDPI, audible speakers and extended driver gameplay remain unverified; Intel/NVIDIA hardware was unavailable.
+The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013) is **not fully campaign-qualified**. Its exact AppImage/archive hashes pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke checks, AMD RX 6700S/680M startup checks, and input-only first-mission/inventory/save replays. The current source passes 312 component tests and the source/history audit; the published prerelease’s qualification is recorded separately. Physical controllers, display/HiDPI, audible speakers and extended driver gameplay remain unverified; Intel/NVIDIA hardware was unavailable.
 
 Mission completion is deferred to the user's later playtest. The final two-hour soak was stopped after its preserved 2,880.043-second checkpoint and remains incomplete. An intermittent native difficulty-initialization exception remains unresolved. No loading optimization met the performance gate, and the earlier keyboard-aim failure was not reproduced or claimed fixed. See the [qualification summary](docs/qualification-summary.md), [campaign checklist](docs/campaign-coverage.md) and [measured roadmap results](docs/roadmap-results.md).
 
 ## Setup and play
 
-Source setup requires Linux **x86_64**, Python 3.10 or later with `venv` and Tk, a C compiler, `pkg-config`, SDL2 development headers, desktop OpenGL with a compatibility profile, and FFmpeg. Portable releases bundle the application dependencies and need the host's graphics drivers. Run from your desktop session with your normal display and audio device available.
+Source setup requires Linux **x86_64**, Python 3.10 or later with `venv` and Tk, GNU Make, a C compiler, `pkg-config`, SDL2 development headers, desktop OpenGL with a compatibility profile, and FFmpeg. Portable releases bundle the application dependencies and need the host's graphics drivers. Run from your desktop session with your normal display and audio device available.
 
-On Arch Linux, install `python tk gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`. On Debian/Ubuntu, install `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic`.
+On Arch Linux, install `python tk make gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`. On Debian/Ubuntu, install `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic`.
 
 ```bash
 git clone https://github.com/aurelioochoa/re4mepc.git
 cd re4mepc
-./setup.sh
-./re4pc.sh launcher
+make install
+make play
 ```
+
+`make install` installs only for your user and needs no `sudo` once the system prerequisites are installed. Keep the checkout and its `.venv` in place. For setup without installing a menu entry or CLI, use `make setup` followed by `make play`.
+
+The installed `re4mepc` command works from any directory when `~/.local/bin` is on your `PATH`. If your shell cannot find it, run `export PATH="$HOME/.local/bin:$PATH"` (and add that line to your shell configuration), or use `~/.local/bin/re4mepc`.
+
+| Task | From the checkout | Installed CLI |
+| --- | --- | --- |
+| Open the launcher | `make play` | `re4mepc` |
+| Import your APK | `make import APK="/path/to/game.apk"` | `re4mepc import "/path/to/game.apk"` |
+| Validate game data | `make check-game` | `re4mepc check` |
+| Start the game directly | `make run` | `re4mepc run` |
+| Show settings | `make settings` | `re4mepc settings` |
+| Create / list save backups | `make backup` / `make backups` | `re4mepc backup` / `re4mepc backups` |
+| Show all CLI commands | `make cli ARGS="--help"` | `re4mepc --help` |
+
+Use `ARGS` for extra CLI options, for example `make run ARGS="--language es"` or `make import APK="/path/to/game.apk" ARGS="--output /external/re4/game"`. `make help` lists targets. `make uninstall` removes the installed CLI, menu entry and icon while preserving game data and saves. Existing shell scripts remain supported.
 
 Choose **Import APK** in the launcher, select your compatible APK and an unused destination folder, then choose **Play** when import completes. To import and run directly from the command line instead:
 
 ```bash
-./re4pc.sh import '/path/to/Resident Evil 4.apk'
-./re4pc.sh check
-./re4pc.sh run
+re4mepc import '/path/to/Resident Evil 4.apk'
+re4mepc check
+re4mepc run
 ```
 
 ## Graphical launcher
 
 ![The RE4 Mobile case-file launcher with an aged parchment, distressed red 4, pinned village photograph, Play button and native installation controls](docs/launcher-preview.png)
 
-Open the launcher with `./re4pc.sh launcher` or `make launcher`. The native desktop UI pairs an aged parchment case file with a pinned village photograph, a distressed red numeral and a textured Play button. Top navigation and the full settings and backup rows support mouse and keyboard activation. Progress and Stop appear during operations. [Artwork prompts and provenance](docs/launcher-assets.md) document the generated assets.
+Open the launcher with `re4mepc`, `make play` or `make launcher`. The native desktop UI pairs an aged parchment case file with a pinned village photograph, a distressed red numeral and a textured Play button. Top navigation and the full settings and backup rows support mouse and keyboard activation. Progress and Stop appear during operations. [Artwork prompts and provenance](docs/launcher-assets.md) document the generated assets.
 
 1. **Import APK** restores your game into a new folder. The launcher suggests an unused destination and switches to it only after import succeeds.
 2. **Browse** selects an existing imported installation. Play becomes available when the expected files are present; the engine performs full validation when it starts.
@@ -73,8 +89,8 @@ The two choices are saved independently in `~/.config/re4mepc/settings.json` (or
 Override the game preference for a single session from the terminal:
 
 ```bash
-./re4pc.sh run --language es
-./re4pc.sh run --language saved
+re4mepc run --language es
+re4mepc run --language saved
 ```
 
 The supported codes are `en`, `es`, `fr`, `de`, `it`, `ja` and `saved`. Source installations need Japanese fonts; the setup packages above include them. Newly built portable packages bundle IPAGothic and its license. Rebuild an existing AppImage or portable archive with `make package` to include these changes.
@@ -83,7 +99,7 @@ The supported codes are `en`, `es`, `fr`, `de`, `it`, `ja` and `saved`. Source i
 
 The main window has no console panel. Progress, completion and failures appear in its status area; **View logs** opens optional session output in a separate window. Applications-menu and desktop shortcuts open without a terminal. Direct CLI runs continue to print terminal logs.
 
-Use `./re4pc.sh launcher --game '/external/re4/game'` for a custom installation. See [desktop and release usage](docs/desktop-release.md) for save locations, diagnostics and standalone packages.
+Use `re4mepc launcher --game '/external/re4/game'` for a custom installation. See [desktop and release usage](docs/desktop-release.md) for save locations, diagnostics and standalone packages.
 
 ### Achievements
 
@@ -100,7 +116,7 @@ Use `./re4pc.sh launcher --game '/external/re4/game'` for a custom installation.
 
 ## Linux app and desktop shortcut
 
-After setup, install an executable launcher and applications-menu entry with the generated application icon:
+`make install` prepares the Python environment, compiles native helpers and installs the `re4mepc` CLI and applications-menu entry with the generated application icon. If you already ran `make setup`, install just the desktop integration with:
 
 ```bash
 make desktop
@@ -144,7 +160,7 @@ Download the AppImage or portable archive from the [experimental prerelease](htt
 Build a standalone Linux x86_64 AppImage and portable archive from source with Docker available:
 
 ```bash
-./setup.sh
+make setup
 make package
 ```
 
@@ -164,7 +180,7 @@ tar -xzf dist/re4mepc-linux-x86_64.tar.gz -C /path/to/extract
 /path/to/extract/re4mepc/AppRun
 ```
 
-Both formats open the launcher with no arguments and accept the same CLI commands as `./re4pc.sh`. They use external XDG locations for game data, settings and backups, so replacing application files preserves your installation. Host graphics drivers and system runtime libraries remain required. See [package requirements and validation](docs/desktop-release.md) and [current qualification summary](docs/qualification-summary.md).
+Both formats open the launcher with no arguments and accept the same CLI commands as `re4mepc`. They use external XDG locations for game data, settings and backups, so replacing application files preserves your installation. Host graphics drivers and system runtime libraries remain required. See [package requirements and validation](docs/desktop-release.md) and [current qualification summary](docs/qualification-summary.md).
 
 ## Controls
 
@@ -191,7 +207,7 @@ To pick up ammo or another ground item, press Space to select it, then press Spa
 
 PC mode hides the movement pad and gun, knife, and lower-weapon touch buttons. Contextual actions (pickups, doors, ladders, and other interactions), companion commands, scope controls, status displays, and menus remain visible.
 
-In PC mode, Enter/B continues through recognized menus and confirms the difficulty slider once per press. WASD/D-pad or the right stick moves the menu cursor; Space/A clicks it, including inventory items and their context menus. Escape/Start cancels a recognized inventory submenu, then returns from inventory to gameplay. Current bindings appear on screen. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work. See [desktop menu controls](docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `./re4pc.sh run --controls touch`.
+In PC mode, Enter/B continues through recognized menus and confirms the difficulty slider once per press. WASD/D-pad or the right stick moves the menu cursor; Space/A clicks it, including inventory items and their context menus. Escape/Start cancels a recognized inventory submenu, then returns from inventory to gameplay. Current bindings appear on screen. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work. See [desktop menu controls](docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `re4mepc run --controls touch`.
 
 Mouse look uses 0.15 degrees per pixel, with vertical movement limited to
 45 degrees up or down. Holding and releasing aim preserves the vertical look
@@ -214,7 +230,7 @@ SDL2 controllers use these default bindings:
 | D-pad | Menu navigation |
 | B | Continue or confirm the recognized slider |
 
-Use **Settings & controls** to remap inputs and adjust mouse sensitivity, controller sensitivity, invert Y and stick dead zone. Tab, F3 and F12 are reserved. Explicit `run` options override saved settings, for example `./re4pc.sh run --window-mode fullscreen --controller-sensitivity 2`. Resizing and HiDPI preserve the original 800 × 480 image with letterboxing.
+Use **Settings & controls** to remap inputs and adjust mouse sensitivity, controller sensitivity, invert Y and stick dead zone. Tab, F3 and F12 are reserved. Explicit `run` options override saved settings, for example `re4mepc run --window-mode fullscreen --controller-sensitivity 2`. Resizing and HiDPI preserve the original 800 × 480 image with letterboxing.
 
 ## Save backups
 
@@ -223,20 +239,20 @@ The host snapshots the complete save set before startup and around native saves,
 The same operations are available in the CLI:
 
 ```bash
-./re4pc.sh backup
-./re4pc.sh backups
-./re4pc.sh export-backup SNAPSHOT_ID '/path/to/save-backup.zip'
-./re4pc.sh import-backup '/path/to/save-backup.zip'
-./re4pc.sh restore-backup SNAPSHOT_ID
+re4mepc backup
+re4mepc backups
+re4mepc export-backup SNAPSHOT_ID '/path/to/save-backup.zip'
+re4mepc import-backup '/path/to/save-backup.zip'
+re4mepc restore-backup SNAPSHOT_ID
 ```
 
 Replace `SNAPSHOT_ID` with an ID from `backups`; add `--game /external/re4/game` for another installation. Ordinary snapshots and save-only exports include achievement records but exclude imported resources, caches and media. For a portable save-and-media bundle, add `--include-media`; it exports media referenced by the selected snapshot and fails if a referenced file is missing. Import validates the bundle before publishing an inactive snapshot; use **Restore** to activate it. Identical existing media is reused, while conflicting contents are rejected.
 
 ```bash
-./re4pc.sh export-backup SNAPSHOT_ID '/path/to/save-and-media.zip' --include-media
-./re4pc.sh import-backup '/path/to/save-and-media.zip'
-./re4pc.sh export-achievements '/path/to/selected-captures.zip' --achievement village --achievement gigante
-./re4pc.sh export-achievements '/path/to/all-captures.zip'
+re4mepc export-backup SNAPSHOT_ID '/path/to/save-and-media.zip' --include-media
+re4mepc import-backup '/path/to/save-and-media.zip'
+re4mepc export-achievements '/path/to/selected-captures.zip' --achievement village --achievement gigante
+re4mepc export-achievements '/path/to/all-captures.zip'
 ```
 
 Gallery export reports missing captures and deduplicates shared files. Portable bundles allow up to 1 GiB of referenced media and 4,096 media files. See [portable captures](docs/portable-captures.md) and [save storage and recovery](docs/desktop-release.md).
@@ -320,9 +336,9 @@ Absolute `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOM
 Explicit paths remain available:
 
 ```bash
-./re4pc.sh import /path/to/game.apk --output /external/re4/game
-./re4pc.sh check --game /external/re4/game
-./re4pc.sh run --game /external/re4/game
+re4mepc import /path/to/game.apk --output /external/re4/game
+re4mepc check --game /external/re4/game
+re4mepc run --game /external/re4/game
 ```
 
 Only the following engine libraries are supported. Import, check and run verify
@@ -383,7 +399,7 @@ errors red); redirected output and log files stay plain. Set `NO_COLOR=1` to
 disable colors or `FORCE_COLOR=1` to enable them even when redirecting output.
 `make check` builds helpers and runs synthetic component tests without a game.
 `make verify` also audits the Git index and history. Use `make check-game`
-(or `./re4pc.sh check`) to validate your imported game. `make clean` removes compiled helpers and Python
+(or `re4mepc check`) to validate your imported game. `make clean` removes compiled helpers and Python
 caches, and `make distclean` also removes `.venv`; both preserve imported game
 data, saves and logs. Run `make build` after cleaning, or `make setup` after
 distclean. No automatic formatter is configured, so `make fmt` explains this.
@@ -391,7 +407,7 @@ distclean. No automatic formatter is configured, so `make fmt` explains this.
 To capture a bounded run and its measurements:
 
 ```bash
-./re4pc.sh run --frames 600 --screenshot /tmp/frame.png --stats /tmp/stats.json
+re4mepc run --frames 600 --screenshot /tmp/frame.png --stats /tmp/stats.json
 ```
 
 Statistics include the native update rate (`engine_hz`), missed frame deadlines
@@ -480,24 +496,26 @@ Debes proporcionar tu propio APK compatible. El proyecto no descarga ni incluye 
 
 ### Instalación y ejecución
 
-Necesitas Linux **x86_64**, Python 3.10 o posterior con `venv` y Tk, un compilador de C, `pkg-config`, las cabeceras de desarrollo de SDL2, OpenGL de escritorio con perfil de compatibilidad y FFmpeg. Ejecuta el juego desde una sesión de escritorio con pantalla y audio disponibles.
+Necesitas Linux **x86_64**, Python 3.10 o posterior con `venv` y Tk, GNU Make, un compilador de C, `pkg-config`, las cabeceras de desarrollo de SDL2, OpenGL de escritorio con perfil de compatibilidad y FFmpeg. Ejecuta el juego desde una sesión de escritorio con pantalla y audio disponibles.
 
-- **Arch Linux:** instala `python tk gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`.
+- **Arch Linux:** instala `python tk make gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`.
 - **Debian/Ubuntu:** instala `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic`.
 
 ```bash
 git clone https://github.com/aurelioochoa/re4mepc.git
 cd re4mepc
-./setup.sh
-./re4pc.sh launcher
+make install
+make play
 ```
+
+`make install` prepara el entorno e instala el comando `re4mepc` y la entrada del menú para tu usuario. Conserva el repositorio y su `.venv`. Para preparar sin instalar accesos, usa `make setup`. Si el shell no encuentra `re4mepc`, ejecuta `export PATH="$HOME/.local/bin:$PATH"` o usa `~/.local/bin/re4mepc`. `make help` muestra los comandos; `make import APK="/ruta/al/juego.apk"`, `make check-game` y `make run` permiten importar, comprobar y ejecutar desde el repositorio. `make uninstall` elimina los accesos y el CLI, pero conserva el juego y las partidas.
 
 En el launcher, elige **Import APK**, selecciona tu APK y una carpeta nueva, y pulsa **Play** cuando termine la importación. **Browse** permite elegir una instalación existente. Para importar y ejecutar desde la terminal:
 
 ```bash
-./re4pc.sh import '/ruta/a/Resident Evil 4.apk'
-./re4pc.sh check
-./re4pc.sh run
+re4mepc import '/ruta/a/Resident Evil 4.apk'
+re4mepc check
+re4mepc run
 ```
 
 El launcher presenta un expediente con pergamino, una fotografía de la aldea e ilustraciones generadas. **View logs** abre los registros de la sesión cuando los necesitas. **Settings & controls** configura la pantalla, las sensibilidades y los controles de teclado, ratón y mando; **Save backups** gestiona las partidas con el juego detenido; **Diagnostics** inicia una sesión con archivos de diagnóstico. El progreso y los errores aparecen en la ventana principal.
@@ -537,7 +555,7 @@ Para recoger munición u otro objeto del suelo, pulsa Espacio para seleccionarlo
 
 Los selectores **Idioma del juego** e **Idioma del lanzador**, debajo de la fotografía de la aldea, ofrecen inglés, español, francés, alemán, italiano y japonés. El idioma del lanzador cambia de inmediato, incluidas las ventanas abiertas, y conserva los cambios de ajustes sin guardar. El idioma del juego se aplica al iniciar el juego; **Usar idioma guardado del juego** deja la selección al motor original. Ambas preferencias se guardan por separado en `~/.config/re4mepc/settings.json` y respetan `XDG_CONFIG_HOME`.
 
-El inglés es el valor inicial. Usa, por ejemplo, `./re4pc.sh run --language es` para cambiar el idioma del juego solo durante esa ejecución; los códigos admitidos son `en`, `es`, `fr`, `de`, `it`, `ja` y `saved`. Las nuevas compilaciones portátiles incluyen IPAGothic y su licencia para mostrar japonés. Para incorporar estos cambios a un AppImage o archivo portátil existente, vuelve a compilarlo con `make package`. Para usar el ratón como pantalla táctil, ejecuta `./re4pc.sh run --controls touch`.
+El inglés es el valor inicial. Usa, por ejemplo, `re4mepc run --language es` para cambiar el idioma del juego solo durante esa ejecución; los códigos admitidos son `en`, `es`, `fr`, `de`, `it`, `ja` y `saved`. Las nuevas compilaciones portátiles incluyen IPAGothic y su licencia para mostrar japonés. Para incorporar estos cambios a un AppImage o archivo portátil existente, vuelve a compilarlo con `make package`. Para usar el ratón como pantalla táctil, ejecuta `re4mepc run --controls touch`.
 
 ### Cómo se hizo el port y cómo funciona
 
@@ -553,14 +571,14 @@ El ritmo se limita a **20 Hz**, porque cada dibujo también actualiza la lógica
 
 Por defecto, los datos están en `~/.local/share/re4mepc/game`, las partidas en su subdirectorio `saves` y la caché de audio en `cache/audio`. Los registros y capturas de pruebas están en `~/.local/state/re4mepc/logs`. Se respetan `XDG_DATA_HOME` y `XDG_STATE_HOME` cuando contienen rutas absolutas. Puedes indicar otra ubicación con `--output` al importar y `--game` al comprobar o ejecutar.
 
-Los ajustes se guardan en `~/.config/re4mepc/settings.json` y las copias de seguridad en `~/.local/state/re4mepc/backups`, separadas por instalación. Se respeta también `XDG_CONFIG_HOME`. Con el juego detenido, `./re4pc.sh backup` crea una copia y `./re4pc.sh backups` muestra sus IDs; `restore-backup ID` restaura una copia tras verificarla y conservar una copia de recuperación.
+Los ajustes se guardan en `~/.config/re4mepc/settings.json` y las copias de seguridad en `~/.local/state/re4mepc/backups`, separadas por instalación. Se respeta también `XDG_CONFIG_HOME`. Con el juego detenido, `re4mepc backup` crea una copia y `re4mepc backups` muestra sus IDs; `restore-backup ID` restaura una copia tras verificarla y conservar una copia de recuperación.
 
 - `make check` compila los helpers y ejecuta pruebas sintéticas sin necesitar el juego.
 - `make verify` añade la auditoría de fuentes e historial Git.
 - `make check-game` valida tu importación.
 - `make visible-test` y `make controls-test` abren una ventana real y usan copias aisladas con partidas propias.
 
-Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La finalización de misiones queda para una prueba posterior del usuario. La campaña completa sigue sin validarse; la prueba final de dos horas se detuvo tras 2.880,043 segundos y permanece incompleta. Sigue sin resolverse una excepción intermitente al inicializar el menú de dificultad. Las pruebas actuales del código fuente pasan 307 casos; faltan las comprobaciones físicas de mando, pantalla/HiDPI y altavoces. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Los mandos, el redimensionado, HiDPI y la pantalla completa sin bordes están implementados. Windows, macOS y Linux ARM64 quedan fuera de esta versión. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
+Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La finalización de misiones queda para una prueba posterior del usuario. La campaña completa sigue sin validarse; la prueba final de dos horas se detuvo tras 2.880,043 segundos y permanece incompleta. Sigue sin resolverse una excepción intermitente al inicializar el menú de dificultad. Las pruebas actuales del código fuente pasan 312 casos; faltan las comprobaciones físicas de mando, pantalla/HiDPI y altavoces. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Los mandos, el redimensionado, HiDPI y la pantalla completa sin bordes están implementados. Windows, macOS y Linux ARM64 quedan fuera de esta versión. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
 
 El código del host tiene licencia MIT; esa licencia excluye los datos originales del juego, las marcas y las dependencias de terceros.
 

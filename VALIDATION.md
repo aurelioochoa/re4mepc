@@ -10,7 +10,7 @@ gameplay mosaic is a documentation image; component tests need no gameplay captu
 From a clean Git clone:
 
 ```bash
-./setup.sh
+make setup
 make check
 make audit-source
 make verify

@@ -90,7 +90,7 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
     required = (root / 're4pc.sh', root / '.venv/bin/python',
                 root / 'build/libre4audio.so', root / 'build/libre4fast.so')
     if not all(path.is_file() for path in required):
-        raise ValueError('Run ./setup.sh first to create the Python environment and native helpers')
+        raise ValueError('Run make install (or make setup / ./setup.sh) to create the Python environment and native helpers')
     if not os.access(required[0], os.X_OK) or not os.access(required[1], os.X_OK):
         raise ValueError('The project launcher and Python interpreter must be executable')
     if icon is not None:
@@ -109,9 +109,21 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
     # All inputs and optional destinations are checked before installing files.
     if desktop is not None and not Path(desktop).is_dir():
         raise ValueError('Desktop destination must be an existing directory')
-    wrapper = '#!/bin/sh\n' + 'exec ' + shlex.join([
-        str(root / 're4pc.sh'), 'launcher', '--game', str(game)
-    ]) + ' "$@"\n'
+    # No arguments opens the GUI. Explicit commands expose the entire CLI;
+    # the installation's game default precedes user flags so overrides win.
+    wrapper = '\n'.join([
+        '#!/bin/sh',
+        'if [ "$#" -eq 0 ]; then set -- launcher; fi',
+        'case "$1" in --game|--game=*|--smoke-test) set -- launcher "$@";; esac',
+        'case "$1" in',
+        '  launcher|run|check|backup|backups|export-backup|restore-backup|import-backup|delete-backup|export-achievements)',
+        '    command=$1; shift',
+        '    set -- "$command" --game ' + shlex.quote(str(game)) + ' "$@"',
+        '    ;;',
+        'esac',
+        'exec ' + shlex.quote(str(root / 're4pc.sh')) + ' "$@"',
+        '',
+    ])
     contents = '\n'.join([
         '[Desktop Entry]', 'Version=1.0', 'Type=Application',
         'Name=Resident Evil 4 Mobile',
@@ -167,6 +179,10 @@ def main():
                 print('Desktop shortcut:', folder / (APP_ID + '.desktop'))
                 print('If your desktop asks, choose Allow Launching / Trust this launcher.')
             print('Launch Resident Evil 4 Mobile from your applications menu, or ~/.local/bin/re4mepc.')
+            print('CLI: re4mepc --help, re4mepc import /path/to/game.apk, re4mepc check, re4mepc run.')
+            if str(Path.home() / '.local/bin') not in os.environ.get('PATH', '').split(os.pathsep):
+                print('To use re4mepc by name, add ~/.local/bin to PATH:')
+                print('  export PATH="$HOME/.local/bin:$PATH"')
     except (ValueError, RuntimeError, OSError, zipfile.BadZipFile,
             Image.DecompressionBombError, subprocess.CalledProcessError) as error:
         print('Desktop setup:', error, file=sys.stderr)

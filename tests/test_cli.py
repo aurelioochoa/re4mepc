@@ -11,6 +11,17 @@ from re4pc.settings import Settings
 
 
 class CLITests(unittest.TestCase):
+    def test_no_arguments_opens_launcher_and_help_still_shows_commands(self):
+        with patch('re4pc.launcher.launch') as launch:
+            self.assertEqual(main([]), 0)
+            launch.assert_called_once()
+            self.assertFalse(launch.call_args.kwargs['smoke_test'])
+        with patch('sys.stdout') as output:
+            with self.assertRaises(SystemExit) as result:
+                main(['--help'])
+            self.assertEqual(result.exception.code, 0)
+            self.assertIn('import', ''.join(call.args[0] for call in output.write.call_args_list))
+
     def test_absent_overrides_preserve_saved_settings(self):
         args = argument_parser().parse_args(['run'])
         self.assertIsNone(args.width)

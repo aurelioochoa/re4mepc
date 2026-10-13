@@ -111,7 +111,7 @@ SOURCE_FILES = {
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',
               'test_actions', 'test_controllers', 'test_settings', 'test_languages', 'test_backups',
               'test_save_boundary', 'test_launcher', 'test_packaging', 'test_diagnostics',
-              'test_texture_cache', 'test_cli', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_capture_exports', 'test_rea_workflow'),
+              'test_texture_cache', 'test_cli', 'test_setup_commands', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_capture_exports', 'test_rea_workflow'),
 }
 PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c'} | {
     f'{folder}/{name}.py' for folder, names in SOURCE_FILES.items() for name in names}

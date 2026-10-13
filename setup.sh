@@ -5,16 +5,31 @@ if [[ $(uname -s) != Linux || $(uname -m) != x86_64 ]]; then
   echo 'This host currently requires Linux x86_64.' >&2
   exit 1
 fi
+missing=()
 for tool in python3 cc pkg-config ffmpeg; do
   if ! command -v "$tool" >/dev/null; then
-    echo "Missing dependency: $tool" >&2
-    exit 1
+    missing+=("$tool")
   fi
 done
-pkg-config --exists sdl2 || { echo 'Install SDL2 development headers.' >&2; exit 1; }
-python3 -c 'import tkinter' || { echo 'Install Python/Tk (python3-tk on Ubuntu, tk on Arch).' >&2; exit 1; }
+if command -v pkg-config >/dev/null && ! pkg-config --exists sdl2; then
+  missing+=('SDL2 development headers')
+fi
+if command -v python3 >/dev/null; then
+  python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' || missing+=('Python 3.10 or later')
+  python3 -c 'import tkinter' 2>/dev/null || missing+=('Python/Tk')
+  python3 -c 'import venv, ensurepip' 2>/dev/null || missing+=('Python venv/ensurepip')
+fi
+if (( ${#missing[@]} )); then
+  printf 'Missing prerequisites:\n' >&2
+  printf '  - %s\n' "${missing[@]}" >&2
+  printf '\nInstall system packages, then rerun make setup or make install.\n' >&2
+  printf 'Debian/Ubuntu:\n  sudo apt-get install python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic\n' >&2
+  printf 'Arch Linux:\n  sudo pacman -S --needed python tk make gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk\n' >&2
+  exit 1
+fi
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python tools/build_native.py
-printf '\nReady. Import an APK with ./re4pc.sh import /path/to/game.apk\n'
-printf 'Then launch with ./re4pc.sh run\n'
+printf '\nReady. Open the launcher with make play to import your APK and play.\n'
+printf 'CLI import: make import APK="/path/to/game.apk"\n'
+printf 'Validate with make check-game, then start with make run.\n'

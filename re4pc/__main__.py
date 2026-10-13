@@ -91,7 +91,8 @@ def argument_parser():
 
 def main(argv=None):
     parser = argument_parser()
-    args = parser.parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    args = parser.parse_args(argv or ['launcher'])
     try:
         if args.command == 'import':
             print('Imported game data into', import_apk(args.apk, args.output))

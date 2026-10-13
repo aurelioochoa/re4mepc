@@ -60,8 +60,21 @@ class DesktopTests(unittest.TestCase):
         result = subprocess.run([str(launcher), '--help'], cwd='/', text=True,
                                 capture_output=True, check=True)
         self.assertEqual(result.stdout.splitlines(), [
-            'launcher', '--game', str(game), '--help',
+            '--help',
         ])
+        for args, expected in (
+                ([], ['launcher', '--game', str(game)]),
+                (['--game', '/another game'], ['launcher', '--game', str(game), '--game', '/another game']),
+                (['run', '--skip-videos'], ['run', '--game', str(game), '--skip-videos']),
+                (['check', '--game', '/another game'], ['check', '--game', str(game), '--game', '/another game']),
+                (['import', '/path/to/game.apk'], ['import', '/path/to/game.apk']),
+                (['settings'], ['settings']),
+                (['export-backup', 'snapshot', '/backup with spaces.zip'],
+                 ['export-backup', '--game', str(game), 'snapshot', '/backup with spaces.zip'])):
+            with self.subTest(args=args):
+                result = subprocess.run([str(launcher), *args], cwd='/', text=True,
+                                        capture_output=True, check=True)
+                self.assertEqual(result.stdout.splitlines(), expected)
         if shutil.which('desktop-file-validate'):
             subprocess.run(['desktop-file-validate', str(entry)], check=True, capture_output=True)
         # An update can reuse the installed icon after the original is removed.

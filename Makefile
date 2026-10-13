@@ -30,8 +30,8 @@ PROJECT       := re4mepc
 TAGLINE       := Resident Evil 4 Mobile Linux PC host
 # `=` and not `:=`: with `:=` these expand before the variables they cite are
 # defined further down, and the help footer prints empty values with no error.
-HELP_VARS      = PYTHON=$(PYTHON) ARGS=$(ARGS) TEST_ARGS=$(TEST_ARGS) DESKTOP_ARGS=$(DESKTOP_ARGS)
-HELP_EXAMPLE   = make run ARGS="--skip-videos --log-level debug"
+HELP_VARS      = PYTHON=$(PYTHON) ARGS=$(ARGS) TEST_ARGS=$(TEST_ARGS) DESKTOP_ARGS=$(DESKTOP_ARGS) APK=/path/to/game.apk
+HELP_EXAMPLE   = make import APK="/path/to/Resident Evil 4.apk"
 
 # ─── Preamble ────────────────────────────────────────────────────────────────
 # -e stops a recipe at the first failing command; -o pipefail stops a gate that
@@ -92,14 +92,21 @@ PYTHON ?= .venv/bin/python
 ARGS ?=
 TEST_ARGS ?=
 DESKTOP_ARGS ?=
+APK ?=
+# Pass APK paths through the environment so spaces and shell characters stay literal.
+override APK := $(value APK)
+export APK
 
 ##@ Setup
 .PHONY: setup
-setup: ## Install dependencies and build native helpers
+setup: ## Prepare the Python environment and compile native helpers
 	./setup.sh
 
 ##@ Desktop app
-.PHONY: desktop uninstall-desktop
+.PHONY: install uninstall desktop uninstall-desktop
+install: setup ## Set up the app and install the re4mepc CLI and app-menu entry
+	$(PYTHON) tools/install_desktop.py $(DESKTOP_ARGS)
+uninstall: uninstall-desktop ## Remove the installed CLI and shortcuts; preserve game and saves
 desktop: build ## Install a Linux executable and app-menu shortcut (DESKTOP_ARGS selects icon)
 	$(PYTHON) tools/install_desktop.py $(DESKTOP_ARGS)
 uninstall-desktop: ## Remove the per-user launcher and icon; preserve game and saves
@@ -112,6 +119,22 @@ build: ## Compile native audio and memory helpers
 	$(PYTHON) -u tools/build_native.py
 run: ## Launch the game with live terminal logs (ARGS adds options)
 	./re4pc.sh run $(ARGS)
+
+##@ Game and CLI
+.PHONY: play launcher import cli settings backup backups
+play: launcher ## Open the launcher to import an APK or play
+launcher: ## Open the native graphical launcher (ARGS adds options)
+	./re4pc.sh launcher $(ARGS)
+import: ## Import your APK: make import APK="/path/to/game.apk" (ARGS adds options)
+	@test -n "$$APK" || { printf 'Usage: make import APK="/path/to/game.apk"\n' >&2; exit 2; }
+	./re4pc.sh import "$$APK" $(ARGS)
+cli: ## Run any CLI command: make cli ARGS="--help" (no ARGS opens launcher)
+	./re4pc.sh $(ARGS)
+settings: ## Show settings or change a value with ARGS
+backup: ## Create a save backup (ARGS adds options)
+backups: ## List save backups (ARGS adds options)
+settings backup backups:
+	./re4pc.sh $@ $(ARGS)
 
 ##@ Gates
 .PHONY: test check verify fmt check-game audit-source
@@ -144,8 +167,6 @@ distclean: clean ## Also remove the local Python environment
 	rm -rf .venv
 
 ##@ Distribution
-.PHONY: package launcher
+.PHONY: package
 package: ## Build audited Linux x86_64 AppImage and portable archive using Ubuntu 22.04 Docker
 	$(PYTHON) tools/package.py $(PACKAGE_ARGS)
-launcher: ## Open the native graphical launcher
-	$(PYTHON) -m re4pc launcher $(ARGS)

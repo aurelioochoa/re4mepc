@@ -1,6 +1,24 @@
 # Desktop launcher and release builds
 
-Run `./re4pc.sh launcher` to open the Python/Tk desktop launcher. APK import and
+Run `make install` from the checkout to prepare the app and install the per-user
+`re4mepc` CLI and applications-menu entry. Use `make play` from the checkout or
+`re4mepc` from any directory to open the Python/Tk desktop launcher. The CLI
+requires `~/.local/bin` on `PATH`; the installer prints how to add it when needed.
+Use `make setup` for preparation without desktop installation. `make uninstall`
+removes the installed CLI and menu entry while preserving game data and saves.
+
+`re4mepc --help` lists commands; `re4mepc import /path/to/game.apk`,
+`re4mepc check` and `re4mepc run` import, validate and start the game.
+The checkout equivalents are `make import APK="/path/to/game.apk"`,
+`make check-game` and `make run`. `make cli ARGS="..."` exposes every CLI
+operation; ordinary targets accept extra options through `ARGS`.
+`DESKTOP_ARGS` applies to `make install`, `make desktop` and `make uninstall`.
+An installation with `DESKTOP_ARGS="--game /external/re4/game"` uses that
+folder for game commands; an explicit CLI `--game` overrides it. Keep the
+checkout and its `.venv` in place, and rerun installation after moving them.
+The existing `./setup.sh` and `./re4pc.sh` entry points remain supported.
+
+APK import and
 Play use child processes; logs are captured with bounded buffers while the GUI
 remains responsive. The main window has no console panel. **View logs** opens
 optional session output in a separate window; desktop entries use `Terminal=false`.
@@ -71,11 +89,11 @@ Caches and imported resources are excluded. No cloud sync is provided.
 Stopped-game CLI equivalents to launcher backup controls:
 
 ```sh
-./re4pc.sh backup
-./re4pc.sh backups
-./re4pc.sh export-backup SNAPSHOT_ID '/path/with spaces/save-backup.zip'
-./re4pc.sh import-backup '/path/with spaces/save-backup.zip'
-./re4pc.sh restore-backup SNAPSHOT_ID
+re4mepc backup
+re4mepc backups
+re4mepc export-backup SNAPSHOT_ID '/path/with spaces/save-backup.zip'
+re4mepc import-backup '/path/with spaces/save-backup.zip'
+re4mepc restore-backup SNAPSHOT_ID
 ```
 
 All accept `--game PATH`. Restoring first checks the manifest, all file sizes
