@@ -7,6 +7,16 @@ remaining qualification gates. Raw game fixtures, captures, profiler output and
 REA evidence are external under
 `~/.local/state/re4mepc/roadmap-20261012/work/evidence`.
 
+| Phase | Result | Remaining gate |
+|---|---|---|
+| Baseline and REA | Five repetitions per cache mode; supported ARM/Thumb mappings verified | Intermittent aim failure not reproduced |
+| Loading investigation | Exclusive attribution and paired experiment implemented; candidate rejected | No loading improvement qualified |
+| Desktop menus | Keyboard/virtual-controller navigation, inventory and cancellation checks pass | Intermittent native difficulty initialization exception; physical controller coverage |
+| Portable captures | Gallery and optional save/media bundles implemented and round-trip checked | None for the implemented interfaces |
+| Campaign and sessions | Input-only first-mission entry and separate synthetic/session evidence | User-deferred natural campaign, difficulties/modes/restarts; final two-hour gate incomplete |
+| Release packages | Frozen candidates pass three clean OS smoke environments | Complete campaign and physical device/display/audio qualification |
+| Rendering feasibility | Draw effects observed; independent boundary blocked by coupling | Shipping presentation remains 20 Hz |
+
 The original source baseline is revision
 `4f8c1d4910d6535ed90aeadce37dce9369b299a5`. Before implementation, `make verify`
 passed 265 component tests and the source/history audit. The benchmark added
@@ -64,4 +74,73 @@ not a guessed offset. REA's format-specific independent load-image verifier
 supports DOS; ELF exposes provider observations. The project cross-checks those
 observations against ELF and Capstone and retains that limitation.
 
-REA validates three sampled functions per library with checked ARM/Thumb decoding, rebased source offsets, dossiers and pseudocode. All six mapping checks pass. This verifies the sampled provider coordinates, not every function or a complete relocation audit. The remaining roadmap phases are tracked separately.
+Loading work now offers opt-in import dispatch profiling, per-service operation
+ranking and separate loading/gameplay exclusive phases. Detailed profiles are
+marked `profiled` and excluded from qualification. A profiled exploratory run
+observes substantial dispatch work around repeated GLES calls; cProfile and
+native hooks perturb its timings and ran alongside static analysis. They are
+hotspot evidence, not paired performance proof. No runtime acceleration is
+retained and texture caching stays opt-in.
+
+The exploratory loading profile ranks exclusive unresolved native execution at
+84.163 s, import dispatch at 22.815 s, graphics submission at 6.335 s and host
+service bodies at 2.163 s. Unresolved execution also includes the separate
+native-frame scope and unhooked C/FFI work. Repeated `glTexParameterf`,
+`glMatrixMode` and `glLoadMatrixf` calls dominate dispatch operations. REA's
+`Bio4_FrameWork::_execState_ResCtl` dossier follows resource-state queries,
+resume handling and error-state changes; computed calls remain unresolved.
+Static evidence explains this lifecycle but cannot attribute wall time to
+individual indirect callees. Existing native helper coverage already handles
+bounded memory/string operations. No additional helper or redundant GL-state
+suppression was adopted without proven memory, output and GL-error equivalence.
+
+One bounded candidate removes a redundant list copy after ctypes register
+slicing. Register/callback arguments, stack arguments and negative-count errors
+match the original before measurement. Two unprofiled batches of five pairs
+alternate execution order on the same AMD renderer. They target the worst
+loading frame and retain the exact source and candidate driver checksums.
+
+| Batch | Paired median improvement | Baseline range / median | Gameplay p95 change | Timing gate |
+|---|---:|---:|---:|---|
+| 1 | −0.005% | 52.68% | −2.94% | Failed |
+| 2 | 5.30% | 17.04% | +10.23% | Failed |
+
+The candidate is rejected: neither batch achieves 10% above variability and
+the second regresses gameplay p95 beyond 5%. Concurrent soak/static analysis
+and source checks introduce contention; the observed figures do not establish
+a causal speedup or regression. No optimization is shipped from this experiment.
+The pre-JNI-fix source's five interleaved default-diagnostics pairs measure 3.26%
+median overhead; the JNI-fix probe measures 0.69%, and the final inventory-cancel
+runtime measures 1.10%. These probes pass the 5% gate.
+An earlier 11.6% probe under heavier
+contention failed and remains in the evidence; default trap and GL dispatch
+paths were then kept separate from opt-in import profiling before the final run.
+
+The longer session exposed per-frame JNI class-reference retention. Reusing the
+existing class identity cache removes the observed 16-byte allocation per tick;
+the isolated before/after probe and regression are recorded in campaign coverage.
+This is a lifecycle correction, not an accepted loading-performance candidate.
+
+Desktop menu routing and its visible input checks are documented in
+[menu controls](menu-controls.md). Gallery exports and optional save/media
+bundles are documented in [portable captures](portable-captures.md).
+Natural campaign checkpoints and long-session coverage are tracked in
+[campaign coverage](campaign-coverage.md). Package reports identify immutable
+artifact hashes and their automated smoke scope separately from physical
+hardware checks and campaign qualification. Independent rendering remains a
+research result with demonstrated coupling; the release stays at 20 Hz.
+
+Each phase has a separate reviewable commit and a fresh staged-source
+`make verify` report. Package smoke reports belong to the immutable candidate
+bytes, even while later authored tooling and documentation are committed.
+Candidates are also copied to the ignored `dist/` directory with checked hashes.
+They are not described as fully qualified releases while the campaign and
+physical-device gates remain incomplete.
+
+Session publication on 2026-10-13 is an experimental prerelease, with natural
+mission completion explicitly deferred to the user's later playtest. Both soak
+processes were stopped after preserving checkpoints. The final runtime reached
+2,880.043 seconds; this does not satisfy the two-hour gate. The full campaign
+and physical-device release gates remain unmet. The
+[qualification summary](qualification-summary.md) records the exact artifact
+hashes, matched reports, known intermittent native failure and manual checks.

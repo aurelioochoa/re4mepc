@@ -14,7 +14,7 @@ TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'VALIDATION.md',
              'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
              'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md',
              'docs/render-audit.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
-             'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md', 'docs/portable-captures.md', 'docs/campaign-coverage.md'}
+             'docs/qualification-summary.md', 'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md', 'docs/portable-captures.md', 'docs/campaign-coverage.md'}
 # Only reviewed artwork (generated or supplied by the user) and host UI screenshots may be binary.
 # New versions require visual review and an explicit SHA-256 update.
 DOCUMENTATION_IMAGES = {

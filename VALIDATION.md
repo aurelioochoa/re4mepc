@@ -259,3 +259,46 @@ clean-OS GUI/engine qualification of the refreshed artifacts remains required;
 run tools/validate_package.py in a Docker-enabled environment. Physical displays,
 vendor graphics drivers, physical controllers and a complete campaign remain
 outside the automated smoke coverage. Existing user imports/saves were preserved.
+
+## Roadmap implementation and qualification — 2026-10-12
+
+The current work supersedes the earlier environment limitations above: Docker,
+the AMD desktop and REA/Ghidra are available for the dated checks. Exact source,
+toolchain and measurement identities are in [roadmap results](docs/roadmap-results.md).
+The five-repetition AMD baseline remains separate from the earlier software
+renderer series. No measured loading optimization qualified for shipment.
+
+Keyboard and SDL virtual-controller menu replays reach gameplay and inventory,
+exercise a held confirm, and cancel gestures on focus loss/disconnect and native
+task/phase changes. Visible gameplay retries do not reproduce the intermittent
+keyboard-aim failure; no fix for that failure is claimed. The component suite
+adds archive corruption, limits, missing/conflicting media, stopped-installation
+locking, interrupted publication and gallery/bundle UI checks.
+
+Both frozen candidate package formats pass clean Ubuntu 22.04, Ubuntu 24.04 and
+Arch software-renderer smoke runs. Their [immutable package report](docs/desktop-release.md)
+identifies hashes, image IDs, gallery/bundle/legacy roundtrips and preceding-build
+settings/backup persistence. Every repack requires new qualification.
+
+[Campaign coverage](docs/campaign-coverage.md) distinguishes input-only first-mission
+entry, synthetic stage stress and the isolated session from natural mission
+completion. All 22 story completions, additional difficulty/mode gameplay and
+natural restart coverage remain unverified. Physical display/HiDPI, controllers,
+audible output and extended package hardware-driver checks remain incomplete. The
+[rendering research](docs/render-audit.md) records extra-draw memory/host effects
+and leaves the presentation gate closed at 20 Hz.
+
+## Experimental publication — 2026-10-13
+
+The [authored qualification summary](docs/qualification-summary.md) identifies
+final package hashes and their matching clean-OS/AMD reports. All packaged
+application modules and artwork match the source, and the staged content
+manifest passes its proprietary-content audit. Final source verification covers
+294 component tests, native builds and the source/history audit.
+
+Natural mission completion is deferred to the user's later playtest. The final
+two-hour soak was stopped at the user's request; its preserved checkpoint is
+2,880.043 seconds, with `completed: false`. The two-hour gate remains incomplete.
+The unresolved intermittent difficulty-initialization exception and remaining
+physical-device checks are recorded in the summary. No campaign-qualified or
+30/60 FPS release claim is made.

@@ -74,8 +74,8 @@ Host import counts and graphics submission effects are recorded separately.
 
 | Extra native call | Changed guest pages (4 KiB) | Additional host draw calls | Changes in selected gameplay fields |
 |---|---:|---:|---|
-| GM_MisConduct::Draw | 4 | 7 | None observed |
-| GM_CtrlMain::Draw | 40 | 19 | None observed |
+| GM_MisConduct::Draw | 4–5 | 7 | None observed |
+| GM_CtrlMain::Draw | 38–40 | 19 | None observed |
 | GM_TaskManager::Render | 40 | 19 | None observed |
 
 At equal simulation ticks, the selected fields are stage, position, player state,
@@ -91,7 +91,9 @@ The fixture unlocks/selects missions synthetically and is not campaign evidence.
 ```
 
 Raw dossiers, memory-effect addresses and captures stay outside the checkout,
-under the roadmap evidence directory in `dossiers` and `render-probe`.
+under the roadmap evidence directory in `dossiers`, `render-probe` and the
+independent `render-probe-final` repeat. The table reports ranges across those
+two runs; addresses/stack layout affect the changed-page count.
 The feasibility result is **blocked by demonstrated draw-side interaction
 coupling and an unproven state boundary**. A development rendering prototype
 was not built because its prerequisite boundary has not been established.

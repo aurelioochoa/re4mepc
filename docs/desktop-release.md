@@ -114,22 +114,23 @@ exercise XDG settings/backups while switching formats. These checks validate a
 software OpenGL compatibility driver; physical displays, hardware controllers
 and vendor-specific driver combinations remain additional coverage.
 
-## Immutable candidate qualification — 2026-10-12
+## Immutable candidate qualification — 2026-10-13
 
 The candidate pair includes desktop menu routing, achievement gallery exports
-and optional portable save/media bundles. Both formats pass clean Ubuntu 22.04,
+and optional portable save/media bundles, plus bounded JNI class-reference
+allocation. Both formats pass clean Ubuntu 22.04,
 Ubuntu 24.04 and Arch containers on these exact bytes:
 
 | Artifact | SHA-256 |
 |---|---|
-| AppImage | eb2df02f95cad7867e064b005dcf133696a55444c4760637238ddaa10d051bfe |
-| Portable tar.gz | f74498acb580e01588e1c7c9188206ab8faf2977984a534d9ba7e37f00bf08ab |
+| AppImage | dbf6dc7df6f70a2e96ee15a8eb89a3c350ea3cb84d90334cc491bb5a6c7d5c11 |
+| Portable tar.gz | 20d94e814d2a0cf0aaf39c832779ccbcf1ec14c1d44027745ea7dcbe6495cd50 |
 
 | Target | Validation image ID |
 |---|---|
-| Ubuntu 22.04 | sha256:705fc84ae7baab3d57accf2c14e45d1dd8a315030205f8392e266fecdae67911 |
-| Ubuntu 24.04 | sha256:9699cd9ecace73586e6dd9ceb95b997b20aaac3cf07efa9b556e4618227184d7 |
-| Arch | sha256:2a24a58daccac5b7367731701581511825de12140723e6f75fda1957b74e54f4 |
+| Ubuntu 22.04 | sha256:4ef2da8a158d29e1f70e8c82b758d2e7dc8ca7230fc92148832ab4396faa566f |
+| Ubuntu 24.04 | sha256:42a99fb2ec2edf3482ff703a764640a679b165bebe9030e4d35a38e01038dcac |
+| Arch | sha256:004bdc81275499b16eb5b2722093c3adc2973c225d28e6d581ecfeeacf091ec7 |
 
 The checks open both Tk launchers and run 160 engine ticks per format with
 llvmpipe, Xvfb and dummy audio. They verify shared settings/backups, gallery
@@ -148,7 +149,8 @@ creates the upgrade state. Hash checks reject artifact changes during validation
 
 Evidence and artifacts are external under
 `~/.local/state/re4mepc/roadmap-20261012/work/evidence/`, in
-`candidate-packages`, `package-validation` and `package-validation-arch`.
+`qualified-candidate-packages`, `qualified-package-validation`,
+`qualified-package-amd` and `qualified-natural-package-menu-retry`.
 Reproduce with:
 
 ```bash
@@ -157,10 +159,39 @@ Reproduce with:
   --output /external/package-validation
 ```
 
+Both formats also open a visible window and execute 160 startup ticks on the
+host's AMD RX 6700S and Radeon 680M with Mesa 26.1.5. The selector and renderer
+identity are recorded per run. These checks use dummy audio and cover startup,
+not extended gameplay on each driver. An initial probe used a symlinked XDG state
+path and was rejected by snapshot path validation; canonicalizing that test path
+allowed both GPUs to pass without a package change. Intel and NVIDIA hardware
+and a physical controller are unavailable.
+
+Both final formats also replay 1,720 ticks of fresh-install keyboard/mouse input
+through the first mission, manual panels, movement and inventory. Reviewed
+captures show the item submenu, inventory return and gameplay return after
+Escape/Start cancellation. Native save/load passes in both bundled runtimes.
+These inputs do not write progression records or request synthetic stage changes;
+they also do not complete a mission. A first runner attempt reused its extraction
+directory as an evidence directory and stopped before launching; the retry uses
+separate directories and is the qualification evidence.
+
 These are automated smoke-qualified candidates. The full release gate remains
 incomplete: natural campaign progression, physical controller hot-plug, audible
-speaker output, physical display/HiDPI checks and package execution on hardware
-drivers still need evidence. Source desktop checks cover resizing, fullscreen,
+speaker output, physical display/HiDPI checks and extended package gameplay on
+hardware drivers still need evidence. Source desktop checks cover resizing, fullscreen,
 focus/cursor capture and SDL virtual-controller disconnect. Available hardware
-is AMD RX 6700S/680M; Intel and NVIDIA hardware and a physical controller are
-unavailable. Repacking invalidates all qualification attached to these hashes.
+is AMD RX 6700S/680M. The earlier candidates with AppImage hash beginning
+`eb2df02f` and archive hash beginning `f74498ac` were superseded by the JNI fix;
+the next pair beginning `49a0efe2` / `ec0b1f22` was superseded by inventory
+cancellation. Their passing reports do not qualify the new bytes. Repacking invalidates all
+qualification attached to the current hashes.
+
+The published prerelease is **experimental and not fully campaign-qualified**.
+The final runtime's two-hour soak was stopped at the user's request after its
+2,880.043-second checkpoint and remains incomplete. A native exception during
+title-to-difficulty component initialization remains unresolved; 20 subsequent
+entry trials passed, which does not establish an intermittent failure is fixed.
+See the [authored qualification summary](qualification-summary.md) for the exact
+scope, failures and manual handoff. Release assets contain only the audited host
+packages, checksums and that summary; private game-derived evidence stays external.
