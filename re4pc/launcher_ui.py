@@ -935,7 +935,7 @@ class AchievementsView:
         self.app, self.root = app, root
         self.store = AchievementStore(root)
         self.chrome = CaseDialog(app, 'Achievements', self.close, minimum=(600, 420),
-                                 footer='●  Local records · Included in save backups')
+                                 footer='● Local')
         self.window, self.frame, self.body = self.chrome.window, self.chrome.frame, self.chrome.body
         self.window.view = self
         self.art = AchievementArtwork(app.assets)
@@ -947,8 +947,10 @@ class AchievementsView:
         self.summary = tk.StringVar()
         self.search = tk.StringVar()
         self.filter = tk.StringVar(value='All')
-        self.close_button = self.chrome.action('Close', self.close)
-        self.refresh_button = self.chrome.action('Refresh', self.refresh)
+        self.close_button = self.chrome.action('Close', self.close, width=70)
+        self.refresh_button = self.chrome.action('Refresh', self.refresh, width=80)
+        self.export_selected_button = self.chrome.action('Export selected', lambda: self.export(True), width=135)
+        self.export_all_button = self.chrome.action('Export all', lambda: self.export(False), width=105)
         self.chrome.footer_buttons.reverse()
         self.catalog = CasePaperPane(self.body, app.assets, render=self.draw_catalog)
         self.detail = CasePaperPane(self.body, app.assets, render=self.draw_detail)
@@ -976,6 +978,40 @@ class AchievementsView:
     def close(self):
         self.window.destroy()
         self.app.window.lift()
+
+    def busy_changed(self):
+        busy = self.app.child is not None
+        self.export_selected_button.configure(state='normal' if not busy and self.records is not None and self.selected else 'disabled')
+        self.export_all_button.configure(state='normal' if not busy and self.records is not None else 'disabled')
+        self.refresh_button.configure(state='disabled' if busy else 'normal')
+
+    def export(self, selected):
+        from tkinter import filedialog, messagebox
+        import json
+        if self.app.child or self.records is None or (selected and not self.selected):
+            return
+        destination = filedialog.asksaveasfilename(parent=self.window, title='Export achievement captures',
+            defaultextension='.zip', initialfile='re4-achievements.zip', filetypes=[('Capture archive', '*.zip')])
+        if not destination:
+            return
+        arguments = ['--achievement', self.selected] if selected else []
+        def complete(code):
+            if not self.window.winfo_exists():
+                return
+            if code:
+                messagebox.showerror('Export failed', self.app.last_output or 'View launcher logs for details.', parent=self.window)
+            else:
+                try:
+                    result = json.loads(self.app.last_output)
+                    count = len(result['missing_captures'])
+                except (ValueError, KeyError, TypeError):
+                    messagebox.showerror('Export result unavailable', 'View launcher logs for details.', parent=self.window)
+                    return
+                messagebox.showinfo('Captures exported', f"Exported {result['files']} media files." +
+                    (f' {count} missing references are listed in achievements.json.' if count else ''), parent=self.window)
+            self.busy_changed()
+        self.app.start('export-achievements', destination, *arguments, '--game', self.root, on_complete=complete)
+        self.busy_changed()
 
     def layout(self, event):
         stacked = self.window.winfo_width() < 880
@@ -1111,6 +1147,7 @@ class AchievementsView:
 
     def select(self, identity, reveal=False):
         self.selected = identity
+        self.busy_changed()
         for row in self.rows.values():
             row.schedule()
         if reveal and identity in self.rows:
@@ -1322,6 +1359,7 @@ class BackupRow(PaperCanvas):
 
 class BackupsView:
     def __init__(self, app, root):
+        from tkinter import ttk
         self.app, self.root = app, root
         self.chrome = CaseDialog(app, 'Save backups', self.close, minimum=(640, 520), footer='●  Local save snapshots')
         self.window, self.frame, self.body = self.chrome.window, self.chrome.frame, self.chrome.body
@@ -1339,6 +1377,9 @@ class BackupsView:
         self.export_button = ArtworkButton(self.detail.content, 'EXPORT', self.export, kind='paper-outline')
         self.restore_button = ArtworkButton(self.detail.content, 'RESTORE', self.restore, kind='primary')
         self.delete_button = ArtworkButton(self.detail.content, 'Delete snapshot', self.delete, kind='danger')
+        self.include_media = tk.BooleanVar(value=False)
+        self.media_option = ttk.Checkbutton(self.detail.content, text='Include achievement media',
+                                            variable=self.include_media, style='Paper.TCheckbutton')
         self.body.bind('<Configure>', self.layout)
         for sequence in ('<MouseWheel>', '<Button-4>', '<Button-5>'):
             self.window.bind(sequence, self.scroll)
@@ -1360,6 +1401,7 @@ class BackupsView:
             button.configure(state='disabled' if busy else 'normal')
         for button in (self.export_button, self.restore_button, self.delete_button):
             button.configure(state='normal' if not busy and self.loaded and self.selected else 'disabled')
+        self.media_option.configure(state='normal' if not busy and self.loaded and self.selected else 'disabled')
         self.chrome.footer = self.app.status.get() if busy else self.notice
         self.chrome.schedule()
 
@@ -1485,15 +1527,17 @@ class BackupsView:
         item = next((item for item in self.snapshots if item['id'] == self.selected), None)
         c.surface(224 if self.mode else 570)
         if item is None:
+            self.media_option.place_forget()
             c.text(42, 48, 'Save snapshots', 30, weight='bold', width=w-84)
             c.art('backups', w/2, 263, min(285, w-80))
             c.text(42, 448, 'Select a snapshot to export, restore or delete it.', 17, width=w-84)
             self.detail.extent(570)
             return
         if self.mode:
-            c.text(24, 14, BACKUP_LABELS.get(item['label'], item['label']), 22, weight='bold', width=w-160)
-            c.text(24, 48, snapshot_date(item), 13, family='DejaVu Sans Mono', width=w-160)
+            c.text(24, 8, BACKUP_LABELS.get(item['label'], item['label']), 22, weight='bold', width=w-160)
+            c.text(24, 34, snapshot_date(item), 13, family='DejaVu Sans Mono', width=w-160)
             c.art('backups', w-70, 43, 86, 72)
+            c.window(self.media_option, 24, 54, w-140, 24)
             bw = (w-60)/2
             for index, button in enumerate((self.export_button, self.restore_button)):
                 c.window(button, 24+index*(bw+12), 84, bw, 34)
@@ -1509,8 +1553,9 @@ class BackupsView:
         c.art('ribbon-spools', w*.76, 372, min(128, w*.25), 100)
         c.rule(420, 40, w-40)
         count = len(item['files'])
-        c.text(42, 438, f'All saves in one snapshot · {count} '+('file' if count == 1 else 'files'), 13,
+        c.text(42, 425, f'All saves in one snapshot · {count} '+('file' if count == 1 else 'files'), 13,
                family='DejaVu Sans Mono', width=w-84)
+        c.window(self.media_option, 42, 445, w-84, 28)
         bw = (w-96)/2
         for index, button in enumerate((self.export_button, self.restore_button)):
             c.window(button, 42+index*(bw+12), 480, bw, 42)
@@ -1536,7 +1581,8 @@ class BackupsView:
         destination = filedialog.asksaveasfilename(parent=self.window, title='Export backup', defaultextension='.zip',
                                                    initialfile='re4-saves-'+self.selected[:12]+'.zip', filetypes=[('Save backup', '*.zip')])
         if destination:
-            self.run('export-backup', self.selected, destination)
+            arguments = ('--include-media',) if self.include_media.get() else ()
+            self.run('export-backup', self.selected, destination, *arguments)
 
     def restore(self):
         from tkinter import messagebox

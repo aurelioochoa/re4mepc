@@ -590,6 +590,52 @@ class CaseFileDialogTests(LauncherGuiFixture):
 
 
 class FinalCaseFileTests(LauncherGuiFixture):
+    def test_gallery_exports_selected_identity_all_independent_of_filter_and_busy_errors(self):
+        view = self.app.achievements()
+        view.search.set('Rock')
+        self.window.update()
+        self.assertEqual(view.selected, 'gigante')
+        with patch.object(self.app, 'start') as start, patch('tkinter.filedialog.asksaveasfilename', return_value='/tmp/gallery with spaces.zip'):
+            view.export(True)
+            self.assertEqual(start.call_args.args, ('export-achievements', '/tmp/gallery with spaces.zip', '--achievement', 'gigante', '--game', view.root))
+            view.filter.set('Unlocked')
+            self.window.update()
+            self.assertIsNone(view.selected)
+            view.export(False)
+            self.assertEqual(start.call_args.args, ('export-achievements', '/tmp/gallery with spaces.zip', '--game', view.root))
+        self.app.child = Mock()
+        view.busy_changed()
+        self.assertTrue(view.export_all_button.instate(['disabled']))
+        self.assertTrue(view.export_selected_button.instate(['disabled']))
+        with patch.object(self.app, 'start') as start:
+            view.export(False)
+        start.assert_not_called()
+        self.app.child = None
+        view.store.path.parent.mkdir(parents=True, exist_ok=True)
+        view.store.path.write_bytes(b'invalid record')
+        view.refresh()
+        self.assertTrue(view.export_all_button.instate(['disabled']))
+        view.window.destroy()
+
+    def test_backup_media_option_is_unchecked_visible_and_opt_in(self):
+        view, items = self.backup_view()
+        view.window.geometry('640x520')
+        self.window.update()
+        self.assertFalse(view.include_media.get())
+        self.assertTrue(view.media_option.winfo_ismapped())
+        relative = view.media_option.winfo_rooty() - view.detail.canvas.winfo_rooty()
+        self.assertGreaterEqual(relative, 0)
+        self.assertLess(relative + view.media_option.winfo_height(), view.detail.canvas.winfo_height())
+        with patch.object(self.app, 'start') as start, patch('tkinter.filedialog.asksaveasfilename', return_value='/tmp/bundle.zip'):
+            view.include_media.set(True)
+            view.export()
+            self.assertEqual(start.call_args.args, ('export-backup', view.selected, '/tmp/bundle.zip', '--include-media', '--game', view.root))
+        self.app.child = Mock()
+        view.busy_changed()
+        self.assertTrue(view.media_option.instate(['disabled']))
+        self.app.child = None
+        view.window.destroy()
+
     def backup_view(self, items=None):
         import json
         with patch.object(self.app, 'start'):

@@ -251,7 +251,8 @@ class Launcher:
         descriptions = {'run': 'Game is running. Use the game window to play.', 'import': 'Importing your APK…',
                         'backups': 'Loading save backups…', 'backup': 'Creating a save snapshot…',
                         'export-backup': 'Exporting backup…', 'restore-backup': 'Restoring saves…',
-                        'import-backup': 'Importing backup…', 'delete-backup': 'Deleting snapshot…'}
+                        'import-backup': 'Importing backup…', 'delete-backup': 'Deleting snapshot…',
+                        'export-achievements': 'Exporting achievement captures…'}
         self.status.set(descriptions.get(command, 'Working…'))
         self.status_label.configure(style='TLabel')
         self.buttons[:] = [button for button in self.buttons if button.winfo_exists()]
@@ -297,7 +298,8 @@ class Launcher:
                 success = {'run': 'Game closed. Ready to play again.', 'import': 'Import complete. Ready to play.',
                            'backups': 'Save backups loaded.', 'backup': 'Save snapshot created.',
                            'export-backup': 'Backup exported.', 'restore-backup': 'Saves restored.',
-                           'import-backup': 'Backup imported.', 'delete-backup': 'Snapshot deleted.'}
+                           'import-backup': 'Backup imported.', 'delete-backup': 'Snapshot deleted.',
+                           'export-achievements': 'Achievement captures exported.'}
                 self.status.set('Operation stopped.' if stopped else success.get(operation, 'Complete.') if code == 0
                                 else 'Operation failed. Open View logs for details, then try again.')
                 self.status_label.configure(style='Error.TLabel' if code and not stopped else 'TLabel')

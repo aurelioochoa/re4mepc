@@ -157,7 +157,7 @@ To pick up ammo or another ground item, press Space to select it, then press Spa
 
 PC mode hides the movement pad and gun, knife, and lower-weapon touch buttons. Contextual actions (pickups, doors, ladders, and other interactions), companion commands, scope controls, status displays, and menus remain visible.
 
-Menus use normal mouse clicks. Mobile confirmation sliders require dragging the arrow across the button. For the original mouse-as-touch controls and their full interface, launch `./re4pc.sh run --controls touch`.
+In PC mode, Enter/B continues through recognized menus and confirms the difficulty slider once per press. WASD/D-pad or the right stick moves the menu cursor; Space/A clicks it, including inventory items and their context menus. Current bindings appear on screen. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work. See [desktop menu controls](docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `./re4pc.sh run --controls touch`.
 
 Mouse look uses 0.15 degrees per pixel, with vertical movement limited to
 45 degrees up or down. Holding and releasing aim preserves the vertical look
@@ -174,11 +174,11 @@ SDL2 controllers use these default bindings:
 | Left stick | Forward/backward and tank turns |
 | Right stick | Look; move the touch cursor in menus |
 | Left / right trigger | Aim / fire |
-| A | Context action; hold to drag the menu cursor |
+| A | Context action; click the menu cursor |
 | X / Y | Reload / knife |
 | Start | Status menu |
 | D-pad | Menu navigation |
-| B | Native menu confirmation |
+| B | Continue or confirm the recognized slider |
 
 Use **Settings & controls** to remap inputs and adjust mouse sensitivity, controller sensitivity, invert Y and stick dead zone. Tab, F3 and F12 are reserved. Explicit `run` options override saved settings, for example `./re4pc.sh run --window-mode fullscreen --controller-sensitivity 2`. Resizing and HiDPI preserve the original 800 × 480 image with letterboxing.
 
@@ -488,9 +488,9 @@ La importación verifica las dos bibliotecas y todos los recursos necesarios ant
 | Alt+Enter | Alternar la pantalla completa sin bordes |
 | F12 | Cerrar la ventana |
 
-Los menús usan clics normales. Para confirmar con un deslizador móvil, arrastra la flecha de un extremo al otro. Enter, Espacio, Escape o un clic omiten el vídeo en reproducción. Al perder el foco, la ventana libera las teclas y el cursor.
+En modo PC, Enter/B continúa en los menús reconocidos y confirma el deslizador con una sola pulsación. WASD/D-pad o el stick derecho mueve el cursor; Espacio/A selecciona objetos y opciones del inventario. También puedes usar el ratón. Enter, Espacio, Escape o un clic omiten el vídeo en reproducción. Al perder el foco, la ventana libera las teclas y el cursor.
 
-Para recoger munición u otro objeto del suelo, pulsa Espacio para seleccionarlo y vuelve a pulsarlo para recogerlo. Los mandos usan el stick izquierdo para moverse y girar, el derecho para mirar, los gatillos para apuntar y disparar, A para interactuar, X para recargar, Y para el cuchillo y Start para el menú de estado. En los menús, mueve el cursor con el stick derecho y mantén A para arrastrar; B confirma. Puedes cambiar las asignaciones en **Settings & controls**.
+Para recoger munición u otro objeto del suelo, pulsa Espacio para seleccionarlo y vuelve a pulsarlo para recogerlo. Los mandos usan el stick izquierdo para moverse y girar, el derecho para mirar, los gatillos para apuntar y disparar, A para interactuar, X para recargar, Y para el cuchillo y Start para el menú de estado. En los menús, mueve el cursor con el stick derecho o D-pad y pulsa A para seleccionar; B continúa o confirma el deslizador. Puedes cambiar las asignaciones en **Settings & controls**.
 
 El juego inicia en inglés. `./re4pc.sh run --language saved` conserva el idioma guardado por el juego; esta opción no añade una traducción al español. Para usar el ratón como pantalla táctil, ejecuta `./re4pc.sh run --controls touch`.
 
@@ -525,3 +525,6 @@ The source written for this host is MIT licensed. The license excludes original
 game data, trademarks and third-party dependencies. Interoperability names,
 symbols, offsets and hashes identify the supported engine; executable test
 snippets are hand-written synthetic fixtures and host ABI trampolines.
+
+
+The [roadmap results](docs/roadmap-results.md) record reproducible performance and REA evidence, desktop menu checks, portable capture formats and remaining qualification gates. Achievements provides **Export selected** and **Export all**. Backup export offers an unchecked **Include achievement media** option; import accepts both save-only ZIPs and portable media bundles. See [portable captures](docs/portable-captures.md) for CLI commands, limits and restore behavior. Natural campaign qualification remains incomplete, and simulation/presentation stay at 20 Hz.

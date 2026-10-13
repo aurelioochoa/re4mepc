@@ -46,8 +46,13 @@ def argument_parser():
             item.add_argument('snapshot_id')
         if command == 'export-backup':
             item.add_argument('destination', type=Path)
+            item.add_argument('--include-media', action='store_true', help='Export a portable save and achievement media bundle')
         if command == 'import-backup':
             item.add_argument('archive', type=Path)
+    gallery = sub.add_parser('export-achievements', help='Export original achievement captures and their metadata as ZIP')
+    gallery.add_argument('destination', type=Path)
+    gallery.add_argument('--game', type=Path, default=game_dir())
+    gallery.add_argument('--achievement', action='append', default=[], metavar='ID', help='Select an achievement (repeatable; default: all)')
     settings = sub.add_parser('settings', help='Show settings or change one value using JSON')
     settings.add_argument('--set', nargs=2, metavar=('KEY', 'JSON_VALUE'))
     run = sub.add_parser('run', help='Run the original mobile engine in a desktop window')
@@ -101,14 +106,17 @@ def main(argv=None):
                 values[key] = json.loads(value)
                 values = Settings.save(values)
             print(json.dumps(values, indent=2))
-        elif args.command in ('backup', 'backups', 'export-backup', 'restore-backup', 'import-backup', 'delete-backup'):
+        elif args.command in ('backup', 'backups', 'export-backup', 'restore-backup', 'import-backup', 'delete-backup', 'export-achievements'):
             from .backups import SaveStore
             if not args.game.is_dir():
                 raise ValueError('Game installation does not exist: ' + str(args.game))
             with SaveStore(args.game) as store:
                 if args.command == 'backup': result = store.snapshot()
                 elif args.command == 'backups': result = store.list_snapshots()
-                elif args.command == 'export-backup': result = store.export(args.snapshot_id, args.destination)
+                elif args.command == 'export-backup': result = store.export(args.snapshot_id, args.destination, include_media=args.include_media)
+                elif args.command == 'export-achievements':
+                    from .capture_exports import export_achievements
+                    result = export_achievements(store, args.destination, args.achievement)
                 elif args.command == 'restore-backup': result = store.restore(args.snapshot_id)
                 elif args.command == 'delete-backup': result = store.delete(args.snapshot_id)
                 else: result = store.import_backup(args.archive)

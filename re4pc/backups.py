@@ -199,7 +199,7 @@ class SaveStore:
             raise ValueError('Invalid snapshot ID')
         return self.snapshots / identity
 
-    def _validate(self, path):
+    def _validate(self, path, *, paths=False):
         if path.is_symlink() or not path.is_dir():
             raise ValueError('Snapshot missing or unsafe')
         manifest_path = path / 'manifest.json'
@@ -225,10 +225,15 @@ class SaveStore:
                 total += target.stat().st_size
                 if total > MAX_BYTES:
                     raise ValueError('Snapshot exceeds size limit')
-                data = target.read_bytes()
-                if len(data) != record['bytes'] or _digest(data) != record['sha256']:
+                digest = hashlib.sha256()
+                size = 0
+                with target.open('rb') as stream:
+                    while chunk := stream.read(1024 * 1024):
+                        digest.update(chunk)
+                        size += len(chunk)
+                if size != record['bytes'] or digest.hexdigest() != record['sha256']:
                     raise ValueError('Snapshot file checksum mismatch: ' + name)
-                files[name] = data
+                files[name] = target if paths else target.read_bytes()
             # Reject unlisted payloads so exported/restored sets remain complete.
             actual = {p.relative_to(path / 'files').as_posix() for p in (path / 'files').rglob('*') if not p.is_dir()}
             if actual != set(records):
@@ -253,9 +258,12 @@ class SaveStore:
             shutil.rmtree(self._path(manifest['id']))
         _sync(self.snapshots)
 
-    def export(self, identity, destination):
+    def export(self, identity, destination, *, include_media=False):
         self._require(stopped=True)
-        manifest, files = self._validate(self._path(identity))
+        if include_media:
+            from .capture_exports import export_bundle
+            return export_bundle(self, identity, destination)
+        manifest, files = self._validate(self._path(identity), paths=True)
         destination = Path(destination).absolute()
         destination.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary = tempfile.mkstemp(prefix='.backup-', dir=destination.parent)
@@ -263,8 +271,8 @@ class SaveStore:
         try:
             with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr('manifest.json', _canonical(manifest))
-                for name, data in files.items():
-                    archive.writestr('files/' + name, data)
+                for name, path in files.items():
+                    archive.write(path, 'files/' + name)
             with open(temporary, 'rb') as stream:
                 os.fsync(stream.fileno())
             # Refuse to overwrite another backup or an unrelated file.
@@ -285,7 +293,23 @@ class SaveStore:
 
     def import_backup(self, archive):
         self._require(stopped=True)
+        try:
+            with zipfile.ZipFile(archive) as source:
+                bundle = 'bundle.json' in source.namelist()
+        except zipfile.BadZipFile as error:
+            raise ValueError('Invalid backup archive') from error
+        if bundle:
+            from .capture_exports import import_bundle
+            return import_bundle(self, archive)
         work = Path(tempfile.mkdtemp(prefix='.import-', dir=self.snapshots))
+        try:
+            _, files = self._read_archive(archive, work)
+            return self._publish(files, 'imported')
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def _read_archive(self, archive, work):
+        """Validate without publishing, for transactional save/media imports."""
         try:
             with zipfile.ZipFile(archive) as source:
                 infos = source.infolist()
@@ -294,8 +318,10 @@ class SaveStore:
                 total = 0
                 for info in infos:
                     _safe_name(info.filename)
-                    if info.is_dir() or stat.S_ISLNK(info.external_attr >> 16) or (info.filename != 'manifest.json' and not info.filename.startswith('files/')):
+                    if info.is_dir() or stat.S_IFMT(info.external_attr >> 16) not in (0, stat.S_IFREG) or (info.filename != 'manifest.json' and not info.filename.startswith('files/')):
                         raise ValueError('Unexpected backup archive member')
+                    if info.filename == 'manifest.json' and info.file_size > 2 * 1024 * 1024:
+                        raise ValueError('Backup manifest exceeds size limit')
                     total += info.file_size
                     if total > MAX_BYTES + 2 * 1024 * 1024:
                         raise ValueError('Backup archive exceeds size limit')
@@ -305,17 +331,16 @@ class SaveStore:
                         shutil.copyfileobj(src, dst)
             manifest = json.loads((work / 'manifest.json').read_text())
             self._path(manifest['id'])
-            named = work.parent / ('.import-' + uuid.uuid4().hex)
+            named = work / ('.validated-' + uuid.uuid4().hex)
             named.mkdir()
             child = named / manifest['id']
-            os.rename(work, child)
-            work = named
-            validated, files = self._validate(child)
-            return self._publish(files, 'imported')
+            child.mkdir()
+            os.rename(work / 'manifest.json', child / 'manifest.json')
+            if (work / 'files').exists():
+                os.rename(work / 'files', child / 'files')
+            return self._validate(child)
         except (zipfile.BadZipFile, KeyError, TypeError, json.JSONDecodeError) as error:
             raise ValueError('Invalid backup archive') from error
-        finally:
-            shutil.rmtree(work, ignore_errors=True)
 
     def restore(self, identity):
         self._require(stopped=True)

@@ -14,7 +14,7 @@ TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'VALIDATION.md',
              'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
              'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md',
              'docs/render-audit.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
-             'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md'}
+             'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md', 'docs/portable-captures.md'}
 # Only reviewed artwork (generated or supplied by the user) and host UI screenshots may be binary.
 # New versions require visual review and an explicit SHA-256 update.
 DOCUMENTATION_IMAGES = {
@@ -97,7 +97,7 @@ DOCUMENTATION_IMAGES = {
 SOURCE_FILES = {
     're4pc': ('__init__', '__main__', 'arm', 'assets', 'bionic', 'desktop', 'eabi', 'fast',
               'filesystem', 'game', 'graphics', 'input', 'jni', 'media',
-              'paths', 'pc_controls', 'menu_controls', 'runtime_log', 'textures', 'timing',
+              'paths', 'pc_controls', 'menu_controls', 'capture_exports', 'runtime_log', 'textures', 'timing',
               'actions', 'controllers', 'settings', 'backups', 'save_boundary',
               'launcher', 'launcher_ui', 'case_dialog', 'packaging', 'diagnostics', 'texture_cache', 'achievements', 'achievement_media'),
     'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
@@ -108,7 +108,7 @@ SOURCE_FILES = {
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',
               'test_actions', 'test_controllers', 'test_settings', 'test_backups',
               'test_save_boundary', 'test_launcher', 'test_packaging', 'test_diagnostics',
-              'test_texture_cache', 'test_cli', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_rea_workflow'),
+              'test_texture_cache', 'test_cli', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_capture_exports', 'test_rea_workflow'),
 }
 PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c'} | {
     f'{folder}/{name}.py' for folder, names in SOURCE_FILES.items() for name in names}

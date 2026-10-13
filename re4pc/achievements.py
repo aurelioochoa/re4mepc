@@ -153,6 +153,12 @@ class AchievementStore:
         except FileNotFoundError:
             self.media = {}
             return Progress(), {}
+        progress, unlocked, self.media = self.decode(raw)
+        return progress, unlocked
+
+    @staticmethod
+    def decode(raw):
+        """Validate a saved record independently of its installation location."""
         if len(raw) > MAX_RECORD_BYTES:
             raise ValueError('Achievement record is too large')
         try:
@@ -179,8 +185,7 @@ class AchievementStore:
                         or not name.endswith('.png' if kind == 'image' else '.mp4')
                         or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-.' for c in name)):
                     raise ValueError('Invalid achievement media filename')
-        self.media = media
-        return Progress.from_dict(record.get('progress')), unlocked
+        return Progress.from_dict(record.get('progress')), unlocked, media
 
     def update(self, progress):
         with self.lock:
