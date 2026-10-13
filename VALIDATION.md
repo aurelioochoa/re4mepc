@@ -1,8 +1,9 @@
 # Validation
 
 The host targets Linux x86_64 with SDL2, desktop OpenGL, FFmpeg and Unicorn.
-No original game libraries, assets, dumps, save files or screenshots are
-part of the repository or required by the component suite.
+No original game libraries, extracted assets, dumps or save files are
+part of the repository or required by the component suite. The README's reviewed
+gameplay mosaic is a documentation image; component tests need no gameplay captures.
 
 ## Repeatable source-only verification
 

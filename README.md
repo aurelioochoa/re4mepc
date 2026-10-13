@@ -6,18 +6,15 @@
 
 Play the original ARM32 Android engine in a Linux desktop window with mouse and keyboard controls. **re4mepc** is an experimental compatibility host: Unicorn executes the game's native libraries, SDL2 handles the window and audio, and a graphics bridge translates OpenGL ES 1 rendering to desktop OpenGL.
 
-You supply the APK. The repository contains the host, importer, synthetic tests and documentation; it never downloads the game. Imported libraries, resources, saves and captures stay outside the checkout. No Android installation is required.
+You supply the APK. The repository contains the host, importer, synthetic tests and documentation; it never downloads the game. Imported libraries, resources, saves and runtime captures stay outside the checkout; the documentation includes selected gameplay screenshots. No Android installation is required.
 
-[Setup](#setup-and-play) · [Graphical launcher](#graphical-launcher) · [Languages](#languages) · [Desktop shortcut](#linux-app-and-desktop-shortcut) · [Portable builds](#portable-builds) · [Controls](#controls) · [Save backups](#save-backups) · [Development](#development-and-testing) · [Español](#español)
+[Setup](#setup-and-play) · [Graphical launcher](#graphical-launcher) · [Languages](#languages) · [Achievements](#achievements) · [Desktop shortcut](#linux-app-and-desktop-shortcut) · [Portable builds](#portable-builds) · [Controls](#controls) · [Save backups](#save-backups) · [Development](#development-and-testing) · [Español](#español)
 
 ## Gameplay gallery
 
-<p>
-  <a href="https://www.mobygames.com/game/42794/resident-evil-4-mobile-edition/screenshots/"><img src="https://cdn.mobygames.com/d6238dc0-ac1c-11ed-9c12-02420a00012f.webp" width="420" alt="Original mobile edition: Leon aiming his handgun at a villager, with the red laser sight and touch controls visible"></a>
-  <a href="https://www.mobygames.com/game/42794/resident-evil-4-mobile-edition/screenshots/"><img src="https://cdn.mobygames.com/dc72a67a-ac1c-11ed-9c12-02420a00012f.webp" width="420" alt="Original mobile edition: Leon facing a chainsaw-wielding Ganado in the village"></a>
-</p>
+![Four actual Linux port gameplay captures in a 2×2 mosaic: Leon exploring the village, aiming his handgun with a laser sight, readying his knife, and moving through the village](docs/gameplay-mosaic.png)
 
-Reference screenshots of the original **Resident Evil 4: Mobile Edition**, hosted by [MobyGames](https://www.mobygames.com/game/42794/resident-evil-4-mobile-edition/screenshots/). These show the mobile game and its touch interface, rather than captures from this Linux port. Game artwork © Capcom. The generated Tux banner's references and prompts are documented in [Banner artwork](docs/banner-artwork.md).
+Actual **re4mepc** gameplay captured during Linux desktop tests. Clockwise from the top left: village exploration, handgun aiming, village gameplay and knife stance. Each frame preserves the original 800 × 480 game image. Game artwork © Capcom. The generated Tux banner's references and prompts are documented in [Banner artwork](docs/banner-artwork.md).
 
 ## Status and limitations
 
@@ -84,11 +81,22 @@ The supported codes are `en`, `es`, `fr`, `de`, `it`, `ja` and `saved`. Source i
 
 **Settings & controls** configures display options, sensitivity and keyboard, mouse or controller bindings for the next game launch. Sliders and numeric fields stay synchronized; each section scrolls so every binding remains reachable. **Save backups** creates snapshots and imports, exports, restores or deletes selected snapshots while the game is stopped. Restore keeps a recovery copy; deleting a snapshot preserves current saves. The [case-file windows](docs/dialogs.md) share generated parchment, seals and inventory artwork and support keyboard navigation at smaller sizes. **Diagnostics** starts a game session with profile, statistics and runtime log files.
 
-**Achievements** shows 21 local achievements with icons, progress, weapon purchase/tune-up goals and a Platinum for earning all other achievements. Saved mission completion and S ranks award them automatically; play once to recover progress from existing saves. **Settings & controls → Achievements** configures unlock screenshots or silent replay clips. Captures appear in the achievement gallery, where **Export selected** and **Export all** create ZIPs with original PNG/MP4 files and achievement metadata. Shared files are deduplicated and missing captures are listed. Records are included in save backups; to transfer their referenced media too, enable the unchecked **Include achievement media** option during backup export. See the [achievement list, captures and historical research](docs/achievements.md).
-
 The main window has no console panel. Progress, completion and failures appear in its status area; **View logs** opens optional session output in a separate window. Applications-menu and desktop shortcuts open without a terminal. Direct CLI runs continue to print terminal logs.
 
 Use `./re4pc.sh launcher --game '/external/re4/game'` for a custom installation. See [desktop and release usage](docs/desktop-release.md) for save locations, diagnostics and standalone packages.
+
+### Achievements
+
+![Achievement case-file window showing the achievement catalog, unlock progress and the earned It Begins With a Ring badge; preview uses synthetic progress](docs/achievements-preview.png)
+
+<p>
+  <img src="re4pc/ui_assets/achievement-village.png" width="120" alt="It Begins With a Ring achievement: village bell" title="It Begins With a Ring">
+  <img src="re4pc/ui_assets/achievement-first_purchase.png" width="120" alt="What Are Ya Buying? weapon purchase achievement badge" title="What Are Ya Buying?">
+  <img src="re4pc/ui_assets/achievement-tuned.png" width="120" alt="Custom Made weapon tune-up achievement badge" title="Custom Made">
+  <img src="re4pc/ui_assets/achievement-platinum.png" width="120" alt="Legend of the Village Platinum achievement: crown" title="Legend of the Village (Platinum)">
+</p>
+
+**Achievements** shows 21 local achievements with icons, progress, weapon purchase/tune-up goals and a Platinum for earning all other achievements. The window preview above uses synthetic progress; the badges show **It Begins With a Ring**, **What Are Ya Buying?**, **Custom Made** and **Legend of the Village (Platinum)**. Saved mission completion and S ranks award them automatically; play once to recover progress from existing saves. **Settings & controls → Achievements** configures unlock screenshots or silent replay clips. Captures appear in the achievement gallery, where **Export selected** and **Export all** create ZIPs with original PNG/MP4 files and achievement metadata. Shared files are deduplicated and missing captures are listed. Records are included in save backups; to transfer their referenced media too, enable the unchecked **Include achievement media** option during backup export. See the [achievement list, captures and historical research](docs/achievements.md).
 
 ## Linux app and desktop shortcut
 
@@ -458,7 +466,7 @@ CI installs host dependencies, builds the C helpers, runs synthetic tests and
 audits the complete fetched history. It needs no APK, game saves or game
 captures. Binary distribution packages containing the game are not produced.
 
-The publication allowlist records exact paths and reviewed SHA-256 values for the generated README banner, launcher artwork and host-only launcher, settings and achievements previews. Altered or unreviewed binary images are rejected. The previous banner SVG remains at `docs/readme-banner.svg`. References and prompts are recorded in [Banner artwork](docs/banner-artwork.md) and [Launcher artwork](docs/launcher-assets.md). The gameplay gallery links to external reference screenshots; imported game assets and gameplay captures stay outside the repository.
+The publication allowlist records exact paths and reviewed SHA-256 values for the generated README banner, launcher artwork, host-only launcher, settings and achievements previews, and the requested gameplay mosaic. Altered or unreviewed binary images are rejected. The previous banner SVG remains at `docs/readme-banner.svg`. References and prompts are recorded in [Banner artwork](docs/banner-artwork.md) and [Launcher artwork](docs/launcher-assets.md). The gameplay gallery contains four Linux port captures; imported game assets and other runtime captures stay outside the repository.
 
 </details>
 

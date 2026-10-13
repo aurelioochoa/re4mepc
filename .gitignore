@@ -18,6 +18,7 @@
 *.f32
 *.png
 !/docs/readme-banner.png
+!/docs/gameplay-mosaic.png
 !/docs/launcher-preview.png
 !/docs/settings-preview.png
 !/docs/settings-minimum-preview.png

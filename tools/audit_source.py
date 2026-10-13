@@ -15,9 +15,12 @@ TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'VALIDATION.md',
              'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md',
              'docs/render-audit.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
              'docs/qualification-summary.md', 'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md', 'docs/portable-captures.md', 'docs/campaign-coverage.md'}
-# Only reviewed artwork (generated or supplied by the user) and host UI screenshots may be binary.
+# Only reviewed artwork, host UI screenshots and explicitly requested gameplay
+# documentation images may be binary.
 # New versions require visual review and an explicit SHA-256 update.
 DOCUMENTATION_IMAGES = {
+    'docs/gameplay-mosaic.png':
+        '639ba91c7c49750295bca08087b48a8a140774d58ec9ce9729210fc55976ef76',
     're4pc/ui_assets/resident-evil-wordmark.png': 'efb3652a76621b8f041a1f719f1bb5403bed5f058da1f0f8afdabd933026d288',
     're4pc/ui_assets/case-paper-v2.png': '0e96d69e5c8bdabf15a74abd8bb360b60acef265a1d1d86101a2970cddd3bae8',
     're4pc/ui_assets/paperclip.png': '5076fca75ba3a674481bc545431004087f17c8aa51059c83fab61ef8bdc57868',

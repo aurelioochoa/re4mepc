@@ -7,7 +7,7 @@ The active banner is `docs/readme-banner.png` (2172 × 724, 3:1), created with t
 - [Original Mobile Edition gameplay gallery — MobyGames](https://www.mobygames.com/game/42794/resident-evil-4-mobile-edition/screenshots/): village textures, over-the-shoulder aiming and red laser sight. [Reference image](https://cdn.mobygames.com/d6238dc0-ac1c-11ed-9c12-02420a00012f.webp).
 - [Resident Evil 4 (2005) artwork gallery — LaunchBox](https://gamesdb.launchbox-app.com/games/details/7502-resident-evil-4-2005): forest atmosphere, lighting, tactical outfit and handgun pose. [Reference image](https://images.launchbox-app.com/14c6ccef-6621-4925-818a-0ec3fe2e89ff.jpg).
 
-The internet images guided the illustration; the generated banner is not an in-game screenshot. Resident Evil characters and source game artwork belong to Capcom. Tux is the Linux mascot. The README gameplay screenshots are externally hosted mobile-edition references, not Linux host validation captures.
+The internet images guided the illustration; the generated banner is not an in-game screenshot. Resident Evil characters and source game artwork belong to Capcom. Tux is the Linux mascot. The README gameplay mosaic separately shows four actual Linux port captures from desktop gameplay tests.
 
 ## Generation prompts
 
