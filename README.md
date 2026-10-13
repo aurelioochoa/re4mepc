@@ -8,7 +8,7 @@ Play the original ARM32 Android engine in a Linux desktop window with mouse and 
 
 You supply the APK. The repository contains the host, importer, synthetic tests and documentation; it never downloads the game. Imported libraries, resources, saves and captures stay outside the checkout. No Android installation is required.
 
-[Setup](#setup-and-play) · [Graphical launcher](#graphical-launcher) · [Desktop shortcut](#linux-app-and-desktop-shortcut) · [Portable builds](#portable-builds) · [Controls](#controls) · [Save backups](#save-backups) · [Development](#development-and-testing) · [Español](#español)
+[Setup](#setup-and-play) · [Graphical launcher](#graphical-launcher) · [Languages](#languages) · [Desktop shortcut](#linux-app-and-desktop-shortcut) · [Portable builds](#portable-builds) · [Controls](#controls) · [Save backups](#save-backups) · [Development](#development-and-testing) · [Español](#español)
 
 ## Gameplay gallery
 
@@ -27,7 +27,7 @@ The title, English menus, original video and audio, and village gameplay have be
 
 Gameplay and presentation run at **20 Hz**, matching the original engine's mission clock. Higher rates also speed up game logic, so 30/60 FPS modes are unavailable. Independent rendering research has not established a safe boundary.
 
-The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013) is **not fully campaign-qualified**. Its exact AppImage/archive hashes pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke checks, AMD RX 6700S/680M startup checks, and input-only first-mission/inventory/save replays. Final source verification passes 294 component tests and the source/history audit. Physical controllers, display/HiDPI, audible speakers and extended driver gameplay remain unverified; Intel/NVIDIA hardware was unavailable.
+The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013) is **not fully campaign-qualified**. Its exact AppImage/archive hashes pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke checks, AMD RX 6700S/680M startup checks, and input-only first-mission/inventory/save replays. The current source passes 307 component tests and the source/history audit; the published prerelease’s qualification is recorded separately. Physical controllers, display/HiDPI, audible speakers and extended driver gameplay remain unverified; Intel/NVIDIA hardware was unavailable.
 
 Mission completion is deferred to the user's later playtest. The final two-hour soak was stopped after its preserved 2,880.043-second checkpoint and remains incomplete. An intermittent native difficulty-initialization exception remains unresolved. No loading optimization met the performance gate, and the earlier keyboard-aim failure was not reproduced or claimed fixed. See the [qualification summary](docs/qualification-summary.md), [campaign checklist](docs/campaign-coverage.md) and [measured roadmap results](docs/roadmap-results.md).
 
@@ -35,7 +35,7 @@ Mission completion is deferred to the user's later playtest. The final two-hour 
 
 Source setup requires Linux **x86_64**, Python 3.10 or later with `venv` and Tk, a C compiler, `pkg-config`, SDL2 development headers, desktop OpenGL with a compatibility profile, and FFmpeg. Portable releases bundle the application dependencies and need the host's graphics drivers. Run from your desktop session with your normal display and audio device available.
 
-On Arch Linux, install `python tk gcc pkgconf sdl2-compat ffmpeg mesa`. On Debian/Ubuntu, install `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg`.
+On Arch Linux, install `python tk gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`. On Debian/Ubuntu, install `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic`.
 
 ```bash
 git clone https://github.com/aurelioochoa/re4mepc.git
@@ -61,6 +61,26 @@ Open the launcher with `./re4pc.sh launcher` or `make launcher`. The native desk
 1. **Import APK** restores your game into a new folder. The launcher suggests an unused destination and switches to it only after import succeeds.
 2. **Browse** selects an existing imported installation. Play becomes available when the expected files are present; the engine performs full validation when it starts.
 3. **Play** opens the game window. The launcher shows the running state and provides **Stop** to end the active operation.
+
+### Languages
+
+Use the **Game language** and **Launcher language** dropdowns below the village photograph. Both offer **English, Spanish, French, German, Italian and Japanese**.
+
+| Selector | When it applies |
+| --- | --- |
+| **Launcher language** | Immediately, including open settings, achievements and backup windows. Unsaved settings edits are preserved. |
+| **Game language** | On the next game launch. Choose **Use game's saved language** to leave language selection to the original engine. |
+
+The two choices are saved independently in `~/.config/re4mepc/settings.json` (or `$XDG_CONFIG_HOME/re4mepc/settings.json`). For example, you can use a French launcher with an English game.
+
+Override the game preference for a single session from the terminal:
+
+```bash
+./re4pc.sh run --language es
+./re4pc.sh run --language saved
+```
+
+The supported codes are `en`, `es`, `fr`, `de`, `it`, `ja` and `saved`. Source installations need Japanese fonts; the setup packages above include them. Newly built portable packages bundle IPAGothic and its license. Rebuild an existing AppImage or portable archive with `make package` to include these changes.
 
 **Settings & controls** configures display options, sensitivity and keyboard, mouse or controller bindings for the next game launch. Sliders and numeric fields stay synchronized; each section scrolls so every binding remains reachable. **Save backups** creates snapshots and imports, exports, restores or deletes selected snapshots while the game is stopped. Restore keeps a recovery copy; deleting a snapshot preserves current saves. The [case-file windows](docs/dialogs.md) share generated parchment, seals and inventory artwork and support keyboard navigation at smaller sizes. **Diagnostics** starts a game session with profile, statistics and runtime log files.
 
@@ -140,7 +160,7 @@ Both formats open the launcher with no arguments and accept the same CLI command
 
 ## Controls
 
-F12 closes the window. PC gameplay controls are enabled by default; the cursor is captured during gameplay and released in menus and story overlays. English is selected at startup; use `--language saved` to retain the game's saved language. Enter, Space, Escape, or a mouse click skips a playing video.
+F12 closes the window. PC gameplay controls are enabled by default; the cursor is captured during gameplay and released in menus and story overlays. English is the default language; see [Languages](#languages) for the independent game and launcher selectors and CLI overrides. Enter, Space, Escape, or a mouse click skips a playing video.
 
 | Desktop input | Game input |
 | --- | --- |
@@ -454,8 +474,8 @@ Debes proporcionar tu propio APK compatible. El proyecto no descarga ni incluye 
 
 Necesitas Linux **x86_64**, Python 3.10 o posterior con `venv` y Tk, un compilador de C, `pkg-config`, las cabeceras de desarrollo de SDL2, OpenGL de escritorio con perfil de compatibilidad y FFmpeg. Ejecuta el juego desde una sesión de escritorio con pantalla y audio disponibles.
 
-- **Arch Linux:** instala `python tk gcc pkgconf sdl2-compat ffmpeg mesa`.
-- **Debian/Ubuntu:** instala `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg`.
+- **Arch Linux:** instala `python tk gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`.
+- **Debian/Ubuntu:** instala `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic`.
 
 ```bash
 git clone https://github.com/aurelioochoa/re4mepc.git
@@ -507,7 +527,9 @@ En modo PC, Enter/B continúa en los menús reconocidos y confirma el deslizador
 
 Para recoger munición u otro objeto del suelo, pulsa Espacio para seleccionarlo y vuelve a pulsarlo para recogerlo. Los mandos usan el stick izquierdo para moverse y girar, el derecho para mirar, los gatillos para apuntar y disparar, A para interactuar, X para recargar, Y para el cuchillo y Start para el menú de estado. En los menús, mueve el cursor con el stick derecho o D-pad y pulsa A para seleccionar; B continúa o confirma el deslizador. Puedes cambiar las asignaciones en **Settings & controls**.
 
-El juego inicia en inglés. `./re4pc.sh run --language saved` conserva el idioma guardado por el juego; esta opción no añade una traducción al español. Para usar el ratón como pantalla táctil, ejecuta `./re4pc.sh run --controls touch`.
+Los selectores **Idioma del juego** e **Idioma del lanzador**, debajo de la fotografía de la aldea, ofrecen inglés, español, francés, alemán, italiano y japonés. El idioma del lanzador cambia de inmediato, incluidas las ventanas abiertas, y conserva los cambios de ajustes sin guardar. El idioma del juego se aplica al iniciar el juego; **Usar idioma guardado del juego** deja la selección al motor original. Ambas preferencias se guardan por separado en `~/.config/re4mepc/settings.json` y respetan `XDG_CONFIG_HOME`.
+
+El inglés es el valor inicial. Usa, por ejemplo, `./re4pc.sh run --language es` para cambiar el idioma del juego solo durante esa ejecución; los códigos admitidos son `en`, `es`, `fr`, `de`, `it`, `ja` y `saved`. Las nuevas compilaciones portátiles incluyen IPAGothic y su licencia para mostrar japonés. Para incorporar estos cambios a un AppImage o archivo portátil existente, vuelve a compilarlo con `make package`. Para usar el ratón como pantalla táctil, ejecuta `./re4pc.sh run --controls touch`.
 
 ### Cómo se hizo el port y cómo funciona
 
@@ -530,7 +552,7 @@ Los ajustes se guardan en `~/.config/re4mepc/settings.json` y las copias de segu
 - `make check-game` valida tu importación.
 - `make visible-test` y `make controls-test` abren una ventana real y usan copias aisladas con partidas propias.
 
-Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La finalización de misiones queda para una prueba posterior del usuario. La campaña completa sigue sin validarse; la prueba final de dos horas se detuvo tras 2.880,043 segundos y permanece incompleta. Sigue sin resolverse una excepción intermitente al inicializar el menú de dificultad. Las pruebas finales de fuentes pasan 294 casos; faltan las comprobaciones físicas de mando, pantalla/HiDPI y altavoces. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Los mandos, el redimensionado, HiDPI y la pantalla completa sin bordes están implementados. Windows, macOS y Linux ARM64 quedan fuera de esta versión. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
+Se han probado el título, los menús en inglés, el audio y vídeo originales y el juego en la aldea. La finalización de misiones queda para una prueba posterior del usuario. La campaña completa sigue sin validarse; la prueba final de dos horas se detuvo tras 2.880,043 segundos y permanece incompleta. Sigue sin resolverse una excepción intermitente al inicializar el menú de dificultad. Las pruebas actuales del código fuente pasan 307 casos; faltan las comprobaciones físicas de mando, pantalla/HiDPI y altavoces. La ejecución ARM y las llamadas a Python añaden sobrecarga, especialmente al cargar niveles. Los mandos, el redimensionado, HiDPI y la pantalla completa sin bordes están implementados. Windows, macOS y Linux ARM64 quedan fuera de esta versión. Consulta [VALIDATION.md](VALIDATION.md) para los resultados y límites registrados.
 
 El código del host tiene licencia MIT; esa licencia excluye los datos originales del juego, las marcas y las dependencias de terceros.
 

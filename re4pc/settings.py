@@ -11,7 +11,8 @@ DEFAULTS = {'version': 1, 'bindings': DEFAULT_BINDINGS, 'sensitivity': 1.0,
             'controller_sensitivity': 1.0, 'invert_y': False, 'stick_dead_zone': 0.18,
             'window_mode': 'windowed', 'window_width': 800, 'window_height': 480,
             'presentation_rate': 20, 'achievement_capture': 'screenshot',
-            'achievement_clip_seconds': 10}
+            'achievement_clip_seconds': 10, 'game_language': 'en',
+            'launcher_language': 'en'}
 
 
 def settings_path():
@@ -39,6 +40,10 @@ def validate(values):
         raise ValueError('invert_y must be boolean')
     if result['window_mode'] not in ('windowed', 'fullscreen'):
         raise ValueError('window_mode must be windowed or fullscreen')
+    from .languages import GAME_LANGUAGES, LAUNCHER_LANGUAGES
+    for name, choices in (('game_language', GAME_LANGUAGES), ('launcher_language', LAUNCHER_LANGUAGES)):
+        if not isinstance(result[name], str) or result[name] not in choices:
+            raise ValueError(name + ' must be one of: ' + ', '.join(choices))
     if result['achievement_capture'] not in ('off', 'screenshot', 'clip', 'both'):
         raise ValueError('achievement_capture must be off, screenshot, clip or both')
     seconds = result['achievement_clip_seconds']

@@ -2,6 +2,7 @@
 import tkinter as tk
 
 from PIL import Image, ImageTk
+from .languages import GAME_LANGUAGES, LAUNCHER_LANGUAGES, widget_translate
 
 
 INK = '#211b13'
@@ -118,7 +119,8 @@ class ArtworkButton(tk.Canvas):
                 self.create_image(0, 0, image=self.paint_surface, anchor='nw')
                 if active or not self.enabled:
                     self.create_rectangle(0, 0, width, height, fill=color, outline='', stipple='gray50')
-            text = 'P L A Y' if self.label == 'Play' else self.label.upper()
+            label = widget_translate(self, self.label)
+            text = 'P L A Y' if label == 'Play' else label.upper()
             self.create_text(width / 2 + 27 * s, height / 2 + offset, text=text,
                              font=font(42), fill=IVORY)
             x, y = width / 2 - 92 * s, height / 2 + offset
@@ -181,6 +183,23 @@ class ArtworkButton(tk.Canvas):
             self.create_rectangle(3, 3, width - 4, height - 4,
                                   outline='#6b3c19' if self.kind in ('paper', 'paper-outline', 'danger', 'section', 'segment') else IVORY,
                                   dash=(3, 3), width=2)
+
+    def create_text(self, *args, **options):
+        if 'text' in options:
+            options['text'] = widget_translate(self, options['text'])
+        if len(str(options.get('text', ''))) > 1 and self.winfo_width() > 30:
+            from tkinter.font import Font
+            available = options.get('width') or self.winfo_width() - (
+                112 * self.scale if self.kind == 'paper' else 120 * self.scale if self.kind == 'play' else 16)
+            face = Font(master=self, font=options['font'])
+            size = abs(face.cget('size'))
+            measured = face.measure(options['text'])
+            if measured > available:
+                face.configure(size=-max(12 if self.kind == 'section' else 9,
+                                         int(size * available / measured)))
+                # Copy the descriptor; Tk must not retain a temporary named font.
+                options['font'] = (face.cget('family'), face.cget('size'))
+        return super().create_text(*args, **options)
 
 
 class CaseFileView:
@@ -261,6 +280,15 @@ class CaseFileView:
                                              (84, 752, 646, 78), kind='paper',
                                              detail='Create, export or restore your saves.')
         launcher.game_entry = launcher.ttk.Entry(self.canvas, textvariable=launcher.game)
+        self.language_controls = {}
+        for key, choices in (('game_language', GAME_LANGUAGES), ('launcher_language', LAUNCHER_LANGUAGES)):
+            variable = tk.StringVar()
+            control = launcher.ttk.Combobox(self.canvas, textvariable=variable, state='readonly',
+                                           style='Language.TCombobox')
+            control.bind('<<ComboboxSelected>>', lambda event, key=key, choices=choices:
+                         launcher.change_language(key, tuple(choices)[event.widget.current()]))
+            self.language_controls[key] = (control, variable, choices)
+        self.sync_languages()
         self.browse_button = self.action('Browse', launcher.browse, (1296, 737, 151, 48), kind='outline')
         launcher.import_button = self.action('Import APK', launcher.import_apk, (1472, 737, 160, 48), kind='outline')
         launcher.diagnostics_button = self.action('Diagnostics', launcher.diagnostics, (170, 884, 100, 39))
@@ -288,6 +316,12 @@ class CaseFileView:
         for key, button in self.nav.items():
             button.selected = key == section
             button.draw()
+
+    def sync_languages(self):
+        for key, (control, variable, choices) in self.language_controls.items():
+            control.configure(values=tuple(self.app.tr(label) for label in choices.values()))
+            code = getattr(self.app, key if key == 'game_language' else 'launcher_language_value').get()
+            control.current(tuple(choices).index(code))
 
     def open_section(self, section):
         self.select(section)
@@ -348,6 +382,13 @@ class CaseFileView:
         self.line(81, 642, 727, 642, '#8c7855')
         self.line(81, 741, 727, 741, '#8c7855')
         self.text(840, 615, 'The village', 15, color=INK, family='DejaVu Sans Mono')
+        for key, x, label in (('game_language', 1050, 'Game language'),
+                              ('launcher_language', 1350, 'Launcher language')):
+            self.text(x, 612, label, 14, color=INK, family='DejaVu Sans')
+            control = self.language_controls[key][0]
+            control.place(x=ox + round(x * s), y=oy + round(635 * s),
+                          width=round(280 * s), height=round(37 * s))
+            control.configure(font=('DejaVu Sans', -max(10, round(16 * s))))
         self.text(839, 685, 'Installation', 25)
         self.line(839, 717, 1631, 717, '#b8aa89')
         self.text(839, 795, 'Your APK stays on your computer.', 17, color=MUTED)
@@ -378,7 +419,7 @@ class CaseFileView:
 
     def text(self, x, y, text, size, *, color=IVORY, family='DejaVu Serif', weight='normal', anchor='nw', **options):
         ox, oy = self.origin
-        return self.canvas.create_text(ox + x * self.scale, oy + y * self.scale, text=text,
+        return self.canvas.create_text(ox + x * self.scale, oy + y * self.scale, text=self.app.tr(text),
                                        font=(family, -max(10, round(size * self.scale)), weight),
                                        fill=color, anchor=anchor, **options)
 
@@ -605,6 +646,7 @@ class SettingsView:
         self.frame = self.chrome.frame
         self.editors, self.binding_editors, self.fields, self.panes, self.nav = {}, {}, {}, {}, {}
         self.sliders, self.field_info = {}, {}
+        self.choice_fields = []
         self.section = self.SECTIONS[0]
         self.notice = tk.StringVar()
         self.cancel_button = self.chrome.action('Cancel', self.close)
@@ -703,8 +745,21 @@ class SettingsView:
         if isinstance(value, bool):
             control = ttk.Checkbutton(pane.content, variable=variable, style='Paper.TCheckbutton')
         elif choices:
-            control = ttk.Combobox(pane.content, textvariable=variable, values=choices, state='readonly',
+            display = tk.StringVar(value=self.app.tr(variable.get()))
+            control = ttk.Combobox(pane.content, textvariable=display,
+                                   values=tuple(self.app.tr(choice) for choice in choices), state='readonly',
                                    style='Paper.TCombobox', width=12)
+            control.bind('<<ComboboxSelected>>', lambda event, variable=variable, choices=choices:
+                         variable.set(choices[event.widget.current()]))
+            def changed(*args, variable=variable, display=display, choices=choices):
+                reverse = {self.app.tr(choice): choice for choice in choices}
+                value = reverse.get(display.get(), display.get())
+                if value in choices and value != variable.get():
+                    variable.set(value)
+            display.trace_add('write', changed)
+            variable.trace_add('write', lambda *args, variable=variable, display=display:
+                               display.set(self.app.tr(variable.get())))
+            self.choice_fields.append((control, display, variable, choices))
         else:
             control = ttk.Entry(pane.content, textvariable=variable, style='Paper.TEntry', width=12)
         error = ttk.Label(pane.content, style='PaperError.TLabel', wraplength=360)
@@ -719,6 +774,11 @@ class SettingsView:
                                                  maximum=.9 if key == 'stick_dead_zone' else 10,
                                                  minimum=0 if key == 'stick_dead_zone' else .05)
             self.sliders[key].bind('<FocusIn>', lambda event, key=key: pane.reveal(self.sliders[key]))
+
+    def translate_choices(self):
+        for control, display, variable, choices in self.choice_fields:
+            control.configure(values=tuple(self.app.tr(choice) for choice in choices))
+            display.set(self.app.tr(variable.get()))
 
     def draw_section(self, name):
         pane = self.panes[name]
@@ -802,6 +862,9 @@ class SettingsView:
         try:
             result = collect_settings(self.values, {key: var.get() for key, var in self.editors.items()},
                                       {key: var.get() for key, var in self.binding_editors.items()}, self.sdl)
+            latest = Settings.load()
+            for key in ('game_language', 'launcher_language'):
+                result[key] = latest[key]
             Settings.save(result)
         except FieldError as error:
             section, control, label, row = self.fields[error.field]
@@ -821,7 +884,7 @@ class SettingsView:
     def can_close(self):
         from tkinter import messagebox
         return self.snapshot() == self.initial or messagebox.askyesno(
-            'Discard settings changes?', 'Discard your unsaved changes?', parent=self.window)
+            self.app.tr('Discard settings changes?'), self.app.tr('Discard your unsaved changes?'), parent=self.window)
 
     def close(self):
         if self.can_close():
@@ -955,8 +1018,8 @@ class AchievementsView:
         self.catalog = CasePaperPane(self.body, app.assets, render=self.draw_catalog)
         self.detail = CasePaperPane(self.body, app.assets, render=self.draw_detail)
         self.search_entry = ttk.Entry(self.catalog.content, textvariable=self.search, style='Paper.TEntry')
-        self.search_hint = tk.Label(self.search_entry, text='Search achievements…', background='#f7efde',
-                                    foreground=PAPER_MUTED, font=('DejaVu Serif', -14), cursor='xterm')
+        self.search_hint = self.app.translated_widget(tk.Label(self.search_entry, text='Search achievements…', background='#f7efde',
+                                    foreground=PAPER_MUTED, font=('DejaVu Serif', -14), cursor='xterm'))
         self.search_hint.bind('<Button-1>', lambda event: self.search_entry.focus_set())
         self.search_entry.bind('<FocusIn>', lambda event: (self.catalog.canvas.yview_moveto(0), self.update_search_hint()))
         self.search_entry.bind('<FocusOut>', lambda event: self.update_search_hint())
@@ -990,8 +1053,8 @@ class AchievementsView:
         import json
         if self.app.child or self.records is None or (selected and not self.selected):
             return
-        destination = filedialog.asksaveasfilename(parent=self.window, title='Export achievement captures',
-            defaultextension='.zip', initialfile='re4-achievements.zip', filetypes=[('Capture archive', '*.zip')])
+        destination = filedialog.asksaveasfilename(parent=self.window, title=self.app.tr('Export achievement captures'),
+            defaultextension='.zip', initialfile='re4-achievements.zip', filetypes=[(self.app.tr('Capture archive'), '*.zip')])
         if not destination:
             return
         arguments = ['--achievement', self.selected] if selected else []
@@ -999,16 +1062,16 @@ class AchievementsView:
             if not self.window.winfo_exists():
                 return
             if code:
-                messagebox.showerror('Export failed', self.app.last_output or 'View launcher logs for details.', parent=self.window)
+                messagebox.showerror(self.app.tr('Export failed'), self.app.tr(self.app.last_output or 'View launcher logs for details.'), parent=self.window)
             else:
                 try:
                     result = json.loads(self.app.last_output)
                     count = len(result['missing_captures'])
                 except (ValueError, KeyError, TypeError):
-                    messagebox.showerror('Export result unavailable', 'View launcher logs for details.', parent=self.window)
+                    messagebox.showerror(self.app.tr('Export result unavailable'), self.app.tr('View launcher logs for details.'), parent=self.window)
                     return
-                messagebox.showinfo('Captures exported', f"Exported {result['files']} media files." +
-                    (f' {count} missing references are listed in achievements.json.' if count else ''), parent=self.window)
+                messagebox.showinfo(self.app.tr('Captures exported'), self.app.tr(f"Exported {result['files']} media files." +
+                    (f' {count} missing references are listed in achievements.json.' if count else '')), parent=self.window)
             self.busy_changed()
         self.app.start('export-achievements', destination, *arguments, '--game', self.root, on_complete=complete)
         self.busy_changed()
@@ -1081,7 +1144,8 @@ class AchievementsView:
         self.clear_rows()
         query, mode = self.search.get().strip().casefold(), self.filter.get()
         self.visible = [item for item in ACHIEVEMENTS
-                        if (not query or query in (item.title+' '+item.description).casefold())
+                        if (not query or query in (item.title+' '+item.description+' '+
+                                                  self.app.tr(item.title)+' '+self.app.tr(item.description)).casefold())
                         and (mode == 'All' or (item.id in self.unlocked) == (mode == 'Unlocked'))]
         if self.selected not in {item.id for item in self.visible}:
             self.selected = self.visible[0].id if self.visible else None
@@ -1215,7 +1279,7 @@ class AchievementsView:
                     message = c.text(44, y, ('Screenshot' if kind == 'image' else 'Clip')+' unavailable: capture file is missing or unsafe.', 13, color=RED, width=w-88)
                     y = c.bbox(message)[3]+12
                     continue
-                button = ttk.Button(c, text=label, command=lambda name=media[kind]: self.open_capture(name))
+                button = self.app.translated_widget(ttk.Button(c, text=label, command=lambda name=media[kind]: self.open_capture(name)))
                 self.detail_buttons.append(button)
                 c.window(button, 44, y, min(220, w-88), 34)
                 button.bind('<FocusIn>', lambda event, button=button: self.detail.reveal(button))
@@ -1261,7 +1325,7 @@ class AchievementsView:
                     label = c.text(24, y, text+' unavailable: capture file is missing or unsafe.', 12, color=RED, width=w-48)
                     y = c.bbox(label)[3]+12
                     continue
-                button = ttk.Button(c, text=text, command=lambda name=media[kind]: self.open_capture(name))
+                button = self.app.translated_widget(ttk.Button(c, text=text, command=lambda name=media[kind]: self.open_capture(name)))
                 self.detail_buttons.append(button)
                 c.window(button, 24, y, 190, 34)
                 button.bind('<FocusIn>', lambda event, button=button: self.detail.reveal(button))
@@ -1286,16 +1350,18 @@ class AchievementsView:
                     picture = source.convert('RGB')
                 picture.thumbnail((1000, 650))
                 viewer = tk.Toplevel(self.window)
-                viewer.title('Achievement screenshot')
+                viewer.launcher = self.app
+                viewer.translation_title = 'Achievement screenshot'
+                viewer.title(self.app.tr(viewer.translation_title))
                 viewer.configure(background=OLIVE)
                 viewer.capture_image = ImageTk.PhotoImage(picture)
                 ttk.Label(viewer, image=viewer.capture_image).pack(padx=12, pady=12)
-                ttk.Button(viewer, text='Close', command=viewer.destroy).pack(pady=(0, 12))
+                self.app.translated_widget(ttk.Button(viewer, text='Close', command=viewer.destroy)).pack(pady=(0, 12))
                 viewer.bind('<Escape>', lambda event: viewer.destroy())
                 viewer.bind('<Destroy>', lambda event: setattr(viewer, 'capture_image', None)
                             if event.widget is viewer else None, add='+')
         except (OSError, ValueError) as error:
-            messagebox.showerror('Capture unavailable', str(error), parent=self.window)
+            messagebox.showerror(self.app.tr('Capture unavailable'), self.app.tr(str(error)), parent=self.window)
 
     def cleanup(self, event):
         if event.widget is self.window:
@@ -1378,8 +1444,8 @@ class BackupsView:
         self.restore_button = ArtworkButton(self.detail.content, 'RESTORE', self.restore, kind='primary')
         self.delete_button = ArtworkButton(self.detail.content, 'Delete snapshot', self.delete, kind='danger')
         self.include_media = tk.BooleanVar(value=False)
-        self.media_option = ttk.Checkbutton(self.detail.content, text='Include achievement media',
-                                            variable=self.include_media, style='Paper.TCheckbutton')
+        self.media_option = self.app.translated_widget(ttk.Checkbutton(self.detail.content, text='Include achievement media',
+                                            variable=self.include_media, style='Paper.TCheckbutton'))
         self.body.bind('<Configure>', self.layout)
         for sequence in ('<MouseWheel>', '<Button-4>', '<Button-5>'):
             self.window.bind(sequence, self.scroll)
@@ -1570,7 +1636,7 @@ class BackupsView:
         from tkinter import filedialog
         if self.app.child:
             return
-        source = filedialog.askopenfilename(parent=self.window, title='Import backup', filetypes=[('Save backup', '*.zip')])
+        source = filedialog.askopenfilename(parent=self.window, title=self.app.tr('Import backup'), filetypes=[(self.app.tr('Save backup'), '*.zip')])
         if source:
             self.run('import-backup', source, refresh=True)
 
@@ -1578,21 +1644,23 @@ class BackupsView:
         from tkinter import filedialog
         if not self.selected or self.app.child:
             return
-        destination = filedialog.asksaveasfilename(parent=self.window, title='Export backup', defaultextension='.zip',
-                                                   initialfile='re4-saves-'+self.selected[:12]+'.zip', filetypes=[('Save backup', '*.zip')])
+        destination = filedialog.asksaveasfilename(parent=self.window, title=self.app.tr('Export backup'), defaultextension='.zip',
+                                                   initialfile='re4-saves-'+self.selected[:12]+'.zip', filetypes=[(self.app.tr('Save backup'), '*.zip')])
         if destination:
             arguments = ('--include-media',) if self.include_media.get() else ()
             self.run('export-backup', self.selected, destination, *arguments)
 
     def restore(self):
         from tkinter import messagebox
-        if self.selected and not self.app.child and messagebox.askyesno('Restore saves',
-                'Replace current saves with this snapshot? A recovery copy will be kept.', parent=self.window):
+        if self.selected and not self.app.child and messagebox.askyesno(self.app.tr('Restore saves'),
+                self.app.tr('Replace current saves with this snapshot? A recovery copy will be kept.'), parent=self.window):
             self.run('restore-backup', self.selected, refresh=True)
 
     def delete(self):
         from tkinter import messagebox
         item = next((item for item in self.snapshots if item['id'] == self.selected), None)
-        if item and not self.app.child and messagebox.askyesno('Delete snapshot',
-                'Delete '+BACKUP_LABELS.get(item['label'], item['label'])+' from '+snapshot_date(item)+'?\n\nCurrent saves are kept. This snapshot cannot be recovered.', parent=self.window):
+        if item and not self.app.child and messagebox.askyesno(self.app.tr('Delete snapshot'),
+                self.app.tr('Delete {label} from {date}?').format(
+                    label=self.app.tr(BACKUP_LABELS.get(item['label'], item['label'])), date=snapshot_date(item))+
+                '\n\n'+self.app.tr('Current saves are kept. This snapshot cannot be recovered.'), parent=self.window):
             self.run('delete-backup', self.selected, refresh=True)

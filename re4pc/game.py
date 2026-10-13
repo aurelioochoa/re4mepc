@@ -32,7 +32,7 @@ KEYS = {
 }
 
 class Game:
-    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language='en', controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True, import_profile=False):
+    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language=None, controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True, import_profile=False):
         self.initialized = False
         self.telemetry = telemetry
         self.diagnostics = Diagnostics(profile=profile, native_hooks=bool(native_profiles), import_hooks=import_profile) if diagnostics else None
@@ -76,7 +76,10 @@ class Game:
         self.startup_seconds = time.monotonic() - self.startup_started
 
     def _initialize(self, language, controls, native_profiles):
-        self.language=language
+        from .languages import GAME_LANGUAGES
+        self.language = language if language is not None else self.settings.get('game_language', 'en')
+        if self.language not in GAME_LANGUAGES:
+            raise ValueError('Unsupported game language: ' + str(self.language))
         self.frames = 0
         self.input_events = 0
         self.touch_previous = (0, 0)
@@ -303,9 +306,9 @@ class Game:
             self.mouse_captured=capture
             log.info('Mouse %s', 'captured for gameplay' if capture else 'released')
         self.frames += 1
-        if self.frames==3 and self.language=='en':
-            user=self.arm.symbols['_ZZN13Bio4_UserData11GetInstanceEvE4inst']
-            self.arm.call('_ZN13Bio4_UserData9SetLangIdEh',user,1)
+        if self.frames == 3:
+            from .languages import apply_game_language
+            apply_game_language(self.arm, self.language)
         elapsed = time.monotonic()-start
         self.engine_seconds += elapsed
         self.max_engine_seconds = max(self.max_engine_seconds, elapsed)

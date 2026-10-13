@@ -19,6 +19,42 @@ class PackagingTests(unittest.TestCase):
                 self.assertEqual((assets / name).read_bytes(), (ROOT / 're4pc/ui_assets' / name).read_bytes())
                 with Image.open(assets / name) as image:
                     image.verify()
+            import os
+            import subprocess
+            import sys
+            environment = dict(os.environ)
+            environment.pop('PYTHONPATH', None)
+            result = subprocess.run([sys.executable, '-c',
+                "from re4pc.settings import validate; from re4pc.languages import translate, LAUNCHER_LANGUAGES; "
+                "assert all(validate({'game_language': 'en', 'launcher_language': code})['launcher_language'] == code "
+                "for code in LAUNCHER_LANGUAGES); "
+                "assert translate('Play', 'ja') == 'プレイ'; print('STAGED_LANGUAGES_PASS')"],
+                cwd=application, env=environment, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('STAGED_LANGUAGES_PASS', result.stdout)
+
+    def test_japanese_font_and_license_are_staged_and_missing_font_fails(self):
+        from tools.package import copy_launcher_fonts
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / 'share'
+            for name in ('DejaVuSans.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSansMono.ttf',
+                         'DejaVuSansMono-Bold.ttf', 'DejaVuSerif.ttf', 'DejaVuSerif-Bold.ttf'):
+                path = source / 'fonts/truetype/dejavu' / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'synthetic Latin font')
+            japanese = source / 'fonts/opentype/ipafont-gothic/ipag.ttf'
+            japanese.parent.mkdir(parents=True)
+            japanese.write_bytes(b'synthetic Japanese font')
+            license = source / 'doc/fonts-ipafont-gothic/copyright'
+            license.parent.mkdir(parents=True)
+            license.write_text('synthetic font license')
+            stage = Path(temporary) / 'stage'
+            copy_launcher_fonts(stage, source)
+            self.assertEqual((stage / 'usr/share/fonts/opentype/ipafont-gothic/ipag.ttf').read_bytes(), japanese.read_bytes())
+            self.assertEqual((stage / 'usr/share/doc/fonts-ipafont-gothic/copyright').read_text(), license.read_text())
+            japanese.unlink()
+            with self.assertRaises(FileNotFoundError):
+                copy_launcher_fonts(stage, source)
 
     def test_library_collection_keeps_graphics_support_on_host(self):
         from tools.package import collect_libraries

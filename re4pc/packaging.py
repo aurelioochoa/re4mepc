@@ -9,7 +9,7 @@ APPLICATION_MODULES = (
     '__init__.py', '__main__.py', 'achievement_media.py', 'achievements.py', 'actions.py', 'arm.py', 'assets.py', 'backups.py',
     'bionic.py', 'capture_exports.py', 'controllers.py', 'desktop.py', 'diagnostics.py', 'eabi.py',
     'fast.py', 'filesystem.py', 'game.py', 'graphics.py', 'input.py', 'jni.py',
-    'launcher.py', 'launcher_ui.py', 'case_dialog.py', 'media.py', 'menu_controls.py', 'packaging.py', 'paths.py', 'pc_controls.py',
+    'launcher.py', 'launcher_ui.py', 'languages.py', 'case_dialog.py', 'media.py', 'menu_controls.py', 'packaging.py', 'paths.py', 'pc_controls.py',
     'runtime_log.py', 'save_boundary.py', 'settings.py', 'texture_cache.py',
     'textures.py', 'timing.py')
 NATIVE_INPUTS = ('audio.c', 'fast.c')

@@ -766,3 +766,121 @@ class FinalCaseFileTests(LauncherGuiFixture):
             self.assertLessEqual(button.winfo_rooty()+button.winfo_height(),
                                  view.detail.canvas.winfo_rooty()+view.detail.canvas.winfo_height())
         view.window.destroy()
+
+
+class LanguageSwitcherTests(LauncherGuiFixture):
+    def setUp(self):
+        self.config = tempfile.TemporaryDirectory()
+        self.addCleanup(self.config.cleanup)
+        environment = patch.dict('os.environ', {'XDG_CONFIG_HOME': self.config.name})
+        environment.start()
+        self.addCleanup(environment.stop)
+        super().setUp()
+
+    def choose(self, key, code):
+        control, variable, choices = self.app.view.language_controls[key]
+        control.current(tuple(choices).index(code))
+        control.event_generate('<<ComboboxSelected>>')
+        self.window.update()
+
+    def test_language_parity_updates_open_forms_and_restores_on_restart(self):
+        from re4pc.languages import LAUNCHER_LANGUAGES, translate
+        from re4pc.launcher import Launcher
+        from re4pc.settings import Settings
+        import tkinter as tk
+        view = self.app.settings()
+        view.editors['window_width'].set('1440')
+        original = view.snapshot()
+        self.choose('game_language', 'saved')
+        for code in LAUNCHER_LANGUAGES:
+            with self.subTest(language=code):
+                self.choose('launcher_language', code)
+                self.assertEqual(Settings.load()['launcher_language'], code)
+                self.assertEqual(Settings.load()['game_language'], 'saved')
+                self.assertEqual(view.snapshot(), original)
+                self.assertIn(translate('Display & sensitivity', code), widget_texts(view.panes[view.section].content))
+                self.assertIn(translate('Import APK', code), widget_texts(self.app.import_button))
+                self.assertEqual(view.fields['window_mode'][1].get(), translate('Windowed', code))
+                self.assertEqual(view.window.title(), translate('Settings & controls', code))
+                other = tk.Toplevel(self.window)
+                restarted = Launcher(other, self.folder)
+                self.assertEqual(restarted.launcher_language, code)
+                self.assertEqual(restarted.game_language.get(), 'saved')
+                other.destroy()
+        view.window.destroy()
+
+    def test_independent_selectors_live_translation_and_restart(self):
+        from re4pc.settings import Settings
+        self.choose('game_language', 'fr')
+        self.choose('launcher_language', 'es')
+        self.assertEqual(Settings.load()['game_language'], 'fr')
+        self.assertEqual(Settings.load()['launcher_language'], 'es')
+        self.assertIn('JUGAR', widget_texts(self.app.play_button))
+        self.assertIn('Idioma del juego', widget_texts(self.app.view.canvas))
+        self.assertIn('Importar APK', widget_texts(self.app.import_button))
+        self.assertTrue(self.app.play_button.instate(['disabled']))
+        from re4pc.launcher import Launcher
+        import tkinter as tk
+        other = tk.Toplevel(self.window)
+        restarted = Launcher(other, self.folder)
+        self.assertEqual(restarted.launcher_language, 'es')
+        self.assertEqual(restarted.game_language.get(), 'fr')
+        other.destroy()
+        self.choose('launcher_language', 'en')
+        self.assertIn('P L A Y', widget_texts(self.app.play_button))
+        self.assertEqual(Settings.load()['game_language'], 'fr')
+
+    def test_open_form_survives_and_cannot_overwrite_language(self):
+        from re4pc.settings import Settings
+        view = self.app.settings()
+        view.editors['window_width'].set('1440')
+        self.choose('game_language', 'es')
+        self.choose('launcher_language', 'es')
+        self.assertEqual(view.editors['window_width'].get(), '1440')
+        self.assertEqual(view.section, 'Display & sensitivity')
+        self.assertIn('Pantalla y sensibilidad', widget_texts(view.panes[view.section].content))
+        mode = view.fields['window_mode'][1]
+        self.assertEqual(mode.cget('values'), ('Ventana', 'Pantalla completa'))
+        mode.current(1)
+        mode.event_generate('<<ComboboxSelected>>')
+        self.assertEqual(view.editors['window_mode'].get(), 'Fullscreen')
+        view.save()
+        self.assertEqual(Settings.load()['game_language'], 'es')
+        self.assertEqual(Settings.load()['launcher_language'], 'es')
+        self.assertEqual(Settings.load()['window_width'], 1440)
+        self.assertEqual(Settings.load()['window_mode'], 'fullscreen')
+
+    def test_failed_save_reverts_selection_and_busy_change_preserves_operation(self):
+        from re4pc.settings import Settings
+        self.choose('game_language', 'ja')
+        with patch('re4pc.settings.Settings.save', side_effect=OSError('read only')), \
+                patch('tkinter.messagebox.showerror') as error:
+            self.choose('game_language', 'de')
+        error.assert_called_once()
+        self.assertEqual(self.app.game_language.get(), 'ja')
+        from re4pc.languages import GAME_LANGUAGES
+        self.assertEqual(self.app.view.language_controls['game_language'][0].current(), tuple(GAME_LANGUAGES).index('ja'))
+        child = Mock()
+        child.poll.return_value = ('', None)
+        with patch('re4pc.launcher.ChildProcess', return_value=child):
+            self.app.start('run', '--game', self.folder)
+        self.choose('launcher_language', 'es')
+        self.assertIs(self.app.child, child)
+        self.assertTrue(self.app.play_button.instate(['disabled']))
+        self.assertIn('JUGANDO', widget_texts(self.app.play_button))
+        self.assertTrue(self.app.stop_button.winfo_ismapped())
+        self.assertEqual(Settings.load()['game_language'], 'ja')
+        self.app.child = None
+        self.app.progress.stop()
+
+    def test_selectors_reachable_at_minimum_size(self):
+        for geometry in ('1000x600', '1000x800', '1440x810'):
+            self.window.geometry(geometry)
+            self.window.update()
+            self.app.view.draw(self.window.winfo_width(), self.window.winfo_height())
+            self.window.update_idletasks()
+            for control, _, _ in self.app.view.language_controls.values():
+                self.assertTrue(control.winfo_ismapped())
+                self.assertGreaterEqual(control.winfo_x(), 0)
+                self.assertLessEqual(control.winfo_x()+control.winfo_width(), self.window.winfo_width())
+                self.assertLessEqual(control.winfo_y()+control.winfo_height(), self.window.winfo_height())

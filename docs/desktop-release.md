@@ -18,6 +18,13 @@ are recorded with the project. Release builds copy these assets from an explicit
 allowlist. Source desktop installation can use the generated icon when neither
 an APK nor a custom icon is specified; an existing installed icon is preserved.
 
+The launcher supports English, Spanish, French, German, Italian and Japanese.
+Its language changes immediately, including open dialogs; the separate game
+language preference applies at the next game launch. Portable builds include
+IPAGothic and its license for Japanese text on systems without CJK fonts.
+Source installations need a Japanese font such as `fonts-ipafont-gothic` on
+Debian/Ubuntu or `noto-fonts-cjk` on Arch Linux.
+
 Settings expose keyboard/controller/mouse bindings, mouse
 and controller sensitivity, invert Y, stick dead zone, window mode and the
 currently qualified presentation rate. Settings tabs scroll on smaller windows.

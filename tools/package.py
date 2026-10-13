@@ -78,6 +78,19 @@ def collect_libraries(stage):
     return sorted(p.name for p in directory.iterdir())
 
 
+def copy_launcher_fonts(stage, source=Path('/usr/share')):
+    """Keep Japanese text readable on hosts without CJK fonts, with its license."""
+    members = [f'fonts/truetype/dejavu/{name}' for name in (
+        'DejaVuSans.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSansMono.ttf',
+        'DejaVuSansMono-Bold.ttf', 'DejaVuSerif.ttf', 'DejaVuSerif-Bold.ttf')]
+    members += ['fonts/opentype/ipafont-gothic/ipag.ttf',
+                'doc/fonts-ipafont-gothic/copyright']
+    for member in members:
+        destination = Path(stage) / 'usr/share' / member
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(Path(source) / member, destination)
+
+
 def copy_application(source, application):
     """Copy only declared application code and generated launcher artwork."""
     source, application = Path(source), Path(application)
@@ -119,11 +132,7 @@ def stage_release(source, output):
                     ignore=shutil.ignore_patterns('__pycache__', 'pip', 'pip-*', 'setuptools', 'setuptools-*', 'pkg_resources', '_distutils_hack', 'distutils-precedence.pth'))
     tk = stage / 'usr/share/tcltk'
     shutil.copytree('/usr/share/tcltk', tk)
-    fonts = stage / 'usr/share/fonts/truetype/dejavu'
-    fonts.mkdir(parents=True)
-    for name in ('DejaVuSans.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSansMono.ttf', 'DejaVuSansMono-Bold.ttf',
-                 'DejaVuSerif.ttf', 'DejaVuSerif-Bold.ttf'):
-        shutil.copy2('/usr/share/fonts/truetype/dejavu/' + name, fonts / name)
+    copy_launcher_fonts(stage)
     fontconfig = stage / 'usr/share/fontconfig'
     fontconfig.mkdir(parents=True)
     # Keep the bundled Fontconfig parser away from newer host configuration
@@ -242,7 +251,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3.10 pyth
 RUN python3.10 -m venv /opt/re4venv
 COPY requirements.txt /tmp/requirements.txt
 RUN /opt/re4venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-ipafont-gothic && rm -rf /var/lib/apt/lists/*
 ''')
         run(['docker', 'build', '-t', args.builder, str(context)])
     # Mount the checkout read-only; writes are confined to declared output.

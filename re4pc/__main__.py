@@ -68,7 +68,8 @@ def argument_parser():
     run.add_argument('--frames', type=int, default=0, help='Stop after this many simulation ticks (0: interactive)')
     run.add_argument('--skip-videos', action='store_true', help='Skip cutscenes')
     run.add_argument('--trace-jni', action='store_true')
-    run.add_argument('--language', choices=('en', 'saved'), default='en')
+    from .languages import GAME_LANGUAGES
+    run.add_argument('--language', choices=tuple(GAME_LANGUAGES), help='Override saved game language')
     run.add_argument('--controls', choices=('pc', 'touch'), default='pc')
     run.add_argument('--screenshot', type=Path)
     run.add_argument('--script', type=Path, help='JSON input replay; frame numbers count simulation ticks')
@@ -132,13 +133,14 @@ def main(argv=None):
                 'window_width': args.width, 'window_height': args.height,
                 'window_mode': args.window_mode, 'presentation_rate': args.presentation_rate,
                 'sensitivity': args.sensitivity, 'controller_sensitivity': args.controller_sensitivity,
-                'stick_dead_zone': args.dead_zone, 'invert_y': args.invert_y})
+                'stick_dead_zone': args.dead_zone, 'invert_y': args.invert_y,
+                'game_language': args.language})
             from .game import Game
             configure(args.log_level, args.log_file)
             log.info('Starting game: %dx%d, controls=%s, data=%s', settings['window_width'], settings['window_height'], args.controls, args.game)
             with RuntimeLog(args.log_interval) as telemetry:
                 game = Game(args.game, settings['window_width'], settings['window_height'], False,
-                    args.trace_jni, args.skip_videos, args.language, args.controls,
+                    args.trace_jni, args.skip_videos, settings['game_language'], args.controls,
                     settings=settings, profile=args.profile, native_profiles=args.native_profile,
                     cache=args.cache, cache_dir=args.cache_dir, telemetry=telemetry,
                     diagnostics=not args.no_diagnostics, import_profile=args.profile_imports)

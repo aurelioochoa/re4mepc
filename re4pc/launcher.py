@@ -70,6 +70,15 @@ class Launcher:
         from tkinter import ttk
         self.tk, self.ttk = tk, ttk
         self.window = window
+        window.launcher = self
+        from .settings import Settings, validate
+        try:
+            preferences = Settings.load()
+            settings_error = None
+        except (ValueError, OSError) as error:
+            preferences = validate({})
+            settings_error = error
+        self.launcher_language = preferences['launcher_language']
         self.child = None
         self.on_complete = None
         self.operation_output = ''
@@ -84,20 +93,83 @@ class Launcher:
         self.kill_job = None
         self.assets = Path(__file__).resolve().parent / 'ui_assets'
         self.configure_style()
-        window.title('Resident Evil 4 Mobile - Launcher')
+        window.title(self.tr('Resident Evil 4 Mobile - Launcher'))
         window.geometry('1280x720')
         window.minsize(1000, 600)
         window.configure(background=self.colors['background'])
         self.game = tk.StringVar(value=str(game or game_dir()))
         self.status = tk.StringVar(value='Ready')
+        self.game_language = tk.StringVar(value=preferences['game_language'])
+        self.launcher_language_value = tk.StringVar(value=self.launcher_language)
         self.installation = tk.StringVar()
         from .launcher_ui import CaseFileView
         self.view = CaseFileView(self)
         self.game.trace_add('write', self.folder_changed)
         self.refresh_installation()
+        if settings_error:
+            self.status.set('Could not load settings: ' + str(settings_error))
         window.protocol('WM_DELETE_WINDOW', self.close)
         self.tick_job = window.after(100, self.tick)
         window.bind('<Destroy>', self.cleanup, add='+')
+
+    def tr(self, text):
+        from .languages import translate
+        return translate(text, self.launcher_language)
+
+    def translated_widget(self, widget):
+        text = widget.cget('text')
+        widget.translation_source = text
+        widget.configure(text=self.tr(text))
+        return widget
+
+    def change_language(self, key, code):
+        """Reload current settings so an open form cannot overwrite this choice."""
+        from .settings import Settings
+        from tkinter import messagebox
+        try:
+            values = Settings.load()
+            values[key] = code
+            Settings.save(values)
+        except (ValueError, OSError) as error:
+            self.view.sync_languages()
+            messagebox.showerror(self.tr('Cannot save language'), self.tr(str(error)), parent=self.window)
+            return False
+        self.game_language.set(values['game_language'])
+        self.launcher_language_value.set(values['launcher_language'])
+        self.launcher_language = values['launcher_language']
+        self.status.set('Launcher language saved.' if key == 'launcher_language' else
+                        'Game language saved. Applies on next launch.')
+        self.retranslate()
+        return True
+
+    def retranslate(self):
+        from .launcher_ui import ArtworkButton
+        from .case_dialog import PaperCanvas
+        self.window.title(self.tr('Resident Evil 4 Mobile - Launcher'))
+        def update(widget):
+            # Native text widgets retain their source for switching back to English.
+            title = getattr(widget, 'translation_title', None)
+            if title is not None:
+                widget.title(self.tr(title))
+            source = getattr(widget, 'translation_source', None)
+            if source is not None:
+                widget.configure(text=self.tr(source))
+            if isinstance(widget, ArtworkButton):
+                widget.draw()
+            elif isinstance(widget, PaperCanvas):
+                widget.schedule()
+            for child in widget.winfo_children():
+                update(child)
+        update(self.window)
+        for popup in self.window.winfo_children():
+            if isinstance(popup, self.tk.Toplevel):
+                view = getattr(popup, 'view', None)
+                if hasattr(view, 'chrome'):
+                    view.chrome.schedule()
+                if hasattr(view, 'translate_choices'):
+                    view.translate_choices()
+        self.view.sync_languages()
+        self.view.draw(self.view.canvas.winfo_width(), self.view.canvas.winfo_height())
 
     def configure_style(self):
         # Native Tk controls, with a shared palette for the launcher and dialogs.
@@ -133,6 +205,7 @@ class Launcher:
             style.map(name, fieldbackground=[('readonly', c['field']), ('disabled', '#29281c')],
                       foreground=[('readonly', c['text']), ('disabled', c['disabled'])],
                       bordercolor=[('focus', c['text'])])
+        style.configure('Language.TCombobox', padding=(6, 2))
         style.configure('TNotebook', borderwidth=0)
         style.configure('TNotebook.Tab', padding=(12, 10), background='#383727', expand=(0, 0, 0, 0))
         style.map('TNotebook.Tab', background=[('selected', c['accent']), ('active', '#4b4733')])
@@ -145,7 +218,7 @@ class Launcher:
         self.window.option_add('*TCombobox*Listbox.selectBackground', c['accent'])
 
     def button(self, parent, label, command, style='TButton'):
-        button = self.ttk.Button(parent, text=label, command=command, style=style)
+        button = self.translated_widget(self.ttk.Button(parent, text=label, command=command, style=style))
         self.buttons.append(button)
         return button
 
@@ -197,9 +270,9 @@ class Launcher:
         self.log_window = popup
         frame = self.ttk.Frame(popup, padding=16)
         frame.pack(fill='both', expand=True)
-        self.ttk.Label(frame, text='Session output', style='PanelHeading.TLabel').pack(anchor='w')
-        self.ttk.Label(frame, text='Logs are optional. You can close this window while an operation runs.',
-                       style='Muted.TLabel').pack(anchor='w', pady=(6, 12))
+        self.translated_widget(self.ttk.Label(frame, text='Session output', style='PanelHeading.TLabel')).pack(anchor='w')
+        self.translated_widget(self.ttk.Label(frame, text='Logs are optional. You can close this window while an operation runs.',
+                       style='Muted.TLabel')).pack(anchor='w', pady=(6, 12))
         body = self.ttk.Frame(frame)
         body.pack(fill='both', expand=True)
         self.console = self.tk.Text(body, wrap='word', height=14, font=('DejaVu Sans Mono', 9),
@@ -209,13 +282,15 @@ class Launcher:
         self.console.configure(yscrollcommand=scrollbar.set)
         self.console.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
-        self.console.insert('end', self.log_output or 'No operations have run in this session.\n')
+        self.console.insert('end', self.log_output or self.tr('No operations have run in this session.\n'))
         self.console.configure(state='disabled')
-        self.ttk.Button(frame, text='Close', command=popup.destroy).pack(anchor='e', pady=(12, 0))
+        self.translated_widget(self.ttk.Button(frame, text='Close', command=popup.destroy)).pack(anchor='e', pady=(12, 0))
 
     def dialog(self, title, geometry):
         popup = self.tk.Toplevel(self.window)
-        popup.title(title)
+        popup.launcher = self
+        popup.translation_title = title
+        popup.title(self.tr(title))
         popup.geometry(geometry)
         popup.configure(background=self.colors['background'])
         popup.transient(self.window)
@@ -242,7 +317,7 @@ class Launcher:
         try:
             self.child = ChildProcess(child_command(command, *arguments))
         except OSError as error:
-            messagebox.showerror('Cannot start', str(error), parent=self.window)
+            messagebox.showerror(self.tr('Cannot start'), self.tr(str(error)), parent=self.window)
             return
         self.operation = command
         self.stopping = False
@@ -320,7 +395,7 @@ class Launcher:
 
     def browse(self):
         from tkinter import filedialog
-        value = filedialog.askdirectory(parent=self.window, title='Choose imported game folder')
+        value = filedialog.askdirectory(parent=self.window, title=self.tr('Choose imported game folder'))
         if value:
             self.game.set(value)
 
@@ -333,7 +408,8 @@ class Launcher:
 
     def import_apk(self):
         from tkinter import filedialog, simpledialog, messagebox
-        apk = filedialog.askopenfilename(parent=self.window, title='Select your game APK', filetypes=[('Android APK', '*.apk'), ('All files', '*')])
+        apk = filedialog.askopenfilename(parent=self.window, title=self.tr('Select your game APK'),
+                                         filetypes=[(self.tr('Android APK'), '*.apk'), (self.tr('All files'), '*')])
         if not apk:
             return
         destination = self.game_path() or game_dir()
@@ -342,13 +418,13 @@ class Launcher:
         while os.path.lexists(destination):
             destination = original.with_name(original.name + '-' + str(index))
             index += 1
-        output = simpledialog.askstring('Import APK', 'Import into a new folder. Existing installations and saves are preserved.',
+        output = simpledialog.askstring(self.tr('Import APK'), self.tr('Import into a new folder. Existing installations and saves are preserved.'),
                                         initialvalue=str(destination), parent=self.window)
         if not output or not output.strip():
             return
         output = str(Path(output.strip()).expanduser())
         if os.path.lexists(output):
-            messagebox.showerror('Choose a new folder', 'This folder already exists. Choose an unused folder for your import.', parent=self.window)
+            messagebox.showerror(self.tr('Choose a new folder'), self.tr('This folder already exists. Choose an unused folder for your import.'), parent=self.window)
             return
         def imported(code):
             if code == 0:
@@ -367,7 +443,7 @@ class Launcher:
             output.mkdir(parents=True, exist_ok=True)
         except OSError as error:
             from tkinter import messagebox
-            messagebox.showerror('Cannot create diagnostics', str(error), parent=self.window)
+            messagebox.showerror(self.tr('Cannot create diagnostics'), self.tr(str(error)), parent=self.window)
             return
         self.append('Diagnostics folder: ' + str(output) + '\nF3 toggles the in-game diagnostics overlay.\n')
         self.start('run', '--game', self.game_path(), '--profile', output / 'profile.jsonl',
@@ -393,7 +469,7 @@ class Launcher:
             sdl.SDL_GetKeyFromName.argtypes = (C.c_char_p,)
             sdl.SDL_GetKeyFromName.restype = C.c_int
         except (ValueError, OSError) as error:
-            messagebox.showerror('Cannot open settings', str(error), parent=self.window)
+            messagebox.showerror(self.tr('Cannot open settings'), self.tr(str(error)), parent=self.window)
             return
         return SettingsView(self, values, sdl)
 
@@ -410,7 +486,7 @@ class Launcher:
         from tkinter import messagebox
         from .launcher_ui import SettingsView
         if self.child and not messagebox.askyesno(
-                'Operation in progress', 'Stop the active operation and close the launcher?', parent=self.window):
+                self.tr('Operation in progress'), self.tr('Stop the active operation and close the launcher?'), parent=self.window):
             return
         for popup in self.window.winfo_children():
             view = getattr(popup, 'view', None)

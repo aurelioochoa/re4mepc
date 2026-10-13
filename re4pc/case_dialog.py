@@ -5,6 +5,7 @@ real Tk widgets, and each paper has its own scroll region.
 """
 import tkinter as tk
 from PIL import Image, ImageOps, ImageTk
+from .languages import widget_translate
 
 INK = '#211b13'
 IVORY = '#eee2c8'
@@ -18,6 +19,11 @@ def font(size=18, family='DejaVu Serif', weight='normal'):
 
 
 class PaperCanvas(tk.Canvas):
+    def create_text(self, *args, **options):
+        if 'text' in options:
+            options['text'] = widget_translate(self, options['text'])
+        return super().create_text(*args, **options)
+
     def __init__(self, parent, assets, *, render=None, load_paper=True, **options):
         super().__init__(parent, background=PAPER, highlightthickness=0, **options)
         self.render = render
@@ -213,6 +219,7 @@ class CaseDialog:
         self.body.pack(fill='both', expand=True)
         self.body_id = self.canvas.create_window(18, 64, anchor='nw', window=self.frame)
         self.title, self.footer = title, footer
+        self.app = app
         self.footer_buttons = []
         self.background = None
         self.photo = None
@@ -255,9 +262,11 @@ class CaseDialog:
         self.canvas.create_line(0, 42, w, 42, fill='#74674b', tags='chrome')
         self.canvas.create_text(24, 21, text='r e 4 m e p c', fill=IVORY, font=font(16), anchor='w', tags='chrome')
         self.canvas.create_line(160, 9, 160, 38, fill='#74674b', tags='chrome')
-        self.canvas.create_text(204, 21, text=self.title, fill=IVORY, font=font(18), anchor='w', tags='chrome')
-        self.canvas.create_line(196, 39, 196+len(self.title)*9, 39, fill=RED, width=2, tags='chrome')
-        self.back.place(x=min(w-180, 210+len(self.title)*10), y=0, width=170, height=40)
+        title = self.app.tr(self.title)
+        title_item = self.canvas.create_text(204, 21, text=title, fill=IVORY, font=font(18), anchor='w', tags='chrome')
+        title_end = self.canvas.bbox(title_item)[2]
+        self.canvas.create_line(196, 39, title_end+6, 39, fill=RED, width=2, tags='chrome')
+        self.back.place(x=min(w-180, title_end+16), y=0, width=170, height=40)
         self.canvas.coords(self.body_id, 18, 64)
         self.canvas.itemconfigure(self.body_id, width=max(1, w-36), height=max(1, h-138))
         self.canvas.create_line(20, h-55, w/2-14, h-55, fill='#a49370', tags='chrome')
@@ -268,7 +277,7 @@ class CaseDialog:
             x -= width
             button.place(x=x, y=h-45, width=width, height=34)
             x -= 10
-        self.canvas.create_text(24, h-28, text=self.footer, fill='#b7ad98', anchor='w',
+        self.canvas.create_text(24, h-28, text=self.app.tr(self.footer), fill='#b7ad98', anchor='w',
                                 font=font(14), width=max(80, x-40), tags='chrome')
         self.canvas.tag_lower('chrome')
 

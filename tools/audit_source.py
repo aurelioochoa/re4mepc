@@ -98,7 +98,7 @@ SOURCE_FILES = {
     're4pc': ('__init__', '__main__', 'arm', 'assets', 'bionic', 'desktop', 'eabi', 'fast',
               'filesystem', 'game', 'graphics', 'input', 'jni', 'media',
               'paths', 'pc_controls', 'menu_controls', 'capture_exports', 'runtime_log', 'textures', 'timing',
-              'actions', 'controllers', 'settings', 'backups', 'save_boundary',
+              'actions', 'controllers', 'settings', 'languages', 'backups', 'save_boundary',
               'launcher', 'launcher_ui', 'case_dialog', 'packaging', 'diagnostics', 'texture_cache', 'achievements', 'achievement_media'),
     'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
               'migrate_local', 'probe_input', 'test_components',
@@ -106,7 +106,7 @@ SOURCE_FILES = {
     'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_desktop', 'test_graphics',
               'test_input', 'test_key_routing', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',
-              'test_actions', 'test_controllers', 'test_settings', 'test_backups',
+              'test_actions', 'test_controllers', 'test_settings', 'test_languages', 'test_backups',
               'test_save_boundary', 'test_launcher', 'test_packaging', 'test_diagnostics',
               'test_texture_cache', 'test_cli', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_capture_exports', 'test_rea_workflow'),
 }
