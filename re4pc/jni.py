@@ -37,7 +37,7 @@ class JNI:
             24: ('IsSameObject', lambda _, x, y, __: int(x == y)),
             25: ('NewLocalRef', lambda _, obj, *__: obj),
             28: ('NewObject', self.new_object), 29: ('NewObjectV', self.new_object), 30: ('NewObjectA', self.new_object),
-            31: ('GetObjectClass', lambda _, obj, *__: self.object(self.objects.get(obj, {}).get('class', 'java/lang/Object'))),
+            31: ('GetObjectClass', self.get_object_class),
             32: ('IsInstanceOf', lambda *_: 1),
             33: ('GetMethodID', self.get_method), 113: ('GetStaticMethodID', self.get_method),
             94: ('GetFieldID', self.get_method), 144: ('GetStaticFieldID', self.get_method),
@@ -91,8 +91,16 @@ class JNI:
             return 0
         if self.trace:
             log.info('[jni] class %s', value)
+        return self.class_object(value)
+
+    def class_object(self, value):
         if value not in self.class_cache: self.class_cache[value]=self.object(value)
         return self.class_cache[value]
+
+    def get_object_class(self, env, obj, *_):
+        # FindClass already represents class identity with persistent handles.
+        # Per-frame new handles outlive this bridge's DeleteLocalRef no-op.
+        return self.class_object(self.objects.get(obj, {}).get('class', 'java/lang/Object'))
 
     def get_method(self, env, clazz, name, signature):
         value, sig = self.arm.string(name), self.arm.string(signature)

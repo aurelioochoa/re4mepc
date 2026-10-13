@@ -84,6 +84,26 @@ class RuntimeTests(unittest.TestCase):
         r.write(p+8,struct.pack('<Q',0x100000002));r.write(p+16,struct.pack('<d',0.5))
         self.assertEqual(j.arguments('(ILjava/lang/String;JF)V',1,p),[9,123,0x100000002,0.5])
 
+    def test_jni_object_class_identity_and_allocations_remain_bounded(self):
+        r=self.runtime;j=JNI(r,Path('.'),800,480)
+        obj=j.object('authored/Class')
+        name=r.cstring('authored/Class')
+        clazz=r.call(r.imports['JNI.FindClass'],j.env,name)
+        before_heap,before_objects=r.heap,len(j.objects)
+        for _ in range(1200):
+            ref=r.call(r.imports['JNI.GetObjectClass'],j.env,obj)
+            self.assertEqual(ref,clazz)
+            self.assertEqual(r.call(r.imports['JNI.IsSameObject'],j.env,ref,clazz),1)
+            r.call(r.imports['JNI.DeleteLocalRef'],j.env,ref)
+        self.assertEqual(r.heap,before_heap)
+        self.assertEqual(len(j.objects),before_objects)
+        other=j.object('authored/Other')
+        other_class=r.call(r.imports['JNI.GetObjectClass'],j.env,other)
+        self.assertNotEqual(other_class,clazz)
+        self.assertEqual(j.objects[other_class]['class'],'authored/Other')
+        fallback=r.call(r.imports['JNI.GetObjectClass'],j.env,0)
+        self.assertEqual(j.objects[fallback]['class'],'java/lang/Object')
+
     def test_native_memory_bridge_preserves_overlapping_bytes(self):
         from re4pc.fast import Fast
         r=self.runtime; fast=Fast(r); p=r.alloc(32)
