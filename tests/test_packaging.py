@@ -56,6 +56,25 @@ class PackagingTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 copy_launcher_fonts(stage, source)
 
+    def test_dependency_notices_merge_with_previously_staged_font_license(self):
+        from tools.package import copy_dependency_notices
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage = root / 'stage'
+            font_license = stage / 'usr/share/doc/fonts-ipafont-gothic/copyright'
+            font_license.parent.mkdir(parents=True)
+            font_license.write_text('already staged font license')
+            source = root / 'dependency-docs'
+            notice = source / 'python3.10/copyright'
+            notice.parent.mkdir(parents=True)
+            notice.write_text('dependency license')
+            (source / 'manual.pdf').write_bytes(b'unneeded manual')
+            copy_dependency_notices(stage, source)
+            copy_dependency_notices(stage, source)
+            self.assertEqual(font_license.read_text(), 'already staged font license')
+            self.assertEqual((stage / 'usr/share/doc/python3.10/copyright').read_text(), 'dependency license')
+            self.assertFalse((stage / 'usr/share/doc/manual.pdf').exists())
+
     def test_library_collection_keeps_graphics_support_on_host(self):
         from tools.package import collect_libraries
         with tempfile.TemporaryDirectory() as temporary:

@@ -103,6 +103,13 @@ def copy_application(source, application):
         shutil.copy2(source / name, application / name)
 
 
+def copy_dependency_notices(stage, source=Path('/usr/share/doc')):
+    """Merge dependency notices with font licenses already present in the stage."""
+    shutil.copytree(source, Path(stage) / 'usr/share/doc', dirs_exist_ok=True,
+                    ignore_dangling_symlinks=True,
+                    ignore=shutil.ignore_patterns('examples', 'html', '*.pdf'))
+
+
 def stage_release(source, output):
     source, output = Path(source), Path(output)
     stage = output / 're4mepc.AppDir'
@@ -161,8 +168,7 @@ exec "$RE4PC_APPDIR/usr/bin/python3" -u -m re4pc "$@"
     (stage / 'AppRun').chmod(0o755)
     dpkg = subprocess.check_output(['dpkg-query', '-W', '-f=${Package}\t${Version}\t${License}\n'], text=True)
     (stage / 'DEPENDENCIES.txt').write_text('Runtime built on Ubuntu 22.04 x86_64. Python wheels pinned in requirements.txt.\nHost graphics drivers/loaders (including DRM and GBM), glibc, libstdc++ and libgcc are intentionally external.\n\nBuilder Debian packages (versions; full notices under usr/share/doc):\n' + dpkg + '\nBundled dependency libraries:\n' + '\n'.join(libraries) + '\n')
-    notices = stage / 'usr/share/doc'
-    shutil.copytree('/usr/share/doc', notices, ignore_dangling_symlinks=True, ignore=shutil.ignore_patterns('examples', 'html', '*.pdf'))
+    copy_dependency_notices(stage)
     tool = output / 'appimagetool-x86_64.AppImage'
     runtime = output / 'runtime-x86_64'
     for url, target, expected in ((APPIMAGE_TOOL, tool, APPIMAGE_TOOL_SHA256), (APPIMAGE_RUNTIME, runtime, APPIMAGE_RUNTIME_SHA256)):

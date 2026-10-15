@@ -1,138 +1,116 @@
-# Experimental prerelease qualification — 2026-10-13
+# Experimental public test qualification — 2026-10-14
 
-**Experimental; not fully campaign-qualified.** Linux x86_64 only, with the
-authoritative simulation and presentation at 20 Hz. Natural mission completion
-is deferred to the user's later playtest. The final two-hour gate is incomplete.
+[Release v0.1.0-experimental.20261014](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014)
+is **experimental and not fully campaign-qualified**. Linux x86_64 only;
+authoritative simulation and presentation remain at 20 Hz. Users supply their
+own compatible APK. Campaign, endurance and broader physical-device work remain
+deferred; this refresh qualifies packaging, languages and the startup/inventory path.
 
 ## Frozen artifacts
 
 | File | SHA-256 |
 |---|---|
-| re4mepc-linux-x86_64.AppImage | dbf6dc7df6f70a2e96ee15a8eb89a3c350ea3cb84d90334cc491bb5a6c7d5c11 |
-| re4mepc-linux-x86_64.tar.gz | 20d94e814d2a0cf0aaf39c832779ccbcf1ec14c1d44027745ea7dcbe6495cd50 |
+| re4mepc-linux-x86_64.AppImage | d492232505f33e386e1a37034dcf59075e763a743bd88e3f3c2e93c4ed32ca46 |
+| re4mepc-linux-x86_64.tar.gz | 2454aabd36526d3c8f8d9eb726cf6bcc1772b25d4682f3bfc595a5008df293c2 |
 
-These exact bytes were rehashed before publication and matched every report
-below. Repacking invalidates their qualification. The audited AppDir manifest
-covers 2,334 files/links; all packaged application modules and artwork match
-the final source. Runtime code is committed at `3aed82c`; its measured runtime
-source digest is
-`503295f0794cff95c44ff74e23d9a93f392b8c1801cd79f0740834b037dd82e7`.
-Later source-publication changes concern documentation and its audit allowlist.
+Both formats were rebuilt from the same Ubuntu 22.04 AppDir. Its audited manifest
+contains 2,338 files/links. All application modules and artwork match the current
+source. The runtime code is unchanged from commit `3052793`; its measured source
+digest, including native inputs and the benchmark identity helper, is
+`d826e79b9f13eaf7612c350b261914daa06994b4bb446301b89fcb97d4a6943d`.
+The release commit additionally includes the packaging fix, validation harness
+and this qualification record. Repacking invalidates qualification of these bytes.
 
-The four release assets are the AppImage, portable archive, SHA256SUMS and this
-authored summary. Packages contain the host runtime and approved host artwork;
-users must supply compatible game data separately. Proprietary game libraries,
-assets, saves, private gameplay captures, raw logs and REA dumps remain external.
+The refresh includes independent game/launcher selectors for English, Spanish,
+French, German, Italian and Japanese, plus bundled Japanese fonts and their
+license. The first fresh build exposed an existing staging conflict: the font
+license created `usr/share/doc` before the dependency-notice copy. Merging the
+notices fixes that build failure; a regression checks preservation of the font
+license and dependency notices across repeated copies.
 
-## Passed checks and their limits
+Release assets are the AppImage, portable archive, SHA256SUMS and this summary.
+Imported engine libraries/assets, saves, private gameplay captures and raw logs
+remain external. Runtime dependencies and notices accompany the packages.
 
-- Final `make verify`: native helper builds, 294 component regressions and
-  source/history publication audit. Each implementation phase also has its own
-  staged-source verification and reviewable commit.
-- Both formats pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch container smoke
-  checks using llvmpipe, Xvfb and dummy audio. The host images have no Python or
-  compiler. Checks open Tk and run 160 engine ticks per format, share external
-  settings/backups across formats, export selected achievement captures,
-  deduplicate media, import PNG/MP4 save/media bundles then explicitly Restore,
-  and round-trip legacy save-only archives. Paths include spaces.
-- Upgrade coverage preserves settings and a snapshot created by the preceding
-  portable build when launching either new format. The old AppImage is frozen
-  as provenance but did not create the upgrade state.
-- Four host startup cases pass: both formats on AMD RX 6700S and Radeon 680M,
-  Mesa 26.1.5, with a visible window, 160 ticks and dummy audio. These are startup
-  checks, not extended hardware gameplay or audible speaker qualification.
-- Both bundled runtimes pass 1,720 ticks of fresh-install keyboard/mouse input
-  through first-mission entry, manual panels, movement, inventory/submenu and
-  cancellation back to gameplay. Captures were reviewed locally and native
-  save/load passed. No synthetic progression or stage requests occur in these
-  replays; neither replay completes a mission.
-- Source keyboard/SDL virtual-controller replays cover held confirmation,
-  focus loss, disconnect, inventory return, remappable menu routing, resizing,
-  fullscreen and cursor capture. Physical controller behavior remains unverified.
-- Capture and backup regressions cover duplicate/missing/conflicting media,
-  unsafe paths, corrupt checksums, payload limits, stopped-installation locking
-  and interrupted publication. Save-only compatibility is preserved.
-- REA 6.4.0/Ghidra 12.1.4/JDK 21 inspect both supported ARM libraries, with six
-  ARM/Thumb address mappings checked against ELF and Capstone. REA remains a
-  development dependency. Its formal independent load-image verifier is DOS
-  specific; ELF evidence is provider observation independently cross-checked
-  by the project.
+## Clean-system checks on these exact bytes
+
+Both formats pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch images with Mesa,
+Xvfb and dummy audio. Hosts have no Python or compiler. Checks cover real Tk
+launchers, 160 engine ticks, settings/backups shared between formats, selected
+achievement exports with media deduplication, PNG/MP4 save/media bundles followed
+by explicit Restore, and legacy save-only roundtrips. Paths contain spaces.
+
+Each format on each OS also opens all six launcher languages, exercises language
+selection, restores saved preferences in a reopened launcher, and verifies
+Japanese glyph coverage from the bundled IPAGothic font. On Ubuntu 22.04, both
+bundled runtimes additionally verify the native language ID and execute 160 ticks
+for each of the six game languages. These checks cover selection and startup,
+not a campaign playthrough in each language. Six packaged launcher screenshots
+were reviewed locally, including Japanese.
 
 | Clean target | Exact validation image ID |
 |---|---|
-| Ubuntu 22.04 | sha256:4ef2da8a158d29e1f70e8c82b758d2e7dc8ca7230fc92148832ab4396faa566f |
-| Ubuntu 24.04 | sha256:42a99fb2ec2edf3482ff703a764640a679b165bebe9030e4d35a38e01038dcac |
-| Arch | sha256:004bdc81275499b16eb5b2722093c3adc2973c225d28e6d581ecfeeacf091ec7 |
+| Ubuntu 22.04 | sha256:c13f92ac9065498426f64bb54fdb10224344ab21421da660d1e50b0272053983 |
+| Ubuntu 24.04 | sha256:50929d2825d645a8e1f49359283b92e2a3177a95f3efa47e0d60a5416bc94385 |
+| Arch | sha256:f41096f88c54b01091e7f5d3bcbe8c52dfe3abcbe5b46f408654cb63f388d5e0 |
 
-## Actual findings and known failures
+Upgrade checks start with the preceding portable prerelease, retain its settings
+and save snapshot, then launch both refreshed formats. The previous AppImage is
+also frozen and hashed, but does not create the upgrade state. Neither preceding
+artifact was changed.
 
-No loading optimization qualified. Five baseline repetitions per cache mode
-were recorded on one AMD renderer. The bounded dispatch candidate failed both
-independent five-pair batches: −0.005% and 5.30% median target improvement,
-below the required 10% and measured variability; the second batch's gameplay
-p95 increased 10.23%. Contention limits causal conclusions. Texture caching
-stays opt-in. Final default diagnostics overhead measured 1.10%, below 5%.
+## First-mission and inventory replay
 
-An earlier completed 7,200.035-second soak exposed JNI class-reference growth:
-one retained 16-byte handle per frame. Reusing the existing class identity cache
-removes that growth in the isolated 1,200-tick probe. That earlier runtime's
-two-hour duration does not qualify the final packages. A ten-minute follow-up
-passed native save/load and 20 synthetic lifecycle cycles.
+Both extracted bundled runtimes use fresh isolated game fixtures on AMD RX 6700S,
+Mesa 26.1.5. Keyboard/mouse events reach the first mission; observed native menu
+states confirm inventory entry, handgun submenu, cancellation to inventory and
+return to active gameplay. Screenshots of each state were reviewed locally.
+Native save/load passes, and the replays finish in gameplay without GL errors.
+No progression records or stage changes are injected; no mission is completed.
+Audio uses the dummy device and does not qualify speakers.
 
-At the user's request, both remaining isolated soak processes were stopped
-with SIGTERM on 2026-10-13 at 06:27:14 UTC after preserving their checkpoints.
-Neither was restarted. The final runtime's last sample records 2,880.043 seconds
-of continuous gameplay, 100% gameplay occupancy and 20 synthetic stage cycles.
-From the five-minute warm-up sample, guest live bytes grew by 448, guest heap
-bytes by 512, RSS decreased by 9,695,232 bytes and descriptor count was unchanged.
-The last sample has no held inputs or queued audio. Its report is incomplete
-(`completed: false`), with no recorded failure; the end-of-run save/load check
-was not reached. The superseded concurrent run also stopped, at its
-4,320.044-second checkpoint. **The final two-hour acceptance gate is unmet.**
+| Format | Measured ticks | Native save/load |
+|---|---|---|
+| portable | 1610 | Passed |
+| appimage | 1610 | Passed |
 
-An intermittent native title-to-difficulty initialization exception was observed
-before and after the JNI correction. REA identifies a component lookup/virtual
-call path; the underlying failure remains unresolved. Ten subsequent PC entry
-trials and ten touch-only trials passed, which does not establish a fix. The
-previous keyboard-aim failure was not reproduced in repeated original-source
-replays and is not claimed fixed.
+The initial fixed-timestamp replay exited successfully but screenshot review
+showed a transition frame and an incomplete inventory round trip. It is not
+counted as a pass for these interactions. The qualifying retry waits for observed
+menu states before capturing and checking each result; application code was
+unchanged. Arch initially inherited bundled libraries while starting the host
+Xvfb shell, causing a Readline symbol conflict. Starting host Xvfb before applying
+the package environment makes the unchanged artifacts pass; the failed log is
+preserved separately. A separate screenshot-helper retry corrected its container display
+startup; it did not change the package bytes.
 
-Qualification harness failures were corrected without changing the frozen
-artifacts: Arch initially lacked `cmp` (test dependency `diffutils` added), a
-symlinked XDG state path was rejected (test path canonicalized), and a replay
-runner reused an extraction directory (retry separated extraction/evidence).
-Only passing retries tied to the final hashes count as qualification.
+Source verification covers **313 component tests**, native helper builds and the
+complete source/history publication audit. The release commit must pass the same
+CI check before repository visibility changes.
 
-Independent rendering research observes guest-memory writes and host effects
-from extra draw calls. Static evidence shows draw-side interaction-state writes;
-selected equal-tick fields alone cannot prove safe separation. No prototype or
-30/60 FPS behavior ships. Interpolation across stage changes, destruction and
-teleports remains unproved.
+## Retained limitations and historical evidence
 
-## Unmet gates and manual handoff
+- Zero naturally completed story missions are qualified. All 22 missions,
+  other difficulties/modes/ranks and natural restart cycles remain unverified.
+- There is no completed two-hour qualification on this refreshed runtime.
+  The previous runtime's interrupted 2,880.043-second checkpoint remains historical.
+- The intermittent native title-to-difficulty initialization exception remains
+  unresolved. Passing startup/replay runs do not establish a fix.
+- Physical controllers, display/HiDPI, audible speakers, extended GPU gameplay
+  and Intel/NVIDIA hardware remain outside this refresh's qualification.
+- No loading optimization qualified; converted-texture caching stays opt-in.
+  Independent rendering is unproved and no 30/60 FPS mode ships.
 
-The roadmap ledger has nine met gates and two unmet phase gates: campaign/session
-qualification and full package/device qualification. Publication is authorized
-as an experimental prerelease despite those unmet gates.
+The preceding [2026-10-13 prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013)
+and its attached qualification summary remain unchanged. Its AppImage hash is
+`dbf6dc7df6f70a2e96ee15a8eb89a3c350ea3cb84d90334cc491bb5a6c7d5c11`;
+its archive hash is
+`20d94e814d2a0cf0aaf39c832779ccbcf1ec14c1d44027745ea7dcbe6495cd50`.
+Earlier RX 6700S/680M startup checks and session/performance measurements apply to
+those recorded artifacts/runtime identities, not automatically to this refresh.
 
-- Complete all 22 story missions on Normal through natural progression, with
-  local evidence for doors, bosses, companions, merchant actions, inventory,
-  death/retry, completion and save/load. Currently zero story completions are
-  qualified. Check representative missions on other difficulties, additional
-  modes, ranks and achievement recovery, plus 20 natural restart/load cycles.
-- Complete a two-hour session on the final runtime in a later validation session.
-  Synthetic stage cycles and the interrupted final soak do not satisfy this gate.
-- Check a physical controller, hot-plug, focus/cursor capture, resizing, HiDPI,
-  fullscreen and audible speakers using final packages. Run extended gameplay
-  on available AMD drivers. Intel/NVIDIA hardware and a physical controller were
-  unavailable during this session and are not qualified.
-- Reproduce and investigate the intermittent difficulty-initialization exception
-  if encountered during playtest; preserve its evidence locally.
-
-Authored details and reproduction commands are in the repository's
-`docs/roadmap-results.md`, `docs/desktop-release.md`, `docs/campaign-coverage.md`,
-`docs/menu-controls.md`, `docs/portable-captures.md`, `docs/rea-workflow.md` and
-`docs/render-audit.md`. Raw evidence is retained outside the checkout at
-`~/.local/state/re4mepc/roadmap-20261012/work/evidence/`, including
-`session-stop-20261013`, `qualified-package-validation`, `qualified-package-amd`
-and `qualified-natural-package-menu-retry`.
+Raw evidence stays local under
+`~/.local/state/re4mepc/public-launch-20261014/evidence/`, including
+`clean-packages`, `launcher-previews` and `natural-package-menu-verified`.
+See [desktop package validation](desktop-release.md),
+[campaign coverage](campaign-coverage.md) and [roadmap results](roadmap-results.md).

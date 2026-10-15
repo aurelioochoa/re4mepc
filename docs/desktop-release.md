@@ -139,7 +139,33 @@ exercise XDG settings/backups while switching formats. These checks validate a
 software OpenGL compatibility driver; physical displays, hardware controllers
 and vendor-specific driver combinations remain additional coverage.
 
-## Immutable candidate qualification — 2026-10-13
+## Current public-test packages — 2026-10-14
+
+The [refreshed experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014)
+includes the six-language selectors, bundled Japanese fonts and the dependency-notice
+staging fix. Its [qualification summary](qualification-summary.md) records the new
+artifact hashes and validation image IDs. Both formats pass clean Ubuntu 22.04,
+Ubuntu 24.04 and Arch smoke/upgrade checks with no host Python/compiler, all six
+launcher languages, saved language preferences and bundled Japanese glyph coverage.
+Both formats also check all six native game-language IDs and 160 ticks per language
+on Ubuntu 22.04. First-mission, inventory/submenu/cancellation and native save/load
+replays pass on AMD RX 6700S using the refreshed bundled runtimes. These checks
+remain separate from campaign, endurance and physical-device qualification.
+
+Reproduce clean-system and preceding-release upgrade checks with:
+
+```bash
+.venv/bin/python tools/validate_package.py \
+  --dist /external/refreshed-packages --previous-dist /external/20261013-packages \
+  --output /external/refreshed-package-validation
+```
+
+The validator uses each format's own interpreter for the language checks. Japanese
+font selection and glyph coverage are checked against a font inside that package.
+Game data and all raw reports/captures remain outside the checkout. The previous
+qualification below is historical and does not certify refreshed artifact bytes.
+
+## Previous candidate qualification — 2026-10-13
 
 The candidate pair includes desktop menu routing, achievement gallery exports
 and optional portable save/media bundles, plus bounded JNI class-reference
@@ -212,7 +238,7 @@ the next pair beginning `49a0efe2` / `ec0b1f22` was superseded by inventory
 cancellation. Their passing reports do not qualify the new bytes. Repacking invalidates all
 qualification attached to the current hashes.
 
-The published prerelease is **experimental and not fully campaign-qualified**.
+The 2026-10-13 prerelease is **experimental and not fully campaign-qualified**.
 The final runtime's two-hour soak was stopped at the user's request after its
 2,880.043-second checkpoint and remains incomplete. A native exception during
 title-to-difficulty component initialization remains unresolved; 20 subsequent

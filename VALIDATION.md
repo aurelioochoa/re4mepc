@@ -303,3 +303,27 @@ two-hour soak was stopped at the user's request; its preserved checkpoint is
 The unresolved intermittent difficulty-initialization exception and remaining
 physical-device checks are recorded in the summary. No campaign-qualified or
 30/60 FPS release claim is made.
+
+
+## Refreshed public-test packages — 2026-10-14
+
+The [current qualification summary](docs/qualification-summary.md) identifies
+`v0.1.0-experimental.20261014` and its new immutable artifact hashes. Both formats were freshly built
+with six-language selectors, Japanese fonts/licenses and merged dependency notices.
+A regression covers the font-license/dependency-notice directory conflict exposed
+by this fresh build. Final source checks cover 313 component tests, native helper
+builds and the complete source/history publication audit.
+
+Both formats pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke/upgrade checks,
+including six-language Tk launchers, restored preferences and bundled Japanese
+glyph coverage. On Ubuntu 22.04 both bundled runtimes additionally check all six
+native language IDs and execute 160 ticks per language. Input-only first-mission
+replays on AMD RX 6700S observe inventory, its handgun submenu, cancellation and
+return to active gameplay, with native save/load and reviewed captures. The first
+fixed-timestamp replay's transition/incomplete-roundtrip captures were rejected;
+the qualifying retry waits for observed states without changing application code.
+
+Earlier GPU/session/performance evidence remains tied to its historical hashes.
+Campaign completion, two-hour endurance, physical-device coverage and the known
+intermittent initialization exception remain deferred. User imports and saves,
+the preceding release artifacts and raw private evidence remain external/preserved.
