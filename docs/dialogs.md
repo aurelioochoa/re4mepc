@@ -2,7 +2,7 @@
 
 Settings, Achievements and Save backups open as separate native windows from the launcher. Their parchment forms, olive navigation, serif headings and oxblood focus indicators share the launcher palette.
 
-Settings opens at 1280 × 720 and supports 640 × 520. Its five sections preserve every existing setting and binding name. Tab reaches native controls; Up and Down move between section buttons. Focused fields scroll into view. At narrow widths, labels stack above fields. Save validates through the existing settings validator before the atomic write; field errors keep the window open. Cancel, Escape and the window close button confirm unsaved edits. Settings apply to the next game launch, and the validated presentation rate remains 20 Hz.
+Settings opens at 1280 × 720 and supports 640 × 520. Its six sections preserve every existing setting and binding name. Tab reaches native controls; Up and Down move between section buttons. Focused fields scroll into view. At narrow widths, labels stack above fields. Save validates through the existing settings validator before the atomic write; field errors keep the window open. Cancel, Escape and the window close button confirm unsaved edits. Settings apply to the next game launch, and the validated presentation rate remains 20 Hz.
 
 ![Settings](settings-preview.png)
 
@@ -11,6 +11,8 @@ Settings opens at 1280 × 720 and supports 640 × 520. Its five sections preserv
 Achievements opens at 1280 × 720 and supports 600 × 420. Search matches titles and requirements; All / Unlocked / Locked segmented filters preserve catalog order. Tab reaches the search, filter and catalog; arrow keys, Home and End select entries. Ctrl+F focuses Search. Selection reads records without starting the game. Refresh retains the selected visible entry and catalog position. Below 880 pixels wide the catalog stacks above an independently scrolling detail pane. Refresh and Close remain visible.
 
 ![Achievement catalog and detail](achievements-preview.png)
+
+The mouse wheel moves through the achievement list four entries at a time and selects the first entry in each group, matching `redegpc`. Small trackpad deltas accumulate; wheel input over the search, filters or window chrome leaves the list in place. The detail pane scrolls independently.
 
 ![Achievements at minimum size](achievements-minimum-preview.png)
 

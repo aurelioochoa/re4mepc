@@ -94,6 +94,9 @@ class LauncherGuiFixture(unittest.TestCase):
         self.window.geometry('1000x600')
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
+        environment = patch.dict('os.environ', {'XDG_CONFIG_HOME': str(Path(temporary.name) / 'config')})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.folder = Path(temporary.name) / 'game with spaces'
         self.app = Launcher(self.window, self.folder)
         self.window.update_idletasks()
@@ -160,9 +163,15 @@ class LauncherGuiTests(LauncherGuiFixture):
         self.assertIn('Locked', texts)
         self.assertIn(f'2 / {len(ACHIEVEMENTS)} unlocked', popup.view.summary.get())
         canvas = popup.view.catalog.canvas
+        popup.view.select(ACHIEVEMENTS[-1].id)
         canvas.yview_moveto(1)
         self.assertGreater(canvas.yview()[0], 0)
-        popup.event_generate('<Button-4>')
+        canvas.event_generate('<Button-4>', x=40, y=40)
+        canvas.event_generate('<Button-4>', x=40, y=40)
+        deadline = time.monotonic() + .1
+        while time.monotonic() < deadline:
+            self.window.update()
+            time.sleep(.01)
         self.window.update()
         self.assertLess(canvas.yview()[1], 1)
         popup.destroy()
@@ -317,8 +326,8 @@ class LauncherGuiTests(LauncherGuiFixture):
             self.app.play()
         self.window.update_idletasks()
         self.assertTrue(self.app.stop_button.winfo_ismapped())
-        self.assertLess(self.app.stop_button.winfo_width(), 90)
-        self.assertLess(self.app.stop_button.winfo_height(), 40)
+        self.assertGreaterEqual(self.app.stop_button.winfo_width(), 80)
+        self.assertGreaterEqual(self.app.stop_button.winfo_height(), 30)
         self.assertTrue(self.app.view.nav['settings'].instate(['disabled']))
         self.assertTrue(self.app.view.nav['backups'].instate(['disabled']))
         child.poll.return_value = ('', 0)
@@ -327,6 +336,86 @@ class LauncherGuiTests(LauncherGuiFixture):
         self.window.update_idletasks()
         self.assertFalse(self.app.stop_button.winfo_ismapped())
         self.assertFalse(self.app.view.nav['settings'].instate(['disabled']))
+
+    def test_responsive_composition_fills_viewport_and_keeps_controls_separate(self):
+        from itertools import combinations
+        view = self.app.view
+        for width, height in ((640, 520), (800, 600), (800, 850), (899, 520),
+                              (900, 520), (1000, 800), (1440, 810), (1500, 560),
+                              (2560, 1080), (900, 1600)):
+            with self.subTest(size=(width, height)):
+                self.window.geometry(f'{width}x{height}')
+                self.window.update()
+                view.draw(width, height)
+                self.window.update_idletasks()
+                self.assertEqual(view.scaled.size, (width, height))
+                self.assertEqual(view.canvas.coords(view.canvas.find_withtag('backdrop')[0]), [0, 0])
+                self.assertEqual(view.stacked, width < 900)
+                controls = [button for button in view.bounds if button.winfo_ismapped()]
+                controls += [self.app.game_entry, *(item[0] for item in view.language_controls.values())]
+                rectangles = []
+                for control in controls:
+                    x, y = control.winfo_x(), control.winfo_y()
+                    w, h = control.winfo_width(), control.winfo_height()
+                    self.assertGreaterEqual(x, 0)
+                    self.assertGreaterEqual(y, 0)
+                    self.assertLessEqual(x + w, width)
+                    self.assertLessEqual(y + h, height)
+                    self.assertGreaterEqual(h, 30)
+                    rectangles.append((x, y, x + w, y + h))
+                for a, b in combinations(rectangles, 2):
+                    self.assertFalse(a[0] < b[2] and b[0] < a[2] and
+                                     a[1] < b[3] and b[1] < a[3], (a, b))
+
+    def test_reflow_preserves_focused_folder_languages_and_keyboard_actions(self):
+        view = self.app.view
+        self.app.game.set('/a folder with spaces/installation')
+        self.app.game_entry.focus_force()
+        self.app.game_entry.selection_range(3, 12)
+        self.window.update()
+        for width, height in ((640, 520), (1280, 720), (800, 800)):
+            self.window.geometry(f'{width}x{height}')
+            self.window.update()
+            view.draw(width, height)
+            self.window.update_idletasks()
+            self.assertIs(self.window.focus_get(), self.app.game_entry)
+            self.assertEqual(self.app.game.get(), '/a folder with spaces/installation')
+            self.assertEqual(self.app.game_entry.index('sel.first'), 3)
+            self.assertEqual(self.app.game_entry.index('sel.last'), 12)
+            for key, (control, _, choices) in view.language_controls.items():
+                code = getattr(self.app, key if key == 'game_language' else 'launcher_language_value').get()
+                self.assertEqual(control.current(), tuple(choices).index(code))
+        view.settings_button.command = Mock()
+        view.settings_button.focus_force()
+        self.window.update()
+        view.settings_button.event_generate('<Return>')
+        view.settings_button.command.assert_called_once_with()
+
+    def test_compact_busy_and_error_feedback_stays_above_footer_in_every_language(self):
+        from re4pc.languages import LAUNCHER_LANGUAGES
+        view = self.app.view
+        self.app.child = Mock()
+        self.app.child.poll.return_value = ('', None)
+        self.app.operation = 'run'
+        self.app.status.set('Long error details\n' * 100 + 'x' * 1000)
+        self.window.geometry('640x520')
+        self.window.update()
+        for language in LAUNCHER_LANGUAGES:
+            self.app.launcher_language = language
+            self.app.retranslate()
+            self.window.update_idletasks()
+            self.assertTrue(self.app.stop_button.winfo_ismapped())
+            self.assertTrue(self.app.progress.winfo_ismapped())
+            for item in view.canvas.find_withtag('status'):
+                bounds = view.canvas.bbox(item)
+                self.assertLessEqual(bounds[3], view.status_bounds[3] + 40)
+                if view.canvas.type(item) == 'text' and 'Long error' in view.canvas.itemcget(item, 'text'):
+                    self.assertLessEqual(bounds[3], view.status_bounds[3])
+                    self.assertIn('…', view.canvas.itemcget(item, 'text'))
+        self.app.child = None
+        view.update_status()
+        self.assertFalse(self.app.stop_button.winfo_ismapped())
+        self.assertFalse(self.app.progress.winfo_ismapped())
 
 
 class DialogFormattingTests(unittest.TestCase):
@@ -417,7 +506,7 @@ class CaseFileDialogTests(LauncherGuiFixture):
         view.nav['Display & sensitivity'].focus_force()
         view.nav['Display & sensitivity'].event_generate('<Down>')
         self.window.update()
-        self.assertEqual(view.section, 'Achievements')
+        self.assertEqual(view.section, 'Laser sight')
         view.select('Keyboard')
         self.window.update()
         pane = view.panes['Keyboard']
@@ -488,10 +577,159 @@ class CaseFileDialogTests(LauncherGuiFixture):
         view.window.geometry('600x420')
         self.window.update()
         before = view.catalog.canvas.yview()
-        view.detail.canvas.event_generate('<Button-5>')
+        view.detail.canvas.event_generate('<Button-5>', x=10, y=10)
         self.window.update()
         self.assertEqual(view.catalog.canvas.yview(), before)
         self.assertGreater(view.detail.canvas.yview()[0], 0)
+        view.window.destroy()
+
+    def test_achievement_wheel_pages_accumulate_bound_and_keep_rows_alive(self):
+        view = self.app.achievements()
+        view.window.geometry('1040x760')
+        self.window.update()
+        rows = dict(view.rows)
+        rows[view.visible[0].id].focus_force()
+        self.window.update()
+
+        def settle():
+            deadline = time.monotonic() + .08
+            while time.monotonic() < deadline:
+                self.window.update()
+                time.sleep(.005)
+
+        def wheel(sequence, *, delta=None, count=1, target=None):
+            canvas = view.catalog.canvas
+            target = target or canvas
+            first = view.rows[view.visible[0].id]
+            y = min(canvas.winfo_height() - 10,
+                    max(10, first.winfo_rooty() - canvas.winfo_rooty() + 10))
+            for _ in range(count):
+                options = dict(x=40, y=y if target is canvas else 10, when='tail')
+                if delta is not None:
+                    options['delta'] = delta
+                target.event_generate(sequence, **options)
+            settle()
+
+        def selected(index):
+            self.assertEqual(view.selected, view.visible[index].id)
+            self.assertEqual(view.rows, rows)
+            self.assertIsNone(view.wheel_job)
+
+        wheel('<Button-5>', target=rows[view.visible[0].id])
+        selected(4)
+        self.assertIs(view.window.focus_get(), rows[view.visible[4].id])
+        self.assertGreater(view.catalog.canvas.yview()[0], 0)
+        wheel('<Button-4>')
+        selected(0)
+        self.assertEqual(view.catalog.canvas.yview()[0], 0)
+        wheel('<MouseWheel>', delta=0)
+        selected(0)
+        # Tk's native delta units differ on macOS.
+        unit = 1 if view.window.tk.call('tk', 'windowingsystem') == 'aqua' else 120
+        if unit == 120:
+            for _ in range(3):
+                wheel('<MouseWheel>', delta=-30)
+                selected(0)
+            wheel('<MouseWheel>', delta=-30)
+            selected(4)
+            wheel('<MouseWheel>', delta=-150)
+            selected(8)
+            wheel('<MouseWheel>', delta=-90)
+            selected(12)
+        wheel('<MouseWheel>', delta=-unit, count=100)
+        selected(20)
+        wheel('<Button-5>', count=20)
+        selected(20)
+        wheel('<MouseWheel>', delta=unit, count=100)
+        selected(0)
+        wheel('<Button-5>', target=view.close_button, count=10)
+        selected(0)
+        wheel('<Button-5>', target=view.search_entry)
+        selected(0)
+        before = view.catalog.canvas.yview()
+        wheel('<Button-5>', target=view.detail.canvas)
+        selected(0)
+        self.assertEqual(view.catalog.canvas.yview(), before)
+        view.window.geometry('600x420')
+        self.window.update()
+        wheel('<Button-5>')
+        selected(4)
+        wheel('<Button-4>')
+        selected(0)
+        view.window.destroy()
+
+    def test_achievement_pending_wheel_filter_refresh_and_close(self):
+        view = self.app.achievements()
+        self.window.update()
+
+        def queue_wheel():
+            row = view.rows[view.visible[0].id]
+            row.event_generate('<Button-5>', x=40, y=10)
+            self.assertIsNotNone(view.wheel_job)
+
+        queue_wheel()
+        view.search.set('tune-up')
+        self.window.update()
+        self.assertIsNone(view.wheel_job)
+        self.assertEqual(view.selected, view.visible[0].id)
+        view.rows[view.visible[0].id].event_generate('<Button-5>', x=40, y=10)
+        self.assertIsNone(view.wheel_job)
+        self.assertEqual(view.selected, view.visible[0].id)
+        view.search.set('no-such-title')
+        self.window.update()
+        view.catalog.canvas.event_generate('<Button-5>', x=40, y=40)
+        self.assertIsNone(view.wheel_job)
+        self.assertIsNone(view.selected)
+        view.search.set('')
+        self.window.update()
+        queue_wheel()
+        view.refresh()
+        self.window.update()
+        self.assertIsNone(view.wheel_job)
+        queue_wheel()
+        view.window.destroy()
+        self.window.update()
+        self.assertIsNone(view.wheel_job)
+
+    def test_achievement_scroll_keeps_embedded_rows_and_their_artwork_drawn(self):
+        view = self.app.achievements()
+        view.window.geometry('1040x760')
+        self.window.update()
+        paper = view.catalog.content
+        first = view.rows[view.visible[0].id]
+        first.focus_force()
+        self.window.update()
+        self.assertTrue(any(first.itemcget(item, 'dash') for item in first.find_all()
+                            if first.type(item) == 'rectangle'))
+        windows = [item for item in paper.find_all() if paper.type(item) == 'window']
+        unchanged_row = view.rows[view.visible[5].id]
+        row_items = unchanged_row.find_all()
+
+        def settle():
+            deadline = time.monotonic() + .15
+            while time.monotonic() < deadline:
+                self.window.update()
+                time.sleep(.005)
+
+        with patch.object(paper, 'render', wraps=paper.render) as redraw:
+            view.rows[view.visible[0].id].event_generate('<Button-5>', x=40, y=10)
+            settle()
+            self.assertEqual(view.selected, view.visible[4].id)
+            redraw.assert_not_called()
+            self.assertEqual(windows, [item for item in paper.find_all() if paper.type(item) == 'window'])
+            self.assertTrue(unchanged_row.winfo_ismapped())
+            self.assertEqual(unchanged_row.find_all(), row_items)
+            # Scrolling the scrollbar must also preserve the embedded windows.
+            view.catalog.canvas.yview_moveto(.8)
+            settle()
+            view.catalog.canvas.yview_moveto(0)
+            settle()
+            redraw.assert_not_called()
+            self.assertTrue(view.rows[view.visible[0].id].winfo_ismapped())
+            # A real resize must still reflow and repaint the paper.
+            view.window.geometry('900x600')
+            settle()
+            self.assertTrue(redraw.called)
         view.window.destroy()
 
     def test_missing_capture_corrupt_record_and_fallbacks(self):

@@ -2,6 +2,7 @@
 import json
 import math
 import os
+import re
 import tempfile
 from copy import deepcopy
 from pathlib import Path
@@ -12,7 +13,8 @@ DEFAULTS = {'version': 1, 'bindings': DEFAULT_BINDINGS, 'sensitivity': 1.0,
             'window_mode': 'windowed', 'window_width': 800, 'window_height': 480,
             'presentation_rate': 20, 'achievement_capture': 'screenshot',
             'achievement_clip_seconds': 10, 'game_language': 'en',
-            'launcher_language': 'en'}
+            'launcher_language': 'en', 'laser_color': '#ff0000',
+            'laser_shape': 'original', 'laser_size': 1.0}
 
 
 def settings_path():
@@ -32,12 +34,17 @@ def validate(values):
     if type(result['version']) is not int or result['version'] != 1:
         raise ValueError('Unsupported settings version')
     for name, minimum, maximum in (('sensitivity', 0.05, 10), ('controller_sensitivity', 0.05, 10),
-                                   ('stick_dead_zone', 0.0, 0.9)):
+                                   ('stick_dead_zone', 0.0, 0.9), ('laser_size', 0.5, 3.0)):
         number = result[name]
         if isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number) or not minimum <= number <= maximum:
             raise ValueError(f'{name} must be between {minimum} and {maximum}')
     if type(result['invert_y']) is not bool:
         raise ValueError('invert_y must be boolean')
+    if not isinstance(result['laser_color'], str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', result['laser_color']):
+        raise ValueError('laser_color must be a hex color like #ff0000')
+    result['laser_color'] = result['laser_color'].lower()
+    if result['laser_shape'] not in ('original', 'circle', 'predator', 'black_matter'):
+        raise ValueError('laser_shape must be original, circle, predator or black_matter')
     if result['window_mode'] not in ('windowed', 'fullscreen'):
         raise ValueError('window_mode must be windowed or fullscreen')
     from .languages import GAME_LANGUAGES, LAUNCHER_LANGUAGES

@@ -83,6 +83,7 @@ class Game:
         self.frames = 0
         self.input_events = 0
         self.touch_previous = (0, 0)
+        self.native_touch_down = False
         self.key_sources = {}
         self.key_routes = {}
         self.keymap = key_map(self.settings)
@@ -90,6 +91,8 @@ class Game:
         self.story_keys = set()
         self.desktop_input = DesktopInput(self.touch, self.key,lambda down,button:self.pc.button(down,button))
         self.skipping_touch = False
+        self.recapture_click = False
+        self.gameplay_click = False
         self.pc = PCControls(self.arm,controls=='pc')
         self.menu = MenuControls(self.arm, self.touch, enabled=controls=='pc',
                                  cursor=self.graphics.controller.cursor, settings=self.settings)
@@ -111,6 +114,9 @@ class Game:
             self.arm.relocate()
             self.pc.install()
             self.menu.install()
+            from .laser import LaserSight
+            self.graphics.laser = LaserSight(self.graphics, self.settings)
+            self.graphics.laser.install()
             self.achievements = AchievementTracker(self.arm, self.root)
             self.unlock_capture = UnlockCapture(self.root, self.achievements.store, self.settings)
             self.save_boundary = SaveBoundary(self.arm, self.save_store, self.achievements.capture)
@@ -131,10 +137,20 @@ class Game:
             log.info('Engine ready; %d FPS native cadence; WASD move, RMB aim, LMB fire, R reload, Tab cursor, F12 quit',ENGINE_HZ)
 
     def touch(self, action, x, y):
+        # Only visible UI targets accept a released gameplay pointer. Hidden
+        # combat controls and captured fire must never receive native touches.
+        if action != 'up' and self.pc.enabled and self.pc.active and self.media.video is None:
+            if not self.mouse_released or not (
+                    getattr(self, 'native_touch_down', False) if action == 'move'
+                    else self.pc.pointer_target(x, y)):
+                return
+        if action == 'up' and not getattr(self, 'native_touch_down', False):
+            return
         methods = {'down':'native_onTouchBegan','move':'native_onTouchMoved','up':'native_onTouchEnded'}
         previous = (x, y) if action == 'down' else self.touch_previous
         self.jni.native(methods[action],self.jni.activity,float_out(x),float_out(y),float_out(previous[0]),float_out(previous[1]))
         self.touch_previous = (x, y)
+        self.native_touch_down = action != 'up'
         self.input_events += 1
 
     def key(self, down, code):
@@ -178,8 +194,6 @@ class Game:
         if kind.startswith('controller_') and controller:
             if kind == 'controller_removed' and getattr(self, 'menu', None):
                 self.menu.cancel()
-            if self.pc.active and kind in ('controller_button', 'controller_axis'):
-                self.mouse_released = False
             controller.gameplay = self.pc.active
             controller.process(event)
             return True
@@ -199,6 +213,7 @@ class Game:
                 if controller: controller.release()
                 if getattr(self, 'mouse_bindings', None): self.mouse_bindings.release()
                 self.pc.release()
+                self.update_mouse_capture()
                 return True
             if self.media.video is not None and down and mapped_code in (66,32,23):
                 self.media.end_video()
@@ -214,17 +229,44 @@ class Game:
                 self.desktop_input.enqueue(('touch',down,742,416))
                 return True
             if key in getattr(self, 'keymap', KEYS): self.desktop_input.enqueue(('key',down,key))
-        elif kind=='touch':
+        elif kind in ('touch', 'mouse_button'):
+            down = event[1]
+            button = 1 if kind == 'touch' else event[2]
+            # Consume the entire click that recaptures, even if a menu opens
+            # before its release. It must neither fire nor activate a button.
+            if button == 1 and getattr(self, 'recapture_click', False):
+                if not down: self.recapture_click = False
+                return True
+            # Keep a UI press on the touch route through its release, even
+            # when that press opens inventory or another native overlay.
+            if button == 1 and getattr(self, 'gameplay_click', False):
+                if kind == 'touch': self.desktop_input.enqueue(event)
+                elif not down:
+                    self.desktop_input.enqueue(('touch', False, *self.desktop_input.position))
+                if not down: self.gameplay_click = False
+                return True
+            if self.pc.enabled and self.pc.active and self.media.video is None:
+                if self.mouse_released:
+                    if button == 1 and down:
+                        if kind == 'touch' and self.pc.pointer_target(*event[2:]):
+                            self.gameplay_click = True
+                            self.desktop_input.enqueue(event)
+                            return True
+                        self.mouse_released = False
+                        self.recapture_click = True
+                        self.update_mouse_capture()
+                    return True
+                self.update_mouse_capture()
+                mapped = self.mouse_bindings.event(down, button)
+                if mapped: self.desktop_input.enqueue(mapped)
+                return True
+            if kind == 'mouse_button' or self.mouse_captured:
+                return True
             if getattr(self, 'menu', None) and self.menu.active:
                 self.menu.cancel()
                 self.menu.cursor[:] = event[2:]
             down,x,y = event[1:]
-            if self.mouse_captured:
-                mapped = self.mouse_bindings.event(down,1)
-                if mapped: self.desktop_input.enqueue(mapped)
-            elif down and self.pc.enabled and self.pc.active and self.mouse_released:
-                self.mouse_released=False
-            elif down and self.media.video is not None:
+            if down and self.media.video is not None:
                 self.media.end_video()
                 self.skipping_touch = True
             elif self.skipping_touch:
@@ -233,13 +275,12 @@ class Game:
         elif kind=='motion':
             if getattr(self, 'menu', None) and self.menu.active:
                 self.menu.cursor[:] = event[1:]
-            if not self.mouse_captured and not self.skipping_touch: self.desktop_input.enqueue(event)
-        elif kind=='mouse_button':
-            if self.pc.active and not self.mouse_released:
-                mapped = self.mouse_bindings.event(*event[1:])
-                if mapped: self.desktop_input.enqueue(mapped)
+            if not self.mouse_captured and not self.skipping_touch and (
+                    getattr(self, 'gameplay_click', False) or not (self.pc.enabled and self.pc.active)):
+                self.desktop_input.enqueue(event)
         elif kind=='mouse_delta':
-            if self.mouse_captured:self.pc.move(*event[1:])
+            if self.mouse_captured and not self.mouse_released and self.pc.active:
+                self.pc.move(*event[1:])
         elif kind=='focus_lost':
             if getattr(self, 'menu', None): self.menu.cancel()
             if controller: controller.release()
@@ -248,7 +289,26 @@ class Game:
             self.pc.release()
             self.mouse_released=True
             self.skipping_touch=False
+            self.recapture_click=False
+            self.gameplay_click=False
+            self.update_mouse_capture()
         return True
+
+    def update_mouse_capture(self):
+        capture = (getattr(self.pc, 'enabled', False) and self.pc.active and
+                   not self.mouse_released and self.media.video is None)
+        if capture == getattr(self, 'mouse_captured', False):
+            return
+        self.gameplay_click = False
+        self.desktop_input.release()
+        self.mouse_bindings.release()
+        controller = getattr(self.graphics, 'controller', None)
+        if controller: controller.release()
+        self.pc.release()
+        with self.phase('input_capture', 'SDL_SetRelativeMouseMode'):
+            self.graphics.capture_mouse(capture)
+        self.mouse_captured = capture
+        log.info('Mouse %s', 'captured for gameplay' if capture else 'released')
 
     def configure_controls(self, settings):
         """Release using the old bindings before applying a remap."""
@@ -267,6 +327,7 @@ class Game:
         self.graphics.controller.configure(settings)
         self.pc.sensitivity = settings['sensitivity']
         self.pc.invert_y = settings['invert_y']
+        self.graphics.laser.configure(settings)
         self.settings = settings
 
     def frame(self):
@@ -295,16 +356,7 @@ class Game:
         self.graphics.draw_controller_cursor()
         if self.menu.active and self.media.video is None:
             self.graphics.draw_menu_hints(self.menu.hints(), self.menu.cursor)
-        capture=self.pc.active and not self.mouse_released and self.media.video is None
-        if capture != self.mouse_captured:
-            self.desktop_input.release()
-            self.mouse_bindings.release()
-            if controller: controller.release()
-            with self.phase('input_capture', 'SDL_SetRelativeMouseMode'):
-                if self.graphics.sdl.SDL_SetRelativeMouseMode(int(capture)):
-                    raise RuntimeError('Cannot capture mouse: '+self.graphics.sdl.SDL_GetError().decode())
-            self.mouse_captured=capture
-            log.info('Mouse %s', 'captured for gameplay' if capture else 'released')
+        self.update_mouse_capture()
         self.frames += 1
         if self.frames == 3:
             from .languages import apply_game_language

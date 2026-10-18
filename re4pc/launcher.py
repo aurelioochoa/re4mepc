@@ -94,8 +94,8 @@ class Launcher:
         self.assets = Path(__file__).resolve().parent / 'ui_assets'
         self.configure_style()
         window.title(self.tr('Resident Evil 4 Mobile - Launcher'))
-        window.geometry('1280x720')
-        window.minsize(1000, 600)
+        window.geometry(f'{min(1280, window.winfo_screenwidth())}x{min(720, window.winfo_screenheight())}')
+        window.minsize(640, 520)
         window.configure(background=self.colors['background'])
         self.game = tk.StringVar(value=str(game or game_dir()))
         self.status = tk.StringVar(value='Ready')

@@ -60,3 +60,71 @@ Snapshots cache exact queries and are not a persistent provider database. A new
 query may re-import/analyze the library. Static references and pseudocode explain
 runtime observations; they do not measure execution time. Preserve provider
 limitations when interpreting incomplete call graphs or decompilation.
+
+## Aiming and firing investigation
+
+The 2026-10-14 investigation used the same REA/Ghidra toolchain to inspect
+`GM_CtrlSub_LaserSite::Draw`, `GM_CtrlMain_Player::_State_AtkAimM` and
+`GM_CtrlMain_Player::_Set_AimMainRot` in the supported engine. REA evidence,
+supporting Capstone disassembly and private runtime captures are stored under
+`/tmp/re4-combat/`; they are not distribution assets.
+
+The laser draw uses a separate visibility flag. The native difficulty table
+suppresses it on Extreme (index 4), which was also the selected difficulty in
+a private copy of the reported save. PC mode now overrides only
+`Get_Diff_LaserSiteNonDrawFlg` at its return; explicit laser-off requests,
+collision endpoints, recoil, ammunition and other difficulty parameters keep
+their native behavior. Touch mode retains the original suppression.
+
+The native aiming state reads the fire scan, ignores its initialization
+substate, and checks the shot cooldown and previous-press latch. A click that
+ends during startup or recoil previously vanished. PC controls now retain one
+pending click for up to 20 engine updates and submit it once the native aiming
+state can accept it. A held button retains native repeat behavior. Releasing
+aim, losing focus, entering a menu/story, damage, expiry or a new player
+lifecycle discards the queued click. Aim startup receives no repeated toggle
+trigger while the weapon is being raised.
+
+Run the isolated engine regression with your imported game available:
+
+```bash
+SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
+  .venv/bin/python tools/test_combat.py --output /tmp/re4-combat/check
+```
+
+It enters the existing synthetic mission-2 fixture on Extreme, compares pixels
+immediately before/after the native laser draw against a hidden-laser negative
+control, sweeps aim angles and measures ammunition for quick mouse/keyboard
+clicks during startup and recoil. It also checks reload and cancellation. It
+does not qualify a full campaign or physical input hardware.
+
+## Laser sight appearance
+
+The launcher now offers Original, Circle, Predator (three dots) and animated
+Black Matter artwork, with an RGB color picker and size multiplier. Defaults
+preserve the native draw. Settings are host preferences; the renderer does not
+patch game resources, saves, collision or damage calculations. Black Matter's
+procedural purple/blue pattern uses the selected color as an accent.
+
+The draw scope follows the same REA/Ghidra evidence described above and checked
+against Capstone for the supported library. Only GL submissions inside the
+laser draw are customized. Custom artwork reuses the endpoint model's native
+vertices, indices, model/view/projection matrices and draw calls. The engine
+therefore determines distance scaling, visibility, depth tests, blending and
+fade/alpha. No extra endpoint is drawn from the beam alone. Original keeps its
+native point geometry; other shapes change the artwork within that geometry.
+The optional user size multiplier scales the native model about its own origin.
+Host textures, UV arrays, upload state, matrices and color are restored after
+each draw. The launcher preview uses the same procedural artwork.
+
+The game-free tests cover preference migration and validation, color-picker
+cancellation, preview/save/reset, minimum-size layout, Predator's three separate
+dots, Black Matter animation, projection and real offscreen GL state/depth.
+An isolated native-engine regression is available with imported game data:
+
+```bash
+SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
+  .venv/bin/python tools/test_laser.py --output /tmp/re4-laser/check
+```
+
+All game fixtures, screenshots and analysis stay outside the checkout.

@@ -1276,6 +1276,89 @@ TEMPLATE_CATALOGS = {
     },
 }
 
+# Laser customization labels share the existing presentation catalogs.
+_LASER_LABELS = {'es': ['Mira láser',
+        'Forma de la mira',
+        'Color del láser',
+        'Tamaño de la mira',
+        'Original',
+        'Círculo',
+        'Predator',
+        'Black Matter',
+        'Elegir color',
+        'Restablecer mira',
+        'Personaliza tu puntería',
+        'Elige un color o escribe #RRGGBB. Predator usa tres puntos. Black Matter anima un patrón '
+        'cósmico con tu color como acento. Tamaño: 0.5 a 3.0. Se aplica al iniciar el juego.'],
+ 'fr': ['Viseur laser',
+        'Forme du viseur',
+        'Couleur du laser',
+        'Taille du viseur',
+        'Original',
+        'Cercle',
+        'Predator',
+        'Black Matter',
+        'Choisir la couleur',
+        'Réinitialiser',
+        'Personnalisez votre visée',
+        'Choisissez une couleur ou saisissez #RRGGBB. Predator utilise trois points. Black Matter '
+        'anime un motif cosmique avec votre couleur en accent. Taille : 0.5 à 3.0. Appliqué au '
+        'prochain lancement.'],
+ 'de': ['Laservisier',
+        'Visierform',
+        'Laserfarbe',
+        'Visiergröße',
+        'Original',
+        'Kreis',
+        'Predator',
+        'Black Matter',
+        'Farbe wählen',
+        'Zurücksetzen',
+        'Visier anpassen',
+        'Farbe wählen oder #RRGGBB eingeben. Predator verwendet drei Punkte. Black Matter animiert '
+        'ein kosmisches Muster mit deiner Akzentfarbe. Größe: 0.5 bis 3.0. Gilt beim nächsten '
+        'Start.'],
+ 'it': ['Mirino laser',
+        'Forma del mirino',
+        'Colore del laser',
+        'Dimensione mirino',
+        'Originale',
+        'Cerchio',
+        'Predator',
+        'Black Matter',
+        'Scegli colore',
+        'Ripristina mirino',
+        'Personalizza la mira',
+        'Scegli un colore o inserisci #RRGGBB. Predator usa tre punti. Black Matter anima un '
+        'motivo cosmico con il tuo colore come accento. Dimensione: da 0.5 a 3.0. Si applica al '
+        'prossimo avvio.'],
+ 'ja': ['レーザーサイト',
+        '照準の形',
+        'レーザーの色',
+        '照準のサイズ',
+        'オリジナル',
+        '円',
+        'プレデター',
+        'ブラックマター',
+        '色を選択',
+        '照準をリセット',
+        '照準をカスタマイズ',
+        '色を選ぶか #RRGGBB を入力。プレデターは3点、ブラックマターは選択色をアクセントに宇宙模様をアニメーション表示。サイズ：0.5～3.0。次回起動時に適用。']}
+for _language, _labels in _LASER_LABELS.items():
+    CATALOGS[_language].update(dict(zip(['Laser sight',
+ 'Sight shape',
+ 'Laser color',
+ 'Sight size',
+ 'Original',
+ 'Circle',
+ 'Predator',
+ 'Black Matter',
+ 'Choose color',
+ 'Reset sight',
+ 'Customize your aim',
+ 'Choose a color or enter #RRGGBB. Predator uses three dots. Black Matter animates a cosmic '
+ 'pattern with your color as its accent. Size: 0.5 to 3.0. Changes apply on next launch.'], _labels)))
+
 _PATTERNS = []
 for source in TEMPLATES:
     parts = re.split(r'(\{\w+\})', source)

@@ -7,6 +7,22 @@ gameplay mosaic is a documentation image; component tests need no gameplay captu
 
 ## Repeatable source-only verification
 
+The aiming/shooting investigation on 2026-10-14 adds nine combat component
+regressions (322 component tests total). REA 6.4.0/Ghidra 12.1.4 identifies
+Extreme's deliberate laser suppression and the native fire scan/cooldown
+checks. A private copy of the reported save selects Extreme. PC mode now
+shows the laser at that difficulty and buffers quick fire taps through startup
+and recoil. See [the investigation and isolated engine command](docs/rea-workflow.md#aiming-and-firing-investigation).
+
+The isolated Extreme replay renders 262 changed pixels in the native laser
+draw versus zero with the original suppression; six aim-angle checks render
+142–328 pixels. The startup tap consumes one round (10 → 9), two clicks
+separated by recoil consume two (9 → 7), and keyboard fire/reload returns the
+magazine to 10. Aim release and focus loss cancel a buffered shot without
+consuming ammunition. These are synthetic mission-2 regression results, not
+full campaign or physical-controller qualification. Raw captures and results
+remain external at `/tmp/re4-combat/verified/`.
+
 From a clean Git clone:
 
 ```bash
@@ -327,3 +343,56 @@ Earlier GPU/session/performance evidence remains tied to its historical hashes.
 Campaign completion, two-hour endurance, physical-device coverage and the known
 intermittent initialization exception remain deferred. User imports and saves,
 the preceding release artifacts and raw private evidence remain external/preserved.
+
+## Laser sight customization — 2026-10-14
+
+The source launcher adds color, Original/Circle/Predator/Black Matter shapes,
+size, live preview and reset under Settings & controls → Laser sight. Existing
+preferences retain the native red sight. Ten synthetic tests cover preference
+validation/roundtrips, the real Tk picker and save/reset lifecycle, minimum-size
+layout, procedural shapes/animation, projection, and offscreen GL state/depth.
+
+`tools/test_laser.py` exercises an isolated mission-2 fixture: native red and
+selected green beam pixels, all custom markers, each Predator dot's selected
+color, size changes, native aim tracking, and explicit visibility-off/on controls.
+It also exercises the native endpoint-model branch with a fixture-only endpoint
+injection; this does not qualify enemy-hit detection or a full campaign. Host
+textures follow the native 16.16 beam endpoint and restore graphics state. Raw
+captures/results remain external under `/tmp/re4-laser/`. Existing published
+AppImage/archive artifacts have not been rebuilt for this source feature.
+
+### Native sight behavior — 2026-10-15
+
+Custom artwork now reskins the actual native endpoint submission. Its vertices,
+indices, positioning, projection, visibility checks, depth/blend state and
+current intensity/alpha remain native. The previous host overlay and its
+constant pixel size have been removed. The optional user size multiplier scales
+the original endpoint model, and custom colors preserve its native fade.
+
+Offscreen GL checks compare custom artwork with the native quad at three camera
+depths, verify the size multiplier, inherited depth/fading/alpha, animation and
+OpenGL state restoration, and check that scope exit never adds an extra draw.
+The isolated native regression compares submitted geometry and render state
+before/during/after customization, native visibility-off cases, alpha-zero
+controls and native marker sizes at different aim distances. Endpoint visibility
+is injected only as a positive fixture control, without modifying game files or
+user saves. Current display restrictions may skip native Tk widget tests.
+
+### Gameplay mouse capture — 2026-10-17
+
+PC gameplay now routes captured SDL buttons directly to desktop actions and
+blocks native touchscreen presses and dragging. Capture centers the pointer in
+window coordinates, enables relative movement and the window grab, and hides
+the cursor. Tab and focus loss update capture immediately. A recapture click
+is consumed through release, including a menu transition during that click;
+controller activity no longer overrides a deliberate cursor release.
+
+The 19 mouse-capture and graphics tests passed, including a real offscreen SDL
+check of relative mode, cursor visibility, centering and injected button/motion
+events outside the viewport. Additional input, key, controller and menu tests
+passed. `make check` ran 349 tests with one failure in the existing launcher
+achievement wheel timing test; that test passed when rerun alone. The isolated
+native combat replay passed all seven cases, including buffered clicks, aim
+angles, keyboard/reload, aim release and focus loss. Its report is external at
+`/tmp/re4-mouse-capture/combat/results.json`. Offscreen SDL does not verify a
+physical desktop pointer grab. Existing distribution packages were not rebuilt.

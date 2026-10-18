@@ -1,7 +1,7 @@
 """Case-file presentation for the native launcher, with keyboard operable controls."""
 import tkinter as tk
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageOps, ImageTk
 from .languages import GAME_LANGUAGES, LAUNCHER_LANGUAGES, widget_translate
 
 
@@ -149,6 +149,13 @@ class ArtworkButton(tk.Canvas):
                              width=max(60, width-52) if self.kind == 'section' else max(60, width-12))
             if self.kind == 'section' and selected:
                 self.create_text(width - 20, height / 2, text='›', fill=color, font=font(26))
+        elif self.kind == 'paper-compact':
+            if active:
+                self.create_rectangle(1, 1, width - 1, height - 1,
+                                      fill='#977743', stipple='gray12', outline='')
+            self.create_text(width / 2, height / 2 + offset, text=self.label,
+                             font=font(17), fill=INK if self.enabled else '#78654b',
+                             width=width - 12)
         elif self.kind == 'paper':
             if active:
                 self.create_rectangle(1, 1, width - 1, height - 1,
@@ -181,7 +188,7 @@ class ArtworkButton(tk.Canvas):
                                  fill='#9d8860')
         if self.enabled and self.focus_get() is self:
             self.create_rectangle(3, 3, width - 4, height - 4,
-                                  outline='#6b3c19' if self.kind in ('paper', 'paper-outline', 'danger', 'section', 'segment') else IVORY,
+                                  outline='#6b3c19' if self.kind in ('paper', 'paper-compact', 'paper-outline', 'danger', 'section', 'segment') else IVORY,
                                   dash=(3, 3), width=2)
 
     def create_text(self, *args, **options):
@@ -191,7 +198,7 @@ class ArtworkButton(tk.Canvas):
             from tkinter.font import Font
             available = options.get('width') or self.winfo_width() - (
                 112 * self.scale if self.kind == 'paper' else 120 * self.scale if self.kind == 'play' else 16)
-            face = Font(master=self, font=options['font'])
+            face = Font(root=self, font=options['font'])
             size = abs(face.cget('size'))
             measured = face.measure(options['text'])
             if measured > available:
@@ -203,7 +210,7 @@ class ArtworkButton(tk.Canvas):
 
 
 class CaseFileView:
-    """Scale a 1672 × 941 composition uniformly, keeping every action reachable."""
+    """Recompose the case file to fill wide, short and portrait windows."""
     def __init__(self, launcher):
         self.app = launcher
         self.canvas = tk.Canvas(launcher.window, highlightthickness=0, background='#15160f')
@@ -292,7 +299,7 @@ class CaseFileView:
         self.browse_button = self.action('Browse', launcher.browse, (1296, 737, 151, 48), kind='outline')
         launcher.import_button = self.action('Import APK', launcher.import_apk, (1472, 737, 160, 48), kind='outline')
         launcher.diagnostics_button = self.action('Diagnostics', launcher.diagnostics, (170, 884, 100, 39))
-        self.action('View logs', launcher.show_logs, (294, 884, 92, 39), busy=False)
+        self.logs_button = self.action('View logs', launcher.show_logs, (294, 884, 92, 39), busy=False)
         launcher.stop_button = self.action('Stop', launcher.stop, (1542, 821, 90, 38), kind='stop', busy=False)
         launcher.stop_button.configure(state='disabled')
         # Dialog/process code shares this style state; visible status is drawn on canvas.
@@ -348,73 +355,196 @@ class CaseFileView:
         if self.layout_job:
             self.canvas.after_cancel(self.layout_job)
         self.layout_job = None
-        self.scale = min(width / 1672, height / 941)
-        s = self.scale
-        w, h = round(1672 * s), round(941 * s)
-        self.origin = ((width - w) // 2, (height - h) // 2)
-        ox, oy = self.origin
-        self.scaled = self.source.resize((w, h), Image.Resampling.LANCZOS)
+        if width < 2 or height < 2:
+            return
+        self.scale, self.origin = 1, (0, 0)
+        self.stacked = width < 900
+        ui = min(1.25, max(.85, min(width / 1280, height / 720)))
+        margin = 14 if self.stacked else max(14, round(24 * ui))
+        gap = margin
+        header, footer = round(48 * ui), round(46 * ui)
+        top, bottom = header + margin, height - footer - margin
+        area = bottom - top
+        if self.stacked:
+            paper_height = max(176, round(area * .43))
+            # Reserve real space for both language selectors, installation and
+            # operation feedback before giving any room to decoration.
+            paper_height = min(paper_height, area - gap - 214)
+            paper = (margin, top, width - margin * 2, paper_height)
+            right = (margin, top + paper_height + gap, width - margin * 2,
+                     area - paper_height - gap)
+        else:
+            paper_width = round((width - margin * 2 - gap) * .47)
+            paper = (margin, top, paper_width, area)
+            right = (margin + paper_width + gap, top,
+                     width - margin * 2 - gap - paper_width, area)
+
+        # Only the presentation stretches/crops. Controls use independent bounds
+        # and readable type, rather than inheriting a fixed image aspect ratio.
+        background = self.source.crop((839, 650, 1672, 941))
+        self.scaled = ImageOps.fit(background, (width, height), Image.Resampling.LANCZOS)
+        self.scaled = Image.blend(self.scaled, Image.new('RGB', (width, height), '#15160f'), .4)
+        px, py, pw, ph = paper
+        sheet = self.source.crop((20, 78, 804, 858))
+        paper_texture = sheet.crop((0, 300, sheet.width, sheet.height)) if self.stacked else sheet
+        self.scaled.paste(ImageOps.fit(paper_texture, (pw, ph), Image.Resampling.LANCZOS), (px, py))
+        rx, ry, rw, rh = right
+        block_height = round(224 * ui) if not self.stacked else 214
+        form_y = bottom - block_height
+        photo_height = form_y - ry - gap
+        if photo_height >= 100:
+            frame = max(5, round(9 * ui))
+            photograph = ImageOps.fit(self.source.crop((839, 109, 1623, 598)),
+                                      (rw - frame * 2, photo_height - frame * 2),
+                                      Image.Resampling.LANCZOS, centering=(.5, .35))
+            self.scaled.paste(sheet.resize((rw, photo_height), Image.Resampling.LANCZOS), (rx, ry))
+            self.scaled.paste(photograph, (rx + frame, ry + frame))
         self.image = ImageTk.PhotoImage(self.scaled)
         self.canvas.delete('all')
-        self.canvas.create_image(ox, oy, image=self.image, anchor='nw')
-        self.text(30, 28, 'r e 4 m e p c', 20, color=IVORY, family='DejaVu Serif', anchor='w')
-        self.line(209, 12, 209, 51, '#514a37')
-        self.line(0, 52, 1672, 52, '#514a37')
-        if self.wordmark_source:
-            word_width = max(1, round(398 * s))
-            word_height = max(1, round(word_width * self.wordmark_source.height / self.wordmark_source.width))
-            self.wordmark_image = ImageTk.PhotoImage(self.wordmark_source.resize(
-                (word_width, word_height), Image.Resampling.LANCZOS))
-            self.canvas.create_image(ox + 227 * s, oy + 242 * s,
-                                     image=self.wordmark_image, anchor='nw')
-        else:
-            self.text(227, 258, 'RESIDENT EVIL', 34, color=INK, family='DejaVu Serif', weight='bold')
+        self.canvas.create_image(0, 0, image=self.image, anchor='nw', tags='backdrop')
+        self.bounds = {}
+
+        def label(x, y, text, size=16, **options):
+            return self.text(x, y, text, round(size * ui), **options)
+
+        def position(button, bounds, scale=ui):
+            x, y, w, h = bounds
+            # Round shared edges together so adjacent actions never overlap by
+            # one pixel at fractional widths or display scales.
+            bounds = (round(x), round(y), round(x + w) - round(x), round(y + h) - round(y))
+            button.position(self.scaled, bounds, scale)
+            self.bounds[button] = bounds
+
+        label(margin, header / 2, 'r e 4 m e p c', 18, anchor='w')
+        self.line(0, header, width, header, '#514a37')
+        # On narrow windows the three utility actions already live on the paper.
+        # Keep a direct route to the folder without repeating them in a tight row.
+        visible_nav = ('installation',) if self.stacked else tuple(self.nav)
+        nav_x = round(158 * ui) if not self.stacked else width - margin - 140
+        available = width - margin - nav_x
+        from tkinter.font import Font
+        face = Font(root=self.canvas, family='DejaVu Serif', size=-round(16 * ui))
+        weights = {key: face.measure(self.app.tr(self.nav[key].label)) + 24 for key in visible_nav}
+        total = sum(weights.values())
+        for key, button in self.nav.items():
+            if key not in visible_nav:
+                if self.app.window.focus_get() is button:
+                    target = {'overview': self.app.play_button if self.app.play_button.enabled else self.app.import_button,
+                              'settings': self.settings_button, 'backups': self.app.backups_button,
+                              'achievements': self.app.achievements_button}[key]
+                    target.focus_set()
+                button.place_forget()
+                continue
+            nav_width = available * weights[key] / total
+            position(button, (nav_x, 0, nav_width, header), ui * .85)
+            nav_x += nav_width
+
+        pad = 14 if self.stacked else max(14, round(36 * ui))
+        content_x, content_width = px + pad, pw - pad * 2
+        play_height = round((52 if self.stacked else 72) * ui)
+        row_height = round((46 if self.stacked else 76) * ui)
+        action_bottom = py + ph - pad
+        row_y = action_bottom - row_height * (1 if self.stacked else 3)
+        play_y = row_y - play_height - round(10 * ui)
+        title_height = play_y - py - pad - round(14 * ui)
+        title_width = min(content_width, title_height * 2.25)
+        title_x = px + (pw - title_width) / 2
+        title_y = py + pad + (title_height - title_width / 2.25) / 2
+        compact_hero = self.stacked and ph < 260
+        if compact_hero:
+            title_height = row_y - py - pad - 8
+            title_width = min(content_width * .48, title_height * 2.25)
+            title_x = content_x + (content_width * .48 - title_width) / 2
+            title_y = py + pad + (title_height - title_width / 2.25) / 2
+        art_scale = title_width / 620
         if self.numeral_source:
-            numeral_height = max(1, round(242 * s))
+            numeral_height = max(1, round(260 * art_scale))
             numeral_width = max(1, round(numeral_height * self.numeral_source.width / self.numeral_source.height))
             self.numeral_image = ImageTk.PhotoImage(self.numeral_source.resize(
                 (numeral_width, numeral_height), Image.Resampling.LANCZOS))
-            self.canvas.create_image(ox + 79 * s, oy + 132 * s, image=self.numeral_image, anchor='nw')
+            self.canvas.create_image(title_x, title_y, image=self.numeral_image, anchor='nw')
         else:
-            self.text(69, 183, '4', 260, color='#741810', weight='bold')
-        self.text(227, 348, 'M O B I L E', 30, color=INK, weight='bold')
-        self.text(229, 390, 'P C  P O R T', 19, color=INK, family='DejaVu Sans Mono')
-        self.line(81, 642, 727, 642, '#8c7855')
-        self.line(81, 741, 727, 741, '#8c7855')
-        self.text(840, 615, 'The village', 15, color=INK, family='DejaVu Sans Mono')
-        for key, x, label in (('game_language', 1050, 'Game language'),
-                              ('launcher_language', 1350, 'Launcher language')):
-            self.text(x, 612, label, 14, color=INK, family='DejaVu Sans')
-            control = self.language_controls[key][0]
-            control.place(x=ox + round(x * s), y=oy + round(635 * s),
-                          width=round(280 * s), height=round(37 * s))
-            control.configure(font=('DejaVu Sans', -max(10, round(16 * s))))
-        self.text(839, 685, 'Installation', 25)
-        self.line(839, 717, 1631, 717, '#b8aa89')
-        self.text(839, 795, 'Your APK stays on your computer.', 17, color=MUTED)
-        self.line(28, 874, 819, 874, '#8d774a')
-        self.line(853, 874, 1644, 874, '#8d774a')
-        self.text(836, 874, '✦', 20, color='#b69b69', anchor='center')
-        self.line(153, 894, 153, 916, '#867659')
-        self.line(281, 894, 281, 916, '#867659')
-        self.text(1642, 904, 'Alt+Enter fullscreen  ·  F12 quit', 16, color=MUTED, anchor='e')
+            self.text(title_x, title_y, '4', max(32, round(240 * art_scale)), color=RED)
+        if self.wordmark_source:
+            word_width = max(1, round(440 * art_scale))
+            word_height = max(1, round(word_width * self.wordmark_source.height / self.wordmark_source.width))
+            self.wordmark_image = ImageTk.PhotoImage(self.wordmark_source.resize(
+                (word_width, word_height), Image.Resampling.LANCZOS))
+            self.canvas.create_image(title_x + 168 * art_scale, title_y + 115 * art_scale,
+                                     image=self.wordmark_image, anchor='nw')
+        else:
+            self.text(title_x + 168 * art_scale, title_y + 115 * art_scale,
+                      'RESIDENT EVIL', max(12, round(32 * art_scale)), color=INK)
+        self.text(title_x + 168 * art_scale, title_y + 208 * art_scale, 'M O B I L E',
+                  max(10, round(28 * art_scale)), color=INK, weight='bold')
+        if title_height >= 110:
+            self.text(title_x + 170 * art_scale, title_y + 249 * art_scale,
+                      'P C  P O R T', max(10, round(17 * art_scale)), color=INK,
+                      family='DejaVu Sans Mono')
+        if compact_hero:
+            position(self.app.play_button, (content_x + content_width * .53,
+                                            py + pad + (title_height - play_height) / 2,
+                                            content_width * .47, play_height), ui * .8)
+        else:
+            position(self.app.play_button, (content_x, play_y, content_width, play_height), ui * .9)
         self.app.utility_images = {
-            name: ImageTk.PhotoImage(image.resize((max(1, round(55 * s)), max(1, round(55 * s))),
-                                                  Image.Resampling.LANCZOS))
-            for name, image in self.icon_sources.items()}
-        self.settings_button.icon = self.app.utility_images.get('settings')
-        self.app.backups_button.icon = self.app.utility_images.get('backups')
-        self.app.achievements_button.icon = self.app.utility_images.get('achievements')
-        # Crop from the displayed plate so buttons have no opaque widget boxes.
-        self.bounds = {}
-        for button, (x, y, bw, bh) in self.buttons:
-            local = tuple(round(value * s) for value in (x, y, bw, bh))
-            button.position(self.scaled, local, s)
-            button.place_configure(x=ox + local[0], y=oy + local[1])
-            self.bounds[button] = (ox + local[0], oy + local[1], local[2], local[3])
-        self.app.game_entry.place(x=ox + round(839 * s), y=oy + round(736 * s),
-                                  width=round(440 * s), height=round(48 * s))
-        self.app.game_entry.configure(font=('DejaVu Sans Mono', -max(10, round(17 * s))))
+            name: ImageTk.PhotoImage(icon.resize((round(48 * ui), round(48 * ui)), Image.Resampling.LANCZOS))
+            for name, icon in self.icon_sources.items()}
+        utilities = ((self.app.achievements_button, 'achievements'),
+                     (self.settings_button, 'settings'), (self.app.backups_button, 'backups'))
+        for index, (button, name) in enumerate(utilities):
+            button.kind = 'paper-compact' if self.stacked else 'paper'
+            button.icon = self.app.utility_images.get(name)
+            if self.stacked:
+                cell = content_width / 3
+                position(button, (content_x + index * cell, row_y, cell, row_height), ui)
+                if index:
+                    self.line(content_x + index * cell, row_y + 6,
+                              content_x + index * cell, action_bottom - 6, '#8c7855')
+            else:
+                position(button, (content_x, row_y + index * row_height, content_width, row_height), ui)
+                if index:
+                    self.line(content_x, row_y + index * row_height,
+                              content_x + content_width, row_y + index * row_height, '#8c7855')
+
+        # Languages and installation stay anchored above the footer; the image
+        # receives the remaining height and disappears when the form needs it.
+        field_height = round(36 * ui) if not self.stacked else 32
+        language_gap = max(12, round(20 * ui))
+        language_width = (rw - language_gap) // 2
+        for index, (key, text) in enumerate((('game_language', 'Game language'),
+                                           ('launcher_language', 'Launcher language'))):
+            x = rx + index * (language_width + language_gap)
+            label(x, form_y, text, 14, color=MUTED, family='DejaVu Sans')
+            control = self.language_controls[key][0]
+            control.place(x=x, y=form_y + round(22 * ui), width=language_width, height=field_height)
+            control.configure(font=('DejaVu Sans', -round(14 * ui)))
+        install_y = form_y + round(70 * ui) if not self.stacked else form_y + 62
+        label(rx, install_y, 'Installation', 22)
+        self.installation_bounds = (rx + round(150 * ui), install_y, rw - round(150 * ui), round(28 * ui))
+        folder_y = install_y + round(34 * ui)
+        self.app.game_entry.place(x=rx, y=folder_y, width=rw, height=field_height)
+        self.app.game_entry.configure(font=('DejaVu Sans Mono', -round(14 * ui)))
+        buttons_y = folder_y + field_height + round(10 * ui)
+        action_width = (rw - 2 * language_gap) // 3
+        position(self.browse_button, (rx, buttons_y, action_width, field_height), ui)
+        position(self.app.import_button, (rx + action_width + language_gap, buttons_y,
+                                          action_width, field_height), ui)
+        self.stop_bounds = (rx + 2 * (action_width + language_gap), buttons_y, action_width, field_height)
+        position(self.app.stop_button, self.stop_bounds, ui)
+        self.status_bounds = (rx, buttons_y + field_height + round(8 * ui), rw, bottom)
+        self.progress_bounds = (rx, bottom - 3, rw, 3)
+
+        self.line(margin, height - footer, width - margin, height - footer, '#8d774a')
+        footer_y = height - footer + round(5 * ui)
+        self.footer_status = (margin, footer_y + round(16 * ui))
+        position(self.app.diagnostics_button, (margin + round(90 * ui), footer_y,
+                                              round(118 * ui), max(30, round(32 * ui))), ui)
+        position(self.logs_button, (margin + round(218 * ui), footer_y,
+                                    round(100 * ui), max(30, round(32 * ui))), ui)
+        if width >= 1100:
+            label(width - margin, footer_y + round(16 * ui), 'Alt+Enter fullscreen  ·  F12 quit',
+                  14, color=MUTED, anchor='e')
         self.update_status()
 
     def text(self, x, y, text, size, *, color=IVORY, family='DejaVu Serif', weight='normal', anchor='nw', **options):
@@ -429,54 +559,52 @@ class CaseFileView:
         self.canvas.create_line(ox + x1 * s, oy + y1 * s, ox + x2 * s, oy + y2 * s, fill=color)
 
     def update_status(self, *args):
-        if not hasattr(self, 'scale'):
+        if not hasattr(self, 'status_bounds'):
             return
         app = self.app
         self.canvas.delete('status')
         ready = app.installation.get() == 'Game files found'
         busy = app.child is not None
-        color = '#47572c' if ready else '#806137'
-        ox, oy = self.origin
-        s = self.scale
-        # The serif letters sit above their line-box center; align the visible ink with the badge.
-        label = self.text(0, 702, app.installation.get(), 22, weight='bold', anchor='w', tags='status')
-        label_bounds = self.canvas.bbox(label)
-        group_width = 44 * s + label_bounds[2] - label_bounds[0]
-        left = ox + 1235 * s - group_width / 2
-        self.canvas.move(label, left + 44 * s - label_bounds[0], 0)
-        cx, cy = left + 15 * s, oy + 697 * s
-        self.canvas.create_oval(cx - 15 * s, cy - 15 * s, cx + 15 * s, cy + 15 * s,
-                                fill=color, outline='', tags='status')
-        if ready:
-            # A drawn check keeps its visible strokes centered, independent of font metrics.
-            self.canvas.create_line(cx - 7 * s, cy, cx - 2 * s, cy + 5 * s,
-                                    cx + 7 * s, cy - 5 * s, fill=IVORY,
-                                    width=max(2, round(3 * s)), capstyle='round', joinstyle='round',
-                                    tags='status')
-        else:
-            self.text((cx - ox) / s, 697, '!', 23, color=IVORY, anchor='center', tags='status')
-        detail = 'Game is running.' if app.operation == 'run' and busy else 'Operation in progress.' if busy else (
-            'Ready to play.' if ready else 'Choose Import APK to install.')
-        self.text(1631, 795, detail, 17, color=MUTED, anchor='ne', tags='status')
-        status = app.status.get()
         error = app.status_label.cget('style') == 'Error.TLabel'
+        x, y, width, height = self.installation_bounds
+        self.text(x + width, y + height / 2, app.installation.get(), 13,
+                  color=MUTED, anchor='e', width=width, tags='status')
+        status = app.status.get()
+        detail = status if status != 'Ready' else (
+            'Game is running.' if app.operation == 'run' and busy else
+            'Operation in progress.' if busy else 'Ready to play.' if ready else
+            'Choose Import APK to install.')
+        x, y, width, bottom = self.status_bounds
+        # Full output remains in View logs. Keep the summary inside its reserved
+        # area even for child commands that return long multiline errors.
+        detail = ' '.join(self.app.tr(detail).split())
+        item = self.text(x, y, detail, 12, color='#e1ab91' if error else IVORY,
+                         width=width, tags='status')
+        if self.canvas.bbox(item)[3] > bottom - 7:
+            low, high = 0, len(detail)
+            while low < high:
+                middle = (low + high + 1) // 2
+                self.canvas.itemconfigure(item, text=detail[:middle].rstrip() + '…')
+                if self.canvas.bbox(item)[3] <= bottom - 7:
+                    low = middle
+                else:
+                    high = middle - 1
+            self.canvas.itemconfigure(item, text=detail[:low].rstrip() + '…')
         short = 'Working' if busy else 'Error' if error else 'Ready' if ready else 'Setup'
-        self.canvas.create_oval(ox + 30 * s, oy + 897 * s, ox + 45 * s, oy + 912 * s,
+        fx, fy = self.footer_status
+        self.canvas.create_oval(fx, fy - 5, fx + 10, fy + 5,
                                 fill='#6b2c21' if error else '#364d28' if ready else '#806137',
                                 outline='#a39369', tags='status')
-        self.text(59, 904, short, 18, anchor='w', tags='status')
-        if status != 'Ready':
-            self.text(839, 830, status, 16, color='#e1ab91' if error else IVORY,
-                      width=round((680 if busy else 790) * s), tags='status')
+        self.text(fx + 18, fy, short, 13, anchor='w', tags='status')
         for name in ('overview', 'settings', 'installation'):
             self.nav[name].configure(state='disabled' if busy else 'normal')
         self.nav['backups'].configure(state='normal' if ready and not busy else 'disabled')
         self.nav['achievements'].configure(state='normal' if ready and not busy else 'disabled')
         if busy:
-            app.stop_button.place_configure(x=ox + round(1542 * s), y=oy + round(821 * s),
-                                             width=round(90 * s), height=round(38 * s))
-            app.progress.place(x=ox + round(839 * s), y=oy + round(859 * s),
-                               width=round(792 * s), height=max(2, round(3 * s)))
+            x, y, width, height = self.stop_bounds
+            app.stop_button.place(x=x, y=y, width=width, height=height)
+            x, y, width, height = self.progress_bounds
+            app.progress.place(x=x, y=y, width=width, height=height)
         else:
             app.stop_button.place_forget()
             app.progress.place_forget()
@@ -539,11 +667,13 @@ def collect_settings(values, edits, binding_edits, sdl):
             original = values[key]
             if key in ('window_mode', 'achievement_capture'):
                 value = value.casefold()
+            elif key == 'laser_shape':
+                value = value.casefold().replace(' ', '_')
             elif key == 'presentation_rate':
                 value = value.removesuffix(' Hz')
             if isinstance(original, bool):
                 value = bool(value)
-            elif key in ('sensitivity', 'controller_sensitivity', 'stick_dead_zone'):
+            elif key in ('sensitivity', 'controller_sensitivity', 'stick_dead_zone', 'laser_size'):
                 value = float(value)
             elif isinstance(original, int):
                 value = int(value)
@@ -633,7 +763,7 @@ from .case_dialog import CaseDialog, PaperCanvas, PaperPane as CasePaperPane
 
 
 class SettingsView:
-    SECTIONS = ('Display & sensitivity', 'Achievements', 'Keyboard', 'Mouse', 'Controller')
+    SECTIONS = ('Display & sensitivity', 'Laser sight', 'Achievements', 'Keyboard', 'Mouse', 'Controller')
 
     def __init__(self, app, values, sdl):
         from tkinter import ttk
@@ -676,6 +806,24 @@ class SettingsView:
                 ('stick_dead_zone', 'Stick dead zone', None), ('invert_y', 'Invert look Y', None)):
             self.add_field(self.SECTIONS[0], key, label, values[key], choices)
         for key, label, choices in (
+                ('laser_shape', 'Sight shape', ('Original', 'Circle', 'Predator', 'Black Matter')),
+                ('laser_color', 'Laser color', None), ('laser_size', 'Sight size', None)):
+            self.add_field('Laser sight', key, label, values[key], choices)
+        self.laser_picker = ArtworkButton(self.panes['Laser sight'].content, 'Choose color', self.choose_laser_color,
+                                         kind='paper-outline')
+        self.laser_reset = ArtworkButton(self.panes['Laser sight'].content, 'Reset sight', self.reset_laser,
+                                        kind='paper-outline')
+        for control in (self.laser_picker, self.laser_reset):
+            control.bind('<FocusIn>', lambda event: self.panes['Laser sight'].reveal(event.widget), add='+')
+        self.laser_preview = tk.Canvas(self.panes['Laser sight'].content, background='#17131e',
+                                       highlightthickness=0, width=280, height=170)
+        self.laser_phase = 0
+        self.laser_job = None
+        for key in ('laser_shape', 'laser_color', 'laser_size'):
+            self.editors[key].trace_add('write', lambda *args: self.update_laser_preview())
+        self.laser_preview.bind('<Destroy>', self.stop_laser_preview)
+        self.animate_laser_preview()
+        for key, label, choices in (
                 ('achievement_capture', 'Unlock capture', ('off', 'screenshot', 'clip', 'both')),
                 ('achievement_clip_seconds', 'Replay length (seconds)', tuple(str(n) for n in range(5, 16)))):
             self.add_field('Achievements', key, label, values[key], choices)
@@ -717,7 +865,7 @@ class SettingsView:
         canvas = self.navigation.content
         w = canvas.winfo_width()
         narrow = w < 270
-        h = 548 if narrow else 570
+        h = max(548 if narrow else 570, 300+len(self.SECTIONS)*48)
         canvas.surface(h)
         canvas.art('settings', w/2 if narrow else 100, 83, 108 if narrow else 134)
         canvas.text(28, 156, 'SETTINGS\n& CONTROLS' if narrow else 'SETTINGS &\nCONTROLS',
@@ -739,6 +887,9 @@ class SettingsView:
         pane = self.panes[section]
         if key == 'window_mode':
             value = value.capitalize()
+        elif key == 'laser_shape':
+            from .laser import SHAPE_LABELS
+            value = SHAPE_LABELS[value]
         elif key == 'presentation_rate':
             value = str(value)+' Hz'
         variable = tk.BooleanVar(value=value) if isinstance(value, bool) else tk.StringVar(value=str(value))
@@ -780,6 +931,52 @@ class SettingsView:
             control.configure(values=tuple(self.app.tr(choice) for choice in choices))
             display.set(self.app.tr(variable.get()))
 
+    def choose_laser_color(self):
+        from tkinter import colorchooser
+        from .settings import validate
+        color = self.editors['laser_color'].get()
+        try:
+            validate({'laser_color': color})
+        except ValueError:
+            color = '#ff0000'
+        _, selected = colorchooser.askcolor(color=color, parent=self.window, title=self.app.tr('Laser color'))
+        if selected:
+            self.editors['laser_color'].set(selected)
+
+    def reset_laser(self):
+        self.editors['laser_shape'].set('Original')
+        self.editors['laser_color'].set('#ff0000')
+        self.editors['laser_size'].set('1.0')
+
+    def update_laser_preview(self):
+        from PIL import ImageTk
+        from .laser import sight_image
+        from .settings import validate
+        canvas = self.laser_preview
+        canvas.delete('all')
+        try:
+            shape = self.editors['laser_shape'].get().casefold().replace(' ', '_')
+            color = self.editors['laser_color'].get()
+            scale = float(self.editors['laser_size'].get())
+            validate({'laser_shape': shape, 'laser_color': color, 'laser_size': scale})
+        except (ValueError, TypeError):
+            canvas.create_text(140, 85, text=self.app.tr('Review the highlighted field.'), fill='#f5dfbe', width=260)
+            return
+        self.laser_photo = ImageTk.PhotoImage(sight_image(shape, color, round(48*scale), self.laser_phase/20))
+        canvas.create_line(16, 85, 160, 85, fill=color, width=2)
+        canvas.create_image(170, 85, image=self.laser_photo)
+
+    def animate_laser_preview(self):
+        if self.section == 'Laser sight':
+            self.update_laser_preview()
+        self.laser_phase = (self.laser_phase+1) % 20
+        self.laser_job = self.laser_preview.after(100, self.animate_laser_preview)
+
+    def stop_laser_preview(self, event):
+        if self.laser_job:
+            self.laser_preview.after_cancel(self.laser_job)
+            self.laser_job = None
+
     def draw_section(self, name):
         pane = self.panes[name]
         canvas = pane.content
@@ -797,12 +994,14 @@ class SettingsView:
             error_height = 42 if error.cget('text') else 0
             rows.append((key, y, error_height))
             y += (78 if narrow else 43) + error_height
+        fields_end = y
         help_text = {
+            'Laser sight': 'Choose a color or enter #RRGGBB. Predator uses three dots. Black Matter animates a cosmic pattern with your color as its accent. Size: 0.5 to 3.0. Changes apply on next launch.',
             'Achievements': 'Save the moment you unlock an achievement. Screenshots are saved by default. Clips are silent, at 5 frames per second, and include up to the selected replay length before the unlock. Clip capture uses extra memory. Recovered achievements do not create captures.',
             'Keyboard': 'Examples: W, Up, Return, Escape, Space, F1, Comma. Tab, F3 and F12 are reserved desktop controls.',
             'Mouse': 'Buttons: Left, Middle, Right, Button4, Button5.',
             'Controller': 'Buttons: a, b, x, y, start, back, guide, leftshoulder, rightshoulder, leftstick, rightstick, dpup, dpdown, dpleft, dpright, lefttrigger, righttrigger. Left stick moves; right stick looks.'}.get(name, '')
-        height = max(570, y+160 if help_text else y+34)
+        height = max(570, y+410 if name == 'Laser sight' else y+160 if help_text else y+34)
         canvas.surface(height)
         canvas.text(left, 40, name, header_size, weight='bold', width=w-64)
         canvas.art('paperclip', 76, 14, 26, 48)
@@ -812,7 +1011,7 @@ class SettingsView:
             canvas.text(left, 105, 'Display', 23, color=RED, weight='bold')
             canvas.rule(120, left+85, right)
         else:
-            canvas.text(left, 106, 'Capture preferences' if name == 'Achievements' else
+            canvas.text(left, 106, 'Customize your aim' if name == 'Laser sight' else 'Capture preferences' if name == 'Achievements' else
                         'Comma-separated names; leave blank to unbind.', 13, family='DejaVu Sans Mono', width=w-64)
         field_x = left if narrow else left+round((w-64)*.37)
         field_w = right-field_x
@@ -834,6 +1033,12 @@ class SettingsView:
                 canvas.window(control, field_x, cy, width, 30)
             if error_height:
                 canvas.window(error, field_x, cy+32, field_w, error_height)
+        if name == 'Laser sight':
+            y = fields_end
+            canvas.window(self.laser_picker, left, y+10, min(180, (w-74)/2), 38)
+            canvas.window(self.laser_reset, left+min(190, (w-64)/2), y+10, min(180, (w-74)/2), 38)
+            canvas.window(self.laser_preview, left, y+65, min(280, w-64), 170)
+            y += 245
         if help_text:
             canvas.rule(y+12, left, right)
             canvas.text(left, y+28, help_text, 14, color=PAPER_MUTED, width=w-64)
@@ -950,6 +1155,7 @@ class AchievementRow(PaperCanvas):
     def __init__(self, parent, view, item, index):
         super().__init__(parent, view.app.assets, takefocus=True, cursor='hand2', height=94, load_paper=False)
         self.view, self.item = view, item
+        self.selected = False
         self.render = self.draw
         self.bind('<Button-1>', lambda event: self.focus_set())
         self.bind('<FocusIn>', self.focused)
@@ -962,13 +1168,14 @@ class AchievementRow(PaperCanvas):
     def focused(self, event):
         if self.view.restoring_focus == self.item.id:
             self.view.restoring_focus = None
-            self.schedule()
         else:
             self.view.select(self.item.id, reveal=True)
+        self.schedule()
 
     def draw(self):
         w, h = self.surface(94)
         selected = self.item.id == self.view.selected
+        self.selected = selected
         if selected:
             self.highlight(h)
             self.text(w-14, h/2, '›', 30, color=RED, anchor='center')
@@ -1007,6 +1214,7 @@ class AchievementsView:
         self.records, self.unlocked = None, {}
         self.rows, self.visible = {}, []
         self.job, self.mode = None, None
+        self.wheel_job = None
         self.summary = tk.StringVar()
         self.search = tk.StringVar()
         self.filter = tk.StringVar(value='All')
@@ -1094,6 +1302,51 @@ class AchievementsView:
         self.catalog.frame.pack_propagate(not stacked)
 
     def scroll(self, event):
+        if event.widget.winfo_toplevel() is not self.window:
+            return
+        for pane in (self.catalog, self.detail):
+            canvas = pane.canvas
+            x, y = event.x_root - canvas.winfo_rootx(), event.y_root - canvas.winfo_rooty()
+            if not (0 <= x < canvas.winfo_width() and 0 <= y < canvas.winfo_height()):
+                continue
+            if pane is self.detail:
+                return pane.scroll(event)
+            if not self.visible:
+                return
+            first = self.rows[self.visible[0].id]
+            last = self.rows[self.visible[-1].id]
+            if not (first.winfo_y() <= canvas.canvasy(y) < last.winfo_y() + last.winfo_height()):
+                return
+            steps = pane.wheel_steps(event)
+            if steps:
+                index = next((i for i, item in enumerate(self.visible) if item.id == self.selected), 0)
+                limit = (len(self.visible) - 1) // 4 * 4
+                index = max(0, min(limit, index // 4 * 4 + steps * 4))
+                if self.selected != self.visible[index].id:
+                    self.selected = self.visible[index].id
+                    # Keep row widgets alive while queued input still targets them.
+                    if self.wheel_job is None:
+                        self.wheel_job = self.window.after(30, self.apply_wheel_selection)
+            return 'break'
+
+    def apply_wheel_selection(self):
+        self.wheel_job = None
+        self.select(self.selected)
+        row = self.rows[self.selected]
+        index = next(i for i, item in enumerate(self.visible) if item.id == self.selected)
+        self.catalog.canvas.yview_moveto(0 if index == 0 else
+            max(0, row.winfo_y() - 24) / self.catalog.content.winfo_height())
+        if self.window.focus_get() in self.rows.values():
+            self.restoring_focus = self.selected
+            row.focus_set()
+
+    def reset_wheel(self):
+        if self.wheel_job is not None:
+            self.window.after_cancel(self.wheel_job)
+            self.wheel_job = None
+        self.catalog.wheel_remainder = 0
+
+    def scroll_panes(self, event):
         widget = event.widget
         while widget is not None:
             if widget is self.detail.frame:
@@ -1114,6 +1367,7 @@ class AchievementsView:
 
     def refresh(self):
         from .achievements import ACHIEVEMENTS
+        self.reset_wheel()
         try:
             self.records, self.unlocked = self.store.load()
         except (OSError, ValueError) as error:
@@ -1139,6 +1393,7 @@ class AchievementsView:
 
     def populate(self, retain_scroll=False):
         from .achievements import ACHIEVEMENTS
+        self.reset_wheel()
         scroll = self.catalog.canvas.yview()[0] if retain_scroll else 0
         focused = next((key for key, row in self.rows.items() if self.window.focus_get() is row), None)
         self.clear_rows()
@@ -1204,16 +1459,20 @@ class AchievementsView:
         self.catalog.canvas.yview_moveto(fraction)
 
     def move(self, index):
+        self.reset_wheel()
         self.restoring_focus = None
         if self.visible:
             self.rows[self.visible[max(0, min(index, len(self.visible)-1))].id].focus_set()
         return 'break'
 
     def select(self, identity, reveal=False):
+        if self.wheel_job is not None:
+            self.reset_wheel()
         self.selected = identity
         self.busy_changed()
         for row in self.rows.values():
-            row.schedule()
+            if row.selected != (row.item.id == identity):
+                row.schedule()
         if reveal and identity in self.rows:
             self.catalog.reveal(self.rows[identity])
         for button in self.detail_buttons:
@@ -1365,6 +1624,7 @@ class AchievementsView:
 
     def cleanup(self, event):
         if event.widget is self.window:
+            self.reset_wheel()
             if self.job:
                 self.window.after_cancel(self.job)
                 self.job = None
@@ -1453,7 +1713,7 @@ class BackupsView:
 
     # Share responsive paper placement and per-pane wheel routing.
     layout = AchievementsView.layout
-    scroll = AchievementsView.scroll
+    scroll = AchievementsView.scroll_panes
 
     def close(self):
         self.window.destroy()

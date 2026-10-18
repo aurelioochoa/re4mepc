@@ -37,7 +37,9 @@ class Graphics:
         self.framebuffer = self.surface_texture = self.surface_depth = 0
         self.fullscreen = False
         self.diagnostics = self.texture_cache = None
+        self.laser = None
         self._mouse_touch = False
+        self.mouse_captured = False
         self._fullscreen_enter = False
         self.window_size = (width, height)
         self.drawable_size = (width, height)
@@ -63,6 +65,9 @@ class Graphics:
         self.signature('SDL_GL_SetSwapInterval', C.c_int, C.c_int)
         self.signature('SDL_SetWindowTitle',None,C.c_void_p,C.c_char_p)
         self.signature('SDL_SetRelativeMouseMode',C.c_int,C.c_int)
+        self.signature('SDL_SetWindowGrab',None,C.c_void_p,C.c_int)
+        self.signature('SDL_ShowCursor',C.c_int,C.c_int)
+        self.signature('SDL_WarpMouseInWindow',None,C.c_void_p,C.c_int,C.c_int)
         self.signature('SDL_GetWindowSize',None,C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_int))
         self.signature('SDL_GL_GetDrawableSize',None,C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_int))
         self.signature('SDL_SetWindowFullscreen',C.c_int,C.c_void_p,C.c_uint)
@@ -180,6 +185,20 @@ class Graphics:
         lx,ly = (px-vx)*self.width/vw,(py-top)*self.height/vh
         return (max(0,min(self.width-1,round(lx))),max(0,min(self.height-1,round(ly))))
 
+    def capture_mouse(self, capture):
+        """Confine and hide the gameplay pointer; never turn it into a touch."""
+        if capture:
+            # SDL takes window coordinates, not HiDPI drawable coordinates.
+            # The letterboxed game viewport shares the window's center.
+            self.sdl.SDL_WarpMouseInWindow(self.window, self.window_size[0]//2,
+                                          self.window_size[1]//2)
+        if self.sdl.SDL_SetRelativeMouseMode(int(capture)):
+            raise RuntimeError('Cannot capture mouse: '+self.sdl.SDL_GetError().decode())
+        self.sdl.SDL_SetWindowGrab(self.window, int(capture))
+        self.sdl.SDL_ShowCursor(0 if capture else 1)
+        self.mouse_captured = capture
+        self._mouse_touch = False
+
     def begin_frame(self):
         if self.framebuffer:
             self.gl.glBindFramebuffer(0x8d40,self.framebuffer)
@@ -223,7 +242,10 @@ class Graphics:
                 # ArmRuntime's import scope already attributes submission and
                 # upload, including argument marshaling. Avoid a second scope
                 # for every GL import; compressed conversion still nests above.
-                result = function(*values)
+                if name in ('glDrawArrays', 'glDrawElements') and self.laser and self.laser.stage:
+                    result = self.laser.draw(function, values)
+                else:
+                    result = function(*values)
             if name == 'glGetString':
                 return self.arm.cstring(C.string_at(result)) if result else 0
             if name in ('glDrawArrays', 'glDrawElements'):
@@ -263,7 +285,7 @@ class Graphics:
             elif kind in (0x401, 0x402):
                 x, y = struct.unpack_from('<ii', data, 20)
                 down,button = kind == 0x401,data[16]
-                if button == 1:
+                if button == 1 and not self.mouse_captured:
                     point = self.map_point(x,y,clamp=self._mouse_touch)
                     if point is not None:
                         self._mouse_touch = down
@@ -274,7 +296,7 @@ class Graphics:
                 x,y = struct.unpack_from('<ii',data,20)
                 dx,dy = struct.unpack_from('<ii',data,28)
                 yield ('mouse_delta',dx,dy)
-                if self._mouse_touch:
+                if self._mouse_touch and not self.mouse_captured:
                     point = self.map_point(x,y,clamp=True)
                     if point is not None:
                         yield ('motion',*point)
@@ -427,6 +449,8 @@ class Graphics:
         self._draw_pixels(data)
 
     def close(self):
+        if getattr(self, 'laser', None):
+            self.laser.close()
         if getattr(self,'controller',None):
             self.controller.close()
         if self.context and self.framebuffer:

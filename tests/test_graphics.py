@@ -11,6 +11,42 @@ from re4pc.graphics import Graphics
 
 
 class VideoOverlayTests(unittest.TestCase):
+    def test_real_sdl_capture_centers_hides_and_routes_clicks_without_touch(self):
+        import struct
+        arm = ArmRuntime()
+        graphics = None
+        try:
+            with patch.dict('os.environ', {'SDL_VIDEODRIVER': 'offscreen',
+                                          'SDL_AUDIODRIVER': 'dummy'}):
+                graphics = Graphics(arm, 1000, 700, hidden=True, logical_size=(800, 480))
+            graphics.signature('SDL_GetRelativeMouseMode', C.c_int)
+            graphics.signature('SDL_GetMouseState', C.c_uint, C.POINTER(C.c_int), C.POINTER(C.c_int))
+            graphics.signature('SDL_PushEvent', C.c_int, C.c_void_p)
+            list(graphics.events())
+            graphics.capture_mouse(True)
+            self.assertEqual(graphics.sdl.SDL_GetRelativeMouseMode(), 1)
+            self.assertEqual(graphics.sdl.SDL_ShowCursor(-1), 0)
+            x, y = C.c_int(), C.c_int()
+            graphics.sdl.SDL_GetMouseState(C.byref(x), C.byref(y))
+            self.assertEqual((x.value, y.value), (500, 350))
+            list(graphics.events())  # Discard SDL's zero-motion warp notification.
+            for kind in (0x401, 0x400, 0x402):
+                event = C.create_string_buffer(64)
+                struct.pack_into('<I', event, 0, kind)
+                if kind != 0x400: event[16] = b'\x01'
+                struct.pack_into('<iiii', event, 20, -200, 2000, 14, -9)
+                self.assertEqual(graphics.sdl.SDL_PushEvent(event), 1)
+            mouse = [event for event in graphics.events()
+                     if event[0] in ('touch', 'motion', 'mouse_button', 'mouse_delta')]
+            self.assertEqual(mouse, [('mouse_button', True, 1),
+                                    ('mouse_delta', 14, -9), ('mouse_button', False, 1)])
+            graphics.capture_mouse(False)
+            self.assertEqual(graphics.sdl.SDL_GetRelativeMouseMode(), 0)
+            self.assertEqual(graphics.sdl.SDL_ShowCursor(-1), 1)
+        finally:
+            if graphics: graphics.close()
+            arm.close()
+
     def test_movie_covers_frame_and_restores_engine_state(self):
         arm = ArmRuntime()
         graphics = None
@@ -170,6 +206,7 @@ class DesktopEventTests(unittest.TestCase):
         graphics.window_size=graphics.drawable_size=(1000,700)
         graphics.viewport=Graphics.viewport_for((800,480),graphics.drawable_size)
         graphics._mouse_touch=graphics._fullscreen_enter=False
+        graphics.mouse_captured=False
         graphics.update_drawable=Mock()
         graphics.toggle_fullscreen=Mock()
         graphics.sdl=Mock()
@@ -188,7 +225,8 @@ class DesktopEventTests(unittest.TestCase):
         for key,value in values.items():
             offset,format={'key':(20,'i'),'modifiers':(24,'H'),'button':(16,'B'),
                            'x':(20,'i'),'y':(24,'i'),'window_event':(12,'B'),
-                           'instance':(8,'i'),'axis':(12,'B'),'value':(16,'h')}[key]
+                           'instance':(8,'i'),'axis':(12,'B'),'value':(16,'h'),
+                           'dx':(28,'i'),'dy':(32,'i')}[key]
             struct.pack_into('<'+format,buffer,offset,value)
         return bytes(buffer)
 
@@ -211,3 +249,32 @@ class DesktopEventTests(unittest.TestCase):
     def test_controller_axis_sdl_payload(self):
         graphics=self.make_graphics([self.data(0x650,instance=7,axis=4,value=20000)])
         self.assertEqual(list(graphics.events()),[('controller_axis',7,4,20000)])
+
+    def test_captured_clicks_ignore_absolute_position_and_never_drag_touch(self):
+        graphics=self.make_graphics([self.data(0x401,button=1,x=-200,y=2000),
+                                     self.data(0x400,x=-300,y=2100,dx=-100,dy=100),
+                                     self.data(0x402,button=1,x=-300,y=2100)])
+        graphics.mouse_captured=True
+        graphics._mouse_touch=True  # A drag started before capture.
+        self.assertEqual(list(graphics.events()),[('mouse_button',True,1),
+                         ('mouse_delta',-100,100),('mouse_button',False,1)])
+
+    def test_capture_centers_hidpi_pointer_hides_and_grabs_then_restores(self):
+        from unittest.mock import call
+        graphics=self.make_graphics([])
+        graphics.window=123
+        graphics.drawable_size=(2000,1400)
+        graphics.sdl.SDL_SetRelativeMouseMode.return_value=0
+        graphics._mouse_touch=True
+        graphics.capture_mouse(True)
+        self.assertTrue(graphics.mouse_captured)
+        self.assertFalse(graphics._mouse_touch)
+        self.assertEqual(graphics.sdl.mock_calls,[
+            call.SDL_WarpMouseInWindow(123,500,350),
+            call.SDL_SetRelativeMouseMode(1),call.SDL_SetWindowGrab(123,1),
+            call.SDL_ShowCursor(0)])
+        graphics.sdl.reset_mock()
+        graphics.capture_mouse(False)
+        self.assertFalse(graphics.mouse_captured)
+        self.assertEqual(graphics.sdl.mock_calls,[call.SDL_SetRelativeMouseMode(0),
+                         call.SDL_SetWindowGrab(123,0),call.SDL_ShowCursor(1)])

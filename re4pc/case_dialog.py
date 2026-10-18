@@ -35,6 +35,7 @@ class PaperCanvas(tk.Canvas):
         self.backdrop = None
         self.assets = assets
         self.job = None
+        self.render_size = None
         if load_paper:
             try:
                 path = assets / 'case-paper-v2.png'
@@ -46,6 +47,13 @@ class PaperCanvas(tk.Canvas):
         self.bind('<Destroy>', self.cleanup, add='+')
 
     def schedule(self, event=None):
+        if event is not None and event.type == tk.EventType.Configure:
+            size = (event.width, event.height)
+            if size == self.render_size:
+                # Scrolling moves this window too. Repainting would detach and
+                # recreate all its embedded rows even though their size is fixed.
+                return
+            self.render_size = size
         if self.job:
             self.after_cancel(self.job)
         self.job = self.after_idle(self.scheduled_redraw)
@@ -168,6 +176,7 @@ class PaperPane:
         self.canvas.configure(yscrollcommand=self.scrolled)
         self.content = PaperCanvas(self.canvas, assets, render=render)
         self.content.fills_viewport = True
+        self.wheel_remainder = 0
         self.identity = self.canvas.create_window(0, 0, anchor='nw', window=self.content)
         self.canvas.bind('<Configure>', self.resize)
         self.content.bind('<Configure>', self.update_region, add='+')
@@ -191,9 +200,19 @@ class PaperPane:
             # Otherwise a wrapping headline can make the scrollbar oscillate.
             self.bar.place(relx=1, x=-10, y=6, relheight=1, height=-12, width=8)
 
+    def wheel_steps(self, event):
+        if getattr(event, 'num', None) in (4, 5):
+            return -1 if event.num == 4 else 1
+        unit = 1 if self.canvas.tk.call('tk', 'windowingsystem') == 'aqua' else 120
+        self.wheel_remainder -= getattr(event, 'delta', 0) / unit
+        steps = int(self.wheel_remainder)
+        self.wheel_remainder -= steps
+        return steps
+
     def scroll(self, event):
-        direction = -1 if getattr(event, 'num', None) == 4 or getattr(event, 'delta', 0) > 0 else 1
-        self.canvas.yview_scroll(direction * 3, 'units')
+        steps = self.wheel_steps(event)
+        if steps:
+            self.canvas.yview_scroll(steps * 3, 'units')
         return 'break'
 
     def reveal(self, widget):

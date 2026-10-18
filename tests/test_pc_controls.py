@@ -136,6 +136,59 @@ class TouchHUDTests(unittest.TestCase):
             self.assertEqual(bytes(self.arm.data), before)
 
 
+class PointerTargetTests(unittest.TestCase):
+    def setUp(self):
+        self.arm = Memory()
+        self.arm.symbols = {'_ZN14LYT_Cmp_Button9doMsgProcEmPv': 501,
+                            '_ZN18LYT_Cmp_PushButton9doMsgProcEmPv': 601}
+        self.pc = PCControls(self.arm)
+        self.pc.active, self.pc.controller = True, 100
+        self.arm.w32(100, 1000)
+        self.arm.write(100+0x40, b'\x01')
+        self.arm.w32(100+0x20, 2000)
+        self.arm.w32(2000, 1000)
+        self.arm.w32(1000+0x2c, 501)
+        self.arm.write(2000+0x50, b'\x01\x01')
+        self.arm.write(2000+0xb8, struct.pack('<4i', 10, 20, 80, 50))
+
+    def test_menu_and_context_buttons_use_native_touch_bounds(self):
+        for offset in (0x0c, 0x10, 0x1c, 0x20):
+            self.arm.w32(100+0x20, 0)
+            self.arm.w32(100+offset, 2000)
+            self.assertTrue(self.pc.pointer_target(40, 30))
+            self.assertTrue(self.pc.pointer_target(90, 70))
+            self.assertFalse(self.pc.pointer_target(91, 70))
+            self.assertFalse(self.pc.pointer_target(40, 19))
+            self.arm.w32(100+offset, 0)
+
+    def test_push_button_uses_its_normal_image_screen_bounds(self):
+        self.arm.w32(1000+0x2c, 601)
+        self.arm.w32(2000+0x94, 3000)
+        self.arm.write(3000+0x3c, struct.pack('<4i', 700, 350, 90, 100))
+        self.assertTrue(self.pc.pointer_target(742, 416))
+        self.assertFalse(self.pc.pointer_target(40, 30))
+        self.arm.w32(2000+0x94, 0)
+        self.assertFalse(self.pc.pointer_target(742, 416))
+
+    def test_hidden_disabled_and_combat_buttons_do_not_receive_clicks(self):
+        for flags in (b'\0\x01', b'\x01\0', b'\0\0'):
+            self.arm.write(2000+0x50, flags)
+            self.assertFalse(self.pc.pointer_target(40, 30))
+        self.arm.write(2000+0x50, b'\x01\x01')
+        self.arm.w32(100+0x20, 0)
+        for offset in (4, 8, 0x14, 0x18):
+            self.arm.w32(100+offset, 2000)
+        self.assertFalse(self.pc.pointer_target(40, 30))
+
+    def test_inactive_gameplay_and_closed_layout_have_no_targets(self):
+        for condition in ('inactive', 'touch', 'closed', 'missing'):
+            self.pc.active = condition != 'inactive'
+            self.pc.enabled = condition != 'touch'
+            self.arm.write(100+0x40, bytes([condition != 'closed']))
+            self.arm.w32(100, 0 if condition == 'missing' else 1000)
+            self.assertFalse(self.pc.pointer_target(40, 30))
+
+
 class MouseControlTests(unittest.TestCase):
     def setUp(self):
         self.arm = Memory()
@@ -360,3 +413,117 @@ class ConfigurableCameraTests(unittest.TestCase):
         self.assertEqual(pc.motion,[6,-6])
         pc.release()
         self.assertEqual(pc.motion,[0,0])
+
+
+class CombatInputTests(unittest.TestCase):
+    def setUp(self):
+        self.arm = Memory()
+        self.pc = PCControls(self.arm)
+        self.pc.player, self.pc.main = 100, 1000
+        self.arm.w32(100, 2000)
+        self.arm.w32(2000+0x120, 3000)
+        self.arm.write(2000+0x130, struct.pack('<f', 32768))
+        self.arm.write(1000+0x61, b'\x01')
+        self.arm.w32(5000, 1000)
+        self.arm.write(5000+0x40, b'\x01')
+        self.uc = Registers()
+        self.uc.reg_write(UC_ARM_REG_SP, 6000)
+        self.arm.w32(6004, 5000)
+        self.pc.button(True, 3)
+
+    def frame(self, state=2, step=1, cooldown=0, latch=0):
+        self.arm.write(100+0x36, struct.pack('<hh', state, step))
+        self.arm.write(100+0x48, bytes([state in (2,4,5,6,7)]))
+        self.arm.write(100+0xaa, struct.pack('<h', cooldown))
+        self.arm.write(100+0xad, bytes([latch]))
+        self.pc.begin_frame()
+        self.arm.w32(5000+0x28, 0)
+        self.arm.w32(5000+0x2c, 0)
+        self.pc._update(self.uc, 0, 0, None)
+        return self.arm.u32(5000+0x2c), self.arm.u32(5000+0x28)
+
+    def test_quick_click_survives_aim_start_and_fires_once(self):
+        self.frame(0)
+        self.pc.button(True, 1)
+        self.assertEqual(self.frame(1)[0], 0)
+        self.pc.button(False, 1)
+        self.assertEqual(self.frame(2, step=0)[0], 0)
+        self.assertEqual(self.frame()[0], 0x80)
+        self.assertEqual(self.frame(6)[0], 0)
+        self.assertEqual(self.frame()[0], 0)
+
+    def test_click_during_recoil_waits_for_cooldown_and_release_latch(self):
+        self.pc.key(True, 8)
+        self.assertEqual(self.frame(6, cooldown=4)[0], 0)
+        self.pc.key(False, 8)
+        self.assertEqual(self.frame(cooldown=3)[0], 0)
+        self.assertEqual(self.frame(latch=1)[0], 0)
+        self.assertEqual(self.frame(cooldown=1)[0], 0x80)
+        self.assertEqual(self.frame()[0], 0)
+
+    def test_held_fire_retains_native_repeat_after_first_accepted_press(self):
+        self.pc.button(True, 1)
+        self.assertEqual(self.frame()[0], 0x80)
+        self.assertEqual(self.frame(6)[0], 0x80)
+        self.pc.button(False, 1)
+        self.assertEqual(self.frame(6)[0], 0)
+
+    def test_releasing_aim_or_focus_discards_buffered_click(self):
+        for cancel in ('aim', 'focus'):
+            self.setUp()
+            self.pc.button(True, 1)
+            self.frame(1)
+            self.pc.button(False, 1)
+            if cancel == 'aim': self.pc.button(False, 3)
+            else: self.pc.release()
+            self.assertEqual(self.frame()[0], 0)
+            self.pc.button(True, 3)
+            self.assertEqual(self.frame()[0], 0)
+
+    def test_damage_story_and_menu_cannot_replay_a_buffered_shot(self):
+        for interruption in ('damage', 'story', 'menu'):
+            self.setUp()
+            self.pc.button(True, 1)
+            self.frame(1)
+            self.pc.button(False, 1)
+            if interruption == 'damage': self.frame(9)
+            elif interruption == 'story':
+                self.arm.w32(1000+0x3c, 4000)
+                self.arm.write(4000+0x31c, b'\x01')
+                self.frame()
+                self.arm.write(4000+0x31c, b'\0')
+            else:
+                self.arm.write(1000+0x61, b'\0')
+                self.frame()
+                self.arm.write(1000+0x61, b'\x01')
+            self.assertEqual(self.frame()[0], 0)
+
+    def test_buffer_expires_instead_of_firing_after_a_long_animation(self):
+        self.pc.button(True, 1)
+        self.frame(1)
+        self.pc.button(False, 1)
+        for _ in range(21): self.frame(1)
+        self.assertEqual(self.frame()[0], 0)
+
+    def test_holding_fire_through_a_long_startup_still_fires(self):
+        self.pc.button(True, 1)
+        for _ in range(30): self.frame(1)
+        self.assertEqual(self.frame()[0], 0x80)
+
+    def test_long_aim_start_does_not_receive_a_second_toggle(self):
+        self.assertEqual(self.frame(0)[1] & 0x80, 0x80)
+        for _ in range(35):
+            self.assertEqual(self.frame(1)[1] & 0x80, 0)
+        self.assertEqual(self.frame(3)[1] & 0x80, 0)
+        self.assertEqual(self.frame(0)[1] & 0x80, 0x80)
+
+    def test_pc_laser_overrides_only_the_visibility_query(self):
+        self.uc.reg_write(UC_ARM_REG_R0, 1)
+        before = bytes(self.arm.data)
+        self.pc._desktop_laser(self.uc, 0, 0, None)
+        self.assertEqual(self.uc.reg_read(UC_ARM_REG_R0), 0)
+        self.assertEqual(bytes(self.arm.data), before)
+        self.pc.enabled = False
+        self.uc.reg_write(UC_ARM_REG_R0, 1)
+        self.pc._desktop_laser(self.uc, 0, 0, None)
+        self.assertEqual(self.uc.reg_read(UC_ARM_REG_R0), 1)

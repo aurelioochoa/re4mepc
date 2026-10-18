@@ -24,7 +24,7 @@ The title, English menus, original video and audio, and village gameplay have be
 
 Gameplay and presentation run at **20 Hz**, matching the original engine's mission clock. Higher rates also speed up game logic, so 30/60 FPS modes are unavailable. Independent rendering research has not established a safe boundary.
 
-The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014) is **not fully campaign-qualified**. The refreshed AppImage/archive include the six-language selectors and bundled Japanese fonts. Their exact hashes pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke/upgrade checks, six-language launcher checks, and input-only first-mission/inventory/save replays on AMD RX 6700S. The Ubuntu 22.04 checks also verify all six native game-language selections in both formats. The current source passes 313 component tests and the source/history audit; the published prerelease’s qualification is recorded separately. Physical controllers, display/HiDPI, audible speakers and extended driver gameplay remain unverified; Intel/NVIDIA hardware was unavailable.
+The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014) is **not fully campaign-qualified**. The refreshed AppImage/archive include the six-language selectors and bundled Japanese fonts. Their exact hashes pass clean Ubuntu 22.04, Ubuntu 24.04 and Arch smoke/upgrade checks, six-language launcher checks, and input-only first-mission/inventory/save replays on AMD RX 6700S. The Ubuntu 22.04 checks also verify all six native game-language selections in both formats. The current source passes 322 component tests and the source/history audit; the published prerelease’s qualification is recorded separately. Physical controllers, display/HiDPI, audible speakers and extended driver gameplay remain unverified; Intel/NVIDIA hardware was unavailable.
 
 Mission completion is deferred to the user's later playtest. The previous runtime's two-hour soak was stopped after its preserved 2,880.043-second checkpoint and remains incomplete. An intermittent native difficulty-initialization exception remains unresolved. No loading optimization met the performance gate, and the earlier keyboard-aim failure was not reproduced or claimed fixed. See the [qualification summary](docs/qualification-summary.md), [campaign checklist](docs/campaign-coverage.md) and [measured roadmap results](docs/roadmap-results.md).
 
@@ -71,6 +71,8 @@ re4mepc run
 
 Open the launcher with `re4mepc`, `make play` or `make launcher`. The native desktop UI pairs an aged parchment case file with a pinned village photograph, a distressed red numeral and a textured Play button. Top navigation and the full settings and backup rows support mouse and keyboard activation. Progress and Stop appear during operations. [Artwork prompts and provenance](docs/launcher-assets.md) document the generated assets.
 
+The launcher fills the window without letterbox bars and supports sizes down to 640 × 520. Below 900 pixels wide, the case file stacks above installation controls and its utility actions form a compact row. Short windows give controls priority over the village photograph. Language selectors, operation feedback and Stop remain visible as the window resizes.
+
 1. **Import APK** restores your game into a new folder. The launcher suggests an unused destination and switches to it only after import succeeds.
 2. **Browse** selects an existing imported installation. Play becomes available when the expected files are present; the engine performs full validation when it starts.
 3. **Play** opens the game window. The launcher shows the running state and provides **Stop** to end the active operation.
@@ -98,6 +100,8 @@ The supported codes are `en`, `es`, `fr`, `de`, `it`, `ja` and `saved`. Source i
 **Settings & controls** configures display options, sensitivity and keyboard, mouse or controller bindings for the next game launch. Sliders and numeric fields stay synchronized; each section scrolls so every binding remains reachable. **Save backups** creates snapshots and imports, exports, restores or deletes selected snapshots while the game is stopped. Restore keeps a recovery copy; deleting a snapshot preserves current saves. The [case-file windows](docs/dialogs.md) share generated parchment, seals and inventory artwork and support keyboard navigation at smaller sizes. **Diagnostics** starts a game session with profile, statistics and runtime log files.
 
 The main window has no console panel. Progress, completion and failures appear in its status area; **View logs** opens optional session output in a separate window. Applications-menu and desktop shortcuts open without a terminal. Direct CLI runs continue to print terminal logs.
+
+**Settings & controls → Laser sight** customizes the aiming laser on the next launch. Keep **Original**, choose a glowing **Circle**, use **Predator** for three dots, or choose **Black Matter** for an animated cosmic pattern inspired by Black Ops camo. Pick any color with **Choose color** or enter `#RRGGBB`; adjust sight size from 0.5× to 3× and inspect the live preview. The chosen color also tints the beam and accents Black Matter's purple/blue pattern. **Reset sight** restores the original red laser. Custom sights reuse the default sight’s geometry and visibility, including its distance scaling, fading and scene depth. Settings are stored locally; game files and saves are unchanged.
 
 Use `re4mepc launcher --game '/external/re4/game'` for a custom installation. See [desktop and release usage](docs/desktop-release.md) for save locations, diagnostics and standalone packages.
 
@@ -205,7 +209,11 @@ F12 closes the window. PC gameplay controls are enabled by default; the cursor i
 
 To pick up ammo or another ground item, press Space to select it, then press Space again to take it.
 
+PC aiming keeps the laser visible on every difficulty, including Extreme. Quick fire taps are retained through weapon startup and recoil; releasing aim cancels a waiting shot.
+
 PC mode hides the movement pad and gun, knife, and lower-weapon touch buttons. Contextual actions (pickups, doors, ladders, and other interactions), companion commands, scope controls, status displays, and menus remain visible.
+
+During PC gameplay, mouse capture centers and hides the pointer and confines it to the window. Left click fires without activating touch buttons. Tab releases or captures the pointer immediately. With the pointer released, visible menu and contextual action buttons accept clicks; clicking the scene restores capture without firing. Menus and `--controls touch` retain normal pointer input.
 
 In PC mode, Enter/B continues through recognized menus and confirms the difficulty slider once per press. WASD/D-pad or the right stick moves the menu cursor; Space/A clicks it, including inventory items and their context menus. Escape/Start cancels a recognized inventory submenu, then returns from inventory to gameplay. Current bindings appear on screen. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work. See [desktop menu controls](docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `re4mepc run --controls touch`.
 
@@ -548,6 +556,8 @@ La importación verifica las dos bibliotecas y todos los recursos necesarios ant
 | F3 | Mostrar / ocultar los diagnósticos |
 | Alt+Enter | Alternar la pantalla completa sin bordes |
 | F12 | Cerrar la ventana |
+
+Durante el juego en modo PC, el cursor se centra, se oculta y queda capturado en la ventana. Los clics y arrastres no activan botones táctiles visibles ni ocultos. Tab libera o captura el cursor inmediatamente; el clic para recapturarlo no dispara.
 
 En modo PC, Enter/B continúa en los menús reconocidos y confirma el deslizador con una sola pulsación. WASD/D-pad o el stick derecho mueve el cursor; Espacio/A selecciona objetos y opciones del inventario. Escape/Start cancela el submenú del inventario y permite volver al juego. También puedes usar el ratón. Enter, Espacio, Escape o un clic omiten el vídeo en reproducción. Al perder el foco, la ventana libera las teclas y el cursor.
 

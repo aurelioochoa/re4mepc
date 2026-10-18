@@ -15,11 +15,18 @@ AIM_UNITS_PER_DEGREE = 3 * TURN / 360
 MOUSE_DEGREES_PER_PIXEL = 0.15
 PITCH_LIMIT = 45.0
 
+# Keep one click through the weapon's short startup/recovery animation.
+# At 20 Hz this expires after one second; menus, damage and releasing aim
+# cancel it sooner. These states/fields are from the supported native player.
+FIRE_BUFFER_FRAMES = 20
+FIRE_BUFFER_STATES = (0, 1, 2, 4, 5, 6, 7, 19)
+
 # Fields in the supported GM_CtrlLyt_Input layout: Pad, ActBtn_Post
 # (lower weapon), ActBtn_Gun and ActBtn_Knif. Event, Ashley, scope and
 # menu components remain visible. LYT_CmpProduct's visibility is separate
 # from its input enable flag.
 TOUCH_COMBAT_COMPONENTS = (0x04, 0x08, 0x14, 0x18)
+TOUCH_UI_COMPONENTS = (0x0c, 0x10, 0x1c, 0x20)
 COMPONENT_VISIBLE = 0x51
 
 
@@ -36,10 +43,11 @@ class PCControls:
         self.previous_scan = 0
         self.aim_owned = False
         self.knife_owned = False
-        self.last_aim_request = -100
         self.frames = 0
         self.menu_requested = self.action_requested = False
         self.last_sample = {}
+        self.fire_down = self.fire_forwarded = False
+        self.fire_pending_until = -1
         self.reload_requested = False
         self.story_active = False
         self.item_active = False
@@ -67,6 +75,13 @@ class PCControls:
         aim=self.arm.symbols['_ZN18GM_CtrlMain_Player17_Set_AimStartRotXEP11GM_CtrlMainf']&~1
         self.arm.uc.hook_add(UC_HOOK_CODE,self._aim_start,begin=aim,end=aim)
         if self.enabled:
+            # Extreme difficulty suppresses the native beam. Desktop aiming
+            # still needs its sight: override only this visibility query, so
+            # collision, damage, recoil and explicit laser-off requests keep
+            # running through the original engine. Touch mode stays native.
+            laser_symbol='_ZN12GM_CtrlParam28Get_Diff_LaserSiteNonDrawFlgEv'
+            laser_end=(self.arm.symbols[laser_symbol]&~1)+self.arm.symbol_sizes[laser_symbol]-4
+            self.arm.uc.hook_add(UC_HOOK_CODE,self._desktop_laser,begin=laser_end,end=laser_end)
             item_symbol='_ZN18GM_CtrlLyt_WinItem5FrameEv'
             item_end=(self.arm.symbols[item_symbol]&~1)+self.arm.symbol_sizes[item_symbol]-4
             self.arm.uc.hook_add(UC_HOOK_CODE,self._item_window,begin=item_end,end=item_end)
@@ -75,6 +90,10 @@ class PCControls:
             end=draw+self.arm.symbol_sizes[draw_symbol]-4
             self.arm.uc.hook_add(UC_HOOK_CODE,self._hud_begin,begin=draw,end=draw)
             self.arm.uc.hook_add(UC_HOOK_CODE,self._hud_end,begin=end,end=end)
+
+    def _desktop_laser(self,uc,address,size,context):
+        if self.enabled:
+            uc.reg_write(UC_ARM_REG_R0,0)
 
     def _item_window(self,uc,address,size,context):
         try:
@@ -159,6 +178,7 @@ class PCControls:
         self.main=uc.reg_read(UC_ARM_REG_R1)
         self.look_pitch=0.0
         self.motion[:]=[0,0]
+        self._clear_fire()
 
     def key(self, down, code):
         if down and code==23 and code not in self.keys and self.item_active:
@@ -171,6 +191,33 @@ class PCControls:
         if down: self.buttons.add(button)
         else: self.buttons.discard(button)
 
+    def pointer_target(self, x, y):
+        """Hit-test the native interaction, companion, scope and menu buttons."""
+        ctrl = self.controller
+        if not (self.enabled and self.active and ctrl and
+                self.arm.read(ctrl+0x40, 1)[0] and self.arm.u32(ctrl)):
+            return False
+        for offset in TOUCH_UI_COMPONENTS:
+            component = self.arm.u32(ctrl+offset)
+            if not component or self.arm.read(component+0x50, 2) != b'\x01\x01':
+                continue
+            # Native Button::_doWait uses its touch rectangle; PushButton
+            # uses the normal image's screen rectangle. Rect4i starts with
+            # a vtable, followed by x, y, width and height.
+            handler = self.arm.u32(self.arm.u32(component)+0x2c)
+            if handler == self.arm.symbols['_ZN18LYT_Cmp_PushButton9doMsgProcEmPv']:
+                image = self.arm.u32(component+0x94)
+                if not image: continue
+                rectangle = image+0x3c
+            elif handler == self.arm.symbols['_ZN14LYT_Cmp_Button9doMsgProcEmPv']:
+                rectangle = component+0xb8
+            else:
+                continue
+            left, top, width, height = struct.unpack('<4i', self.arm.read(rectangle, 16))
+            if width > 0 and height > 0 and left <= x <= left+width and top <= y <= top+height:
+                return True
+        return False
+
     def move(self, dx, dy, *, sensitivity=None):
         scale = self.sensitivity if sensitivity is None else sensitivity
         self.motion[0]+=dx*scale
@@ -181,6 +228,43 @@ class PCControls:
         self.previous_scan=0
         self.reload_requested=False
         self.item_take_requested=self.item_take_this_frame=False
+        self._clear_fire()
+
+    def _clear_fire(self):
+        self.fire_down = self.fire_forwarded = False
+        self.fire_pending_until = -1
+
+    def _fire_scan(self, state, aiming, knife, want_aim):
+        down = 1 in self.buttons or 8 in self.keys
+        pressed = down and not self.fire_down
+        self.fire_down = down
+        if not down:
+            self.fire_forwarded = False
+        if knife:
+            self.fire_pending_until = -1
+            return 0x100 if down else 0
+        if self.aim_owned and not want_aim:
+            self.fire_pending_until = -1
+            self.fire_forwarded = False
+            return 0
+        if not (want_aim or aiming) or state not in FIRE_BUFFER_STATES:
+            self.fire_pending_until = -1
+            self.fire_forwarded = False
+            return 0x80 if down else 0
+        if pressed:
+            self.fire_pending_until = self.frames + FIRE_BUFFER_FRAMES
+        pending = self.frames <= self.fire_pending_until or (down and not self.fire_forwarded)
+        # AtkAimM ignores its first substate and rejects a shot while +0xaa
+        # is counting down or +0xad still latches the previous press. Feed a
+        # released scan while waiting, then let the original code fire/reload.
+        step = struct.unpack('<h', self.arm.read(self.player+0x38, 2))[0]
+        cooldown = struct.unpack('<h', self.arm.read(self.player+0xaa, 2))[0]
+        ready = aiming and state in (2, 4, 5) and step > 0 and cooldown <= 1 and not self.arm.read(self.player+0xad, 1)[0]
+        if pending and ready:
+            self.fire_pending_until = -1
+            self.fire_forwarded = down
+            return 0x80
+        return 0x80 if down and self.fire_forwarded else 0
 
     def begin_frame(self):
         self.item_take_this_frame=self.item_take_requested
@@ -225,11 +309,16 @@ class PCControls:
         try:
             ctrl=self.arm.u32(uc.reg_read(UC_ARM_REG_SP)+4)
             if not self.enabled or not self.arm.read(ctrl+0x40,1)[0] or not self.arm.u32(ctrl):
+                self._clear_fire()
                 return
-            if not self.main or not self.arm.read(self.main+0x61,1)[0]:return
+            if not self.main or not self.arm.read(self.main+0x61,1)[0]:
+                self._clear_fire()
+                return
             event=self.arm.u32(self.main+0x3c)
             self.story_active=bool(event and self.arm.read(event+0x31c,1)[0])
-            if self.story_active:return
+            if self.story_active:
+                self._clear_fire()
+                return
             self.active=True;self.controller=ctrl
             aiming=bool(self.player and self.arm.read(self.player+0x48,1)[0])
             knife=bool(self.player and self.arm.read(self.player+0x5e,1)[0]==1)
@@ -240,7 +329,7 @@ class PCControls:
             rate_x=x*100
             rate_y=y*100
             scan=(8 if rate_x<0 else 4 if rate_x>0 else 0)|(1 if rate_y>0 else 2 if rate_y<0 else 0)
-            if 1 in self.buttons or 8 in self.keys: scan|=0x100 if knife else 0x80
+            scan |= self._fire_scan(state, aiming, knife, want_aim)
             # 0x100 selects the knife while unarmed, then slashes while it is
             # equipped. Holding F readies it; desktop fire performs the slash.
             if 11 in self.keys and not knife: scan|=0x100
@@ -248,8 +337,10 @@ class PCControls:
             trig=scan & ~self.previous_scan
             if want_aim:
                 self.aim_owned=True
-                if not aiming and self.frames-self.last_aim_request>=15:
-                    trig|=0x80;self.last_aim_request=self.frames
+                # Repeated gun triggers during startup toggle the weapon
+                # instead of holding aim. Retry only after holstering ends.
+                if not aiming and state == 0:
+                    trig|=0x80
             elif self.aim_owned:
                 if knife and 11 in self.keys:self.aim_owned=False
                 # A quick RMB release can arrive before Check_isAiming turns
