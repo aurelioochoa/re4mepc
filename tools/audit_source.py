@@ -10,7 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'README.es.md', 'VALIDATION.md',
+TOP_LEVEL = {'.gitignore', 'LICENSE', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md',
+             'Makefile', 'README.md', 'README.es.md', 'VALIDATION.md',
              'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
              'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md', 'docs/advanced-usage.md',
              'docs/render-audit.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',

@@ -162,6 +162,8 @@ The experimental packages have documented smoke/upgrade checks on Ubuntu 22.04, 
 
 ### Development
 
+Contributions use this repository's GitHub issues and pull requests. Read the bilingual [contribution guide](CONTRIBUTING.md#english) and [piracy policy](CODE_OF_CONDUCT.md#english).
+
 | Command | Purpose |
 | --- | --- |
 | `make help` | Show available targets |
@@ -342,6 +344,8 @@ Las pruebas visibles han ejercitado el título, los menús en inglés, audio/ví
 Los paquetes experimentales tienen comprobaciones documentadas de inicio/actualización en Ubuntu 22.04, Ubuntu 24.04 y Arch, de idiomas y repeticiones de primera misión/inventario/guardado en AMD RX 6700S. Estas pruebas no demuestran soporte de toda la campaña; no hubo hardware Intel/NVIDIA disponible. Consulta [VALIDATION.md](VALIDATION.md), el [resumen de validación](docs/qualification-summary.md), la [cobertura de campaña](docs/campaign-coverage.md) y las [mediciones de la hoja de ruta](docs/roadmap-results.md) (en inglés).
 
 ### Desarrollo
+
+Las contribuciones se revisan en los issues y pull requests de este repositorio. Lee la [guía de contribución](CONTRIBUTING.md#español) y la [política de piratería](CODE_OF_CONDUCT.md#español); ambos documentos contienen inglés y español.
 
 | Comando | Función |
 | --- | --- |
