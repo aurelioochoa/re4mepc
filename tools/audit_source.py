@@ -10,9 +10,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'VALIDATION.md',
+TOP_LEVEL = {'.gitignore', 'LICENSE', 'Makefile', 'README.md', 'README.es.md', 'VALIDATION.md',
              'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
-             'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md',
+             'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md', 'docs/advanced-usage.md',
              'docs/render-audit.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
              'docs/qualification-summary.md', 'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md', 'docs/portable-captures.md', 'docs/campaign-coverage.md'}
 # Only reviewed artwork, host UI screenshots and explicitly requested gameplay
