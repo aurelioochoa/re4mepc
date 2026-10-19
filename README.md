@@ -10,7 +10,7 @@ Play the original **Resident Evil 4 Mobile Android** engine in a Linux desktop w
 
 **Bring your own game:** supply a compatible APK. The project does not include or download the game. Imported libraries, resources and saves stay outside the checkout. Full campaign completion has not been validated.
 
-[Gameplay](#gameplay) · [Quick start](#quick-start) · [Game files](#game-files) · [Controls](#controls) · [Development](#development)
+[Gameplay](#gameplay) · [Quick start](#quick-start) · [Game files](#game-files) · [How the port works](#how-the-port-works) · [Controls](#controls) · [Development](#development)
 
 ### Gameplay
 
@@ -67,6 +67,18 @@ The importer restores the APK's resources and verifies both ARM libraries and ev
 | `libmc_eruption_for_android_jni.so` | `25109c3b799045312073243b644f6053726689d7baf05bcf09b7acd786cff4f6` |
 
 Import, check and run enforce these hashes. Use `re4mepc import "/path/to/game.apk" --output /external/re4/game` to select another location, then pass `--game /external/re4/game` to check or run. See [engine validation and migration](docs/advanced-usage.md#data-locations-and-supported-engine).
+
+### How the port works
+
+The original Android ARM32 libraries still execute the game logic. A Python host replaces the Android services they use, **Unicorn** executes ARM/Thumb instructions, and native C helpers handle frequent memory operations and audio mixing.
+
+1. **Restore and load the engine.** The importer extracts `libbio4af.so` and `libmc_eruption_for_android_jni.so`, restores resource names from the APK and verifies the supported library hashes. A custom ELF loader maps the libraries, applies ARM relocations and resolves imported symbols to host functions.
+2. **Share memory and supply Android services.** A **256 MiB** mapping below 4 GiB uses the same addresses in Unicorn and the Linux process, allowing host bridges to access validated guest buffers directly. ARM trampolines dispatch imported calls to Python or C. A limited JNI implementation supplies objects, strings, arrays and native method registration; the host runs library constructors, `JNI_OnLoad` and lifecycle callbacks. Bionic/libc and EABI bridges provide files, saves, allocation and imported math helpers.
+3. **Bridge graphics and media.** Fixed-function OpenGL ES 1 calls map to desktop OpenGL's compatibility profile; OES paletted textures are expanded before upload. SDL2 supplies the window, input and audio output. FFmpeg decodes original sounds and movies, with decoded audio cached locally and mixed through a native callback.
+4. **Feed the original controls.** Menus receive the engine's key/touch callbacks. During gameplay, hooks tied to the supported engine's symbols translate keyboard, mouse and controller actions into its control state and camera angles. Mouse look adjusts the native camera orbit before wall-collision checks. File services route native saves to the installation's save directory, with host snapshots around save boundaries.
+5. **Preserve the engine clock.** Each loop polls SDL input, applies controls, calls `native_onDrawFrame`, updates movie playback and swaps the window. Updates run at **20 Hz** because each draw also advances game logic. Raising that rate speeds up movement, combat and mission timers; higher rendering rates require separating the engine's update and draw paths.
+
+Source entry points: [ARM/ELF runtime](re4pc/arm.py), [JNI](re4pc/jni.py), [lifecycle and frame loop](re4pc/game.py), [graphics](re4pc/graphics.py), [desktop controls](re4pc/pc_controls.py), and [media](re4pc/media.py). See the [architecture reference](docs/advanced-usage.md#how-it-works) for the full source map. Engine-specific symbols, offsets and service coverage limit compatibility to the validated libraries; full campaign support remains unverified.
 
 ### Launcher
 
@@ -193,7 +205,7 @@ Ejecuta el motor original de **Resident Evil 4 Mobile para Android** en una vent
 
 **Debes aportar tu propio juego:** proporciona un APK compatible. El proyecto no incluye ni descarga el juego. Las bibliotecas importadas, recursos y partidas se guardan fuera del repositorio. La campaña completa no está validada.
 
-[Jugabilidad](#jugabilidad) · [Inicio rápido](#inicio-rápido) · [Archivos del juego](#archivos-del-juego) · [Controles](#controles) · [Desarrollo](#desarrollo)
+[Jugabilidad](#jugabilidad) · [Inicio rápido](#inicio-rápido) · [Archivos del juego](#archivos-del-juego) · [Cómo funciona el port](#cómo-funciona-el-port) · [Controles](#controles) · [Desarrollo](#desarrollo)
 
 ### Jugabilidad
 
@@ -250,6 +262,18 @@ El importador restaura los recursos del APK y verifica las dos bibliotecas ARM y
 | `libmc_eruption_for_android_jni.so` | `25109c3b799045312073243b644f6053726689d7baf05bcf09b7acd786cff4f6` |
 
 La importación, comprobación y ejecución exigen estos hashes. Usa `re4mepc import "/ruta/al/juego.apk" --output /external/re4/game` para elegir otra ubicación y pasa `--game /external/re4/game` al comprobar o ejecutar. Consulta la [validación del motor y migración](docs/advanced-usage.md#data-locations-and-supported-engine) (en inglés).
+
+### Cómo funciona el port
+
+Las bibliotecas ARM32 originales de Android siguen ejecutando la lógica del juego. Un host en Python sustituye los servicios de Android que utilizan, **Unicorn** ejecuta las instrucciones ARM/Thumb y pequeños componentes nativos en C realizan operaciones frecuentes de memoria y mezcla de audio.
+
+1. **Restaurar y cargar el motor.** El importador extrae `libbio4af.so` y `libmc_eruption_for_android_jni.so`, restaura los nombres de los recursos del APK y verifica los hashes admitidos. Un cargador ELF propio sitúa las bibliotecas en memoria, aplica las reubicaciones ARM y enlaza los símbolos importados con funciones del host.
+2. **Compartir memoria y proporcionar servicios de Android.** Una región de **256 MiB** bajo los 4 GiB usa las mismas direcciones en Unicorn y en el proceso Linux, permitiendo acceder directamente a búferes emulados tras validarlos. Pequeñas rutinas ARM dirigen las llamadas importadas a Python o C. Una implementación limitada de JNI proporciona objetos, cadenas, arrays y registro de métodos nativos; el host ejecuta los constructores, `JNI_OnLoad` y los callbacks del ciclo de vida. Los puentes Bionic/libc y EABI proporcionan archivos, partidas, asignación de memoria y funciones matemáticas importadas.
+3. **Conectar gráficos y medios.** Las llamadas de función fija de OpenGL ES 1 se traducen al perfil de compatibilidad de OpenGL de escritorio; las texturas con paleta OES se expanden antes de enviarlas a la GPU. SDL2 proporciona ventana, entrada y salida de audio. FFmpeg decodifica los sonidos y vídeos originales; el audio decodificado se guarda en caché local y se mezcla mediante un callback nativo.
+4. **Alimentar los controles originales.** Los menús reciben los callbacks de teclas y toques del motor. Durante el juego, enlaces asociados a los símbolos del motor admitido traducen las acciones de teclado, ratón y mando a su estado de control y ángulos de cámara. El ratón ajusta la órbita nativa antes de comprobar colisiones con paredes. Los servicios de archivos dirigen las partidas nativas a la carpeta de guardados de la instalación, con copias del host alrededor de las operaciones de guardado.
+5. **Conservar el reloj del motor.** Cada iteración recoge la entrada SDL, aplica los controles, llama a `native_onDrawFrame`, actualiza los vídeos y presenta la ventana. Las actualizaciones funcionan a **20 Hz** porque cada dibujado también avanza la lógica. Aumentar esa frecuencia acelera movimiento, combate y temporizadores; una frecuencia de renderizado superior requiere separar actualización y dibujado dentro del motor.
+
+Puntos de entrada del código: [runtime ARM/ELF](re4pc/arm.py), [JNI](re4pc/jni.py), [ciclo de vida y bucle de fotogramas](re4pc/game.py), [gráficos](re4pc/graphics.py), [controles de escritorio](re4pc/pc_controls.py) y [medios](re4pc/media.py). La [referencia de arquitectura](docs/advanced-usage.md#how-it-works) incluye el mapa completo (en inglés). Los símbolos y desplazamientos específicos del motor y los servicios implementados limitan la compatibilidad a las bibliotecas validadas; la campaña completa sigue sin verificarse.
 
 ### Lanzador
 
