@@ -1,4 +1,4 @@
-[English README](../README.md) · [README en español](../README.es.md)
+[English README](../README.md#english) · [README en español](../README.md#español)
 
 Detailed reference retained from the project README. Commands run from the repository root.
 
