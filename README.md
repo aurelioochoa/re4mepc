@@ -4,6 +4,8 @@
 
 ## English
 
+> **Disclaimer:** `re4mepc` is not a decompilation or a static recompilation of Resident Evil 4 Mobile. It is an effort to preserve the specific Android release identified by the supported library hashes and make that release playable on PC, currently targeting Linux x86_64. Unicorn executes the original ARM32 libraries at runtime; Python/C bridges supply Android services, desktop controls, graphics and audio. You must supply your own compatible APK. Full campaign playability remains unverified.
+
 ![Resident Evil 4 Mobile — Tux as Leon and Ashley in a misty village](docs/readme-banner.png)
 
 Play the original **Resident Evil 4 Mobile Android** engine in a Linux desktop window with keyboard, mouse and controller support. `re4mepc` is an experimental compatibility host: Unicorn executes the ARM32 libraries, SDL2 handles the window and audio, and a bridge maps OpenGL ES 1 to desktop OpenGL. No Android installation is required.
@@ -193,11 +195,24 @@ Real-engine tests open desktop windows and use isolated game copies. Cleaning pr
 
 See [detailed usage, architecture and testing](docs/advanced-usage.md), [diagnostics](docs/diagnostics.md), [rendering audit](docs/render-audit.md), and [reverse-engineering workflow](docs/rea-workflow.md).
 
-### License and credits
+### License
 
 The host's original source is licensed under [MIT](LICENSE). This excludes original game data, trademarks and third-party dependencies. Resident Evil belongs to its respective rights holders. The repository distributes the host and documentation, not the game.
 
+### Credits
+
+- **Capcom and the original game's creators:** Resident Evil 4 Mobile, its engine, characters, artwork and audio.
+- **Unicorn contributors:** ARM/Thumb execution of the original Android libraries.
+- **SDL2 and FFmpeg contributors:** desktop window/input/audio services and original media decoding.
+- **Python, Tcl/Tk and Pillow contributors:** the host language, native launcher and image handling. **pyelftools, Capstone and Keystone contributors:** ELF parsing, disassembly and assembly tools.
+- **DejaVu and IPA font contributors:** fonts used in portable builds, with their accompanying licenses.
+- **Project contributors and testers:** the compatibility bridges, PC controls, launcher and preservation documentation. See [banner provenance](docs/banner-artwork.md) and [launcher artwork credits](docs/launcher-assets.md) for visual assets.
+
+Third-party components retain their own licenses. This unofficial preservation effort has no affiliation with or endorsement from the original game's rights holders.
+
 ## Español
+
+> **Aviso:** `re4mepc` no es una descompilación ni una recompilación estática de Resident Evil 4 Mobile. Es un esfuerzo para preservar la edición específica de Android identificada por los hashes de las bibliotecas compatibles y permitir jugarla en PC, actualmente en Linux x86_64. Unicorn ejecuta las bibliotecas ARM32 originales en tiempo de ejecución; los puentes de Python/C proporcionan servicios de Android, controles de escritorio, gráficos y audio. Debes aportar tu propio APK compatible. La jugabilidad de toda la campaña sigue sin verificarse.
 
 ![Resident Evil 4 Mobile: Tux como Leon y Ashley en una aldea con niebla](docs/readme-banner.png)
 
@@ -388,6 +403,17 @@ Las pruebas del motor real abren ventanas y usan copias aisladas del juego. La l
 
 Consulta la [guía detallada de uso, arquitectura y pruebas](docs/advanced-usage.md), los [diagnósticos](docs/diagnostics.md), la [auditoría de renderizado](docs/render-audit.md) y el [flujo de ingeniería inversa](docs/rea-workflow.md) (en inglés).
 
-### Licencia y créditos
+### Licencia
 
 El código original del host tiene licencia [MIT](LICENSE). Esto excluye datos originales del juego, marcas y dependencias de terceros. Resident Evil pertenece a sus respectivos titulares. El repositorio distribuye el host y documentación, no el juego.
+
+### Créditos
+
+- **Capcom y los creadores del juego original:** Resident Evil 4 Mobile, su motor, personajes, arte y audio.
+- **Colaboradores de Unicorn:** ejecución ARM/Thumb de las bibliotecas originales de Android.
+- **Colaboradores de SDL2 y FFmpeg:** servicios de ventana, entrada y audio de escritorio, y decodificación de los medios originales.
+- **Colaboradores de Python, Tcl/Tk y Pillow:** lenguaje del host, lanzador nativo y tratamiento de imágenes. **Colaboradores de pyelftools, Capstone y Keystone:** análisis de ELF, desensamblado y ensamblado.
+- **Colaboradores de las fuentes DejaVu e IPA:** fuentes usadas en las versiones portátiles, con sus licencias correspondientes.
+- **Colaboradores y testers del proyecto:** puentes de compatibilidad, controles de PC, lanzador y documentación de preservación. Consulta la [procedencia del banner](docs/banner-artwork.md) y los [créditos del arte del lanzador](docs/launcher-assets.md) (en inglés).
+
+Los componentes de terceros conservan sus propias licencias. Este esfuerzo de preservación no es oficial ni cuenta con afiliación o respaldo de los titulares del juego original.
