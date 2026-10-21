@@ -1,5 +1,6 @@
 """Exercise movie compositing against a real offscreen OpenGL context."""
 import ctypes as C
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,15 +16,24 @@ class VideoOverlayTests(unittest.TestCase):
         import struct
         arm = ArmRuntime()
         graphics = None
+        # CI supplies X11 via Xvfb: SDL 2's offscreen driver cannot capture
+        # relative mouse input, even when its OpenGL rendering works.
+        driver = os.environ.get('SDL_VIDEODRIVER', 'offscreen')
         try:
-            with patch.dict('os.environ', {'SDL_VIDEODRIVER': 'offscreen',
+            with patch.dict('os.environ', {'SDL_VIDEODRIVER': driver,
                                           'SDL_AUDIODRIVER': 'dummy'}):
-                graphics = Graphics(arm, 1000, 700, hidden=True, logical_size=(800, 480))
+                graphics = Graphics(arm, 1000, 700, hidden=driver == 'offscreen',
+                                    logical_size=(800, 480))
             graphics.signature('SDL_GetRelativeMouseMode', C.c_int)
             graphics.signature('SDL_GetMouseState', C.c_uint, C.POINTER(C.c_int), C.POINTER(C.c_int))
             graphics.signature('SDL_PushEvent', C.c_int, C.c_void_p)
             list(graphics.events())
-            graphics.capture_mouse(True)
+            try:
+                graphics.capture_mouse(True)
+            except RuntimeError as error:
+                if driver == 'offscreen' and 'No relative mode implementation available' in str(error):
+                    self.skipTest('SDL offscreen driver lacks relative mouse support; run under Xvfb with SDL_VIDEODRIVER=x11')
+                raise
             self.assertEqual(graphics.sdl.SDL_GetRelativeMouseMode(), 1)
             self.assertEqual(graphics.sdl.SDL_ShowCursor(-1), 0)
             x, y = C.c_int(), C.c_int()
