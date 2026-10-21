@@ -10,6 +10,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+# Every bundled movie (bio4/res4/buki/ending .m4v) is authored at 30 fps.
+VIDEO_FPS = 30
+
 class Media:
     def __init__(self, root, sdl, graphics=None):
         self.root, self.sdl = Path(root).resolve(), sdl
@@ -180,7 +183,7 @@ class Media:
             self.video_queue = queue.Queue(maxsize=8)
             self.video_stop = threading.Event()
             self.video = subprocess.Popen([ffmpeg_binary(),'-v','error','-threads','1','-filter_threads','1','-i',str(path),
-                '-an','-vf','fps=30,'+filters,'-pix_fmt','rgb24','-f','rawvideo','pipe:1'],
+                '-an','-vf',f'fps={VIDEO_FPS},'+filters,'-pix_fmt','rgb24','-f','rawvideo','pipe:1'],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             self.video_reader = threading.Thread(target=self.read_video,
                 args=(self.video, self.video_queue, self.video_stop, g.width*g.height*3),
@@ -235,7 +238,7 @@ class Media:
                     raise RuntimeError('Cannot load decoded video audio')
                 self.audio.re4_audio_play(255, self.video_volume)
             self.video_started = time.monotonic()
-        target = int((time.monotonic()-self.video_started)*30)
+        target = int((time.monotonic()-self.video_started)*VIDEO_FPS)
         while self.video_index < target:
             try: frame = self.video_queue.get_nowait()
             except queue.Empty: break
@@ -246,6 +249,11 @@ class Media:
             self.video_index += 1
         if self.video_frame is not None:
             self.graphics.draw_video(self.video_frame)
+
+    def next_video_time(self):
+        """Monotonic time the next source frame is due, or None without a movie."""
+        if self.video is None or self.video_started is None: return None
+        return self.video_started + (self.video_index + 1) / VIDEO_FPS
 
     def end_video(self):
         outstanding = []

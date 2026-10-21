@@ -111,6 +111,18 @@ class Launcher:
         window.protocol('WM_DELETE_WINDOW', self.close)
         self.tick_job = window.after(100, self.tick)
         window.bind('<Destroy>', self.cleanup, add='+')
+        window.after_idle(self.warm_artwork)
+
+    def warm_artwork(self):
+        """Prepare dialog artwork in the background once the launcher is drawn."""
+        from . import ui_images
+        from .achievements import ACHIEVEMENTS
+        from .launcher_ui import AchievementArtwork
+        paper = self.assets / 'case-paper-v2.png'
+        ui_images.warm(sources=[(paper if paper.is_file() else self.assets / 'paper.png', 'RGB')] +
+                       [(self.assets / (name + '.png'), 'RGBA')
+                        for name in ('settings', 'backups', 'case-seal', 'paperclip', 'ribbon-spools')])
+        AchievementArtwork(self.assets).warm(ACHIEVEMENTS)
 
     def tr(self, text):
         from .languages import translate
@@ -386,6 +398,8 @@ class Launcher:
 
     def cleanup(self, event):
         if event.widget is self.window:
+            from . import ui_images
+            ui_images.shutdown()
             self.view.cleanup()
             self.window.after_cancel(self.tick_job)
             if self.folder_update:

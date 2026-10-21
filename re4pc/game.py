@@ -11,6 +11,7 @@ from .graphics import Graphics
 from .jni import JNI
 from .media import Media
 from .fast import Fast
+from .native_unzip import NativeUnzip
 from .input import DesktopInput
 from .pc_controls import PCControls
 from .runtime_log import log
@@ -111,6 +112,8 @@ class Game:
             bio = self.arm.load(self.root / 'lib/libbio4af.so', 2 * 1024 * 1024)
             install(self.arm)
             self.fast=Fast(self.arm)
+            self.unzip=NativeUnzip(self.arm)
+            self.unzip.install()
             self.arm.relocate()
             self.pc.install()
             self.menu.install()
@@ -378,6 +381,14 @@ class Game:
         if self.diagnostics:
             self.diagnostics.presentation()
 
+    def present_video(self):
+        """Show a due movie frame between engine ticks without simulating."""
+        with self.phase('media_video'):
+            self.graphics.begin_frame()
+            self.media.update_video()
+        if self.media.video is not None:
+            self.present()
+
     def statistics(self, pacer=None, elapsed=None):
         """Legacy fields retain their meanings; new fields have a versioned schema."""
         stats = {'schema_version': 2,
@@ -407,6 +418,8 @@ class Game:
         stats['settings'] = self.settings
         stats['diagnostics'] = self.diagnostics.metrics() if self.diagnostics else {'enabled':False}
         stats['texture_cache'] = self.graphics.texture_cache.metrics()
+        stats['native_unzip'] = {'calls': self.unzip.calls, 'fallbacks': self.unzip.fallbacks,
+                                 'bytes': self.unzip.bytes}
         stats['pending_audio_decodes'] = sum(not future.done() for future in self.media.decoding.values())
         stats['pending_audio_requests'] = len(self.media.pending_audio)
         return stats
@@ -483,7 +496,7 @@ class Game:
                 if screenshot and frames and self.frames==frames: self.graphics.screenshot(screenshot)
                 self.present()
                 with self.phase('pacing'):
-                    pacer.wait()
+                    pacer.wait(self.media.next_video_time, self.present_video)
             if screenshot and (not frames or self.frames < frames):
                 self.frame()
                 self.graphics.screenshot(screenshot)

@@ -4,8 +4,9 @@ Artwork is presentation only. Text, focus targets, forms and actions remain
 real Tk widgets, and each paper has its own scroll region.
 """
 import tkinter as tk
-from PIL import Image, ImageOps, ImageTk
+from PIL import Image, ImageTk
 from .languages import widget_translate
+from . import ui_images
 
 INK = '#211b13'
 IVORY = '#eee2c8'
@@ -39,8 +40,7 @@ class PaperCanvas(tk.Canvas):
         if load_paper:
             try:
                 path = assets / 'case-paper-v2.png'
-                with Image.open(path if path.is_file() else assets / 'paper.png') as image:
-                    self.paper = image.convert('RGB')
+                self.paper = ui_images.source(path if path.is_file() else assets / 'paper.png', 'RGB')
             except OSError:
                 pass
         self.bind('<Configure>', self.schedule)
@@ -80,7 +80,7 @@ class PaperCanvas(tk.Canvas):
             paint_height = max(570, self.master.winfo_height()) if getattr(self, 'fills_viewport', False) else height
             if height <= paint_height*1.5:
                 paint_height = height
-            texture = (self.backdrop or self.paper).resize((width, min(height, paint_height)), Image.Resampling.LANCZOS)
+            texture = ui_images.resized(self.backdrop or self.paper, (width, min(height, paint_height)))
             self.bitmap = Image.new('RGB', (width, height))
             for y in range(0, height, texture.height):
                 self.bitmap.paste(texture, (0, y))
@@ -110,12 +110,10 @@ class PaperCanvas(tk.Canvas):
         if key not in self.photos:
             try:
                 if name not in self.sources:
-                    with Image.open(self.assets / (name + '.png')) as image:
-                        source = image.convert('RGBA')
-                    bounds = source.getchannel('A').point(lambda a: 255 if a > 8 else 0).getbbox()
-                    self.sources[name] = source.crop(bounds) if bounds else source
-                image = ImageOps.contain(self.sources[name], (max(1, int(width)), max(1, int(height))),
-                                        Image.Resampling.LANCZOS)
+                    source = ui_images.source(self.assets / (name + '.png'), 'RGBA')
+                    trimmed = ui_images.trimmed(source, 8)
+                    self.sources[name] = source if trimmed is None else trimmed
+                image = ui_images.contained(self.sources[name], (max(1, int(width)), max(1, int(height))))
                 self.photos[key] = ImageTk.PhotoImage(image)
             except OSError:
                 self.photos[key] = None
@@ -244,9 +242,8 @@ class CaseDialog:
         self.photo = None
         self.job = None
         try:
-            with Image.open(app.assets / 'case-file.png') as source:
-                # Repeat the existing unlettered olive texture behind native content.
-                self.background = source.convert('RGB').crop((1040, 0, 1650, 48))
+            # Repeat the existing unlettered olive texture behind native content.
+            self.background = ui_images.source(app.assets / 'case-file.png', 'RGB').crop((1040, 0, 1650, 48))
         except OSError:
             pass
         self.back = ArtworkButton(self.canvas, 'Back to launcher', close, kind='nav')

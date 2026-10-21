@@ -269,14 +269,24 @@ class MouseControlTests(unittest.TestCase):
     def test_large_aim_motion_is_bounded_and_can_reverse(self):
         self.arm.write(100+0x48, b'\x01')
         self.arm.write(2000+0x130, struct.pack('<f', 32768))
-        for dy, expected in ((-10000,-45),(20,-42),(10000,45),(-20,42)):
+        for dy, expected in ((-10000,-60),(20,-57),(10000,60),(-20,57)):
             self.pc.active = True
             self.pc.move(0, dy)
             self.pc.begin_frame()
             self.assertAlmostEqual(self.pc.look_pitch, expected, places=4)
             blend=struct.unpack('<f', self.arm.read(2000+0x130, 4))[0]/65536
-            self.assertGreaterEqual(blend, 0.125)
-            self.assertLessEqual(blend, 0.875)
+            self.assertGreaterEqual(blend, 0)
+            self.assertLessEqual(blend, 1)
+
+    def test_free_look_reaches_near_vertical_and_can_reverse(self):
+        for dy, expected in ((-10000,-89),(20,-86),(10000,89),(-20,86)):
+            self.pc.active = True
+            self.pc.move(0, dy)
+            self.pc.begin_frame()
+            self.assertAlmostEqual(self.pc.look_pitch, expected, places=4)
+        self.pc._camera_pose(Registers(), 0, 0, None)
+        native=struct.unpack('<f',self.arm.read(4300+0x10,4))[0]
+        self.assertAlmostEqual(native*360/65536,86,places=4)
 
     def test_aim_entry_carries_look_angle_without_overriding_touch_mode(self):
         self.pc.active = True
@@ -336,7 +346,7 @@ class MouseControlTests(unittest.TestCase):
     def test_rendered_view_uses_native_collision_vectors_at_every_pitch(self):
         self.arm.write(4000, struct.pack('<fff', 0, 2, 0))
         self.arm.write(4100, struct.pack('<fff', 0, 1, 10))
-        for pitch in (-45,-20,0,20,45):
+        for pitch in (-89,-45,-20,0,20,45,89):
             self.pc.look_pitch=pitch
             uc=Registers()
             before=dict(uc.values)
@@ -517,13 +527,57 @@ class CombatInputTests(unittest.TestCase):
         self.assertEqual(self.frame(3)[1] & 0x80, 0)
         self.assertEqual(self.frame(0)[1] & 0x80, 0x80)
 
-    def test_pc_laser_overrides_only_the_visibility_query(self):
-        self.uc.reg_write(UC_ARM_REG_R0, 1)
-        before = bytes(self.arm.data)
-        self.pc._desktop_laser(self.uc, 0, 0, None)
-        self.assertEqual(self.uc.reg_read(UC_ARM_REG_R0), 0)
-        self.assertEqual(bytes(self.arm.data), before)
-        self.pc.enabled = False
-        self.uc.reg_write(UC_ARM_REG_R0, 1)
-        self.pc._desktop_laser(self.uc, 0, 0, None)
-        self.assertEqual(self.uc.reg_read(UC_ARM_REG_R0), 1)
+
+class DoubleTapTests(CombatInputTests):
+    FLICKS = 0x4000 | 0x8000 | 0x10000 | 0x20000
+
+    def tap(self, code, state=2):
+        self.pc.key(True, code)
+        trig = self.frame(state)[1]
+        self.pc.key(False, code)
+        return trig | self.frame(state)[1]
+
+    def test_aimed_double_tap_sends_the_pad_flick_for_each_direction(self):
+        for code, bit in ((19, 0x4000), (20, 0x8000), (21, 0x10000), (22, 0x20000)):
+            self.assertEqual(self.tap(code) & self.FLICKS, 0)
+            self.assertEqual(self.tap(code) & self.FLICKS, bit)
+
+    def test_slow_mixed_or_third_taps_do_not_flick(self):
+        self.tap(21)
+        for _ in range(4): self.frame()
+        self.assertEqual(self.tap(21) & self.FLICKS, 0)
+        self.assertEqual(self.tap(22) & self.FLICKS, 0)
+        self.assertEqual(self.tap(22) & self.FLICKS, 0x20000)
+        self.assertEqual(self.tap(22) & self.FLICKS, 0)
+
+    def test_double_tap_backward_while_moving_requests_quick_turn(self):
+        self.pc.button(False, 3)
+        self.tap(20, state=0)
+        self.assertEqual(self.tap(20, state=0) & self.FLICKS, 0x8000)
+
+    def test_releasing_aim_during_step_cancels_the_aim_it_restarts(self):
+        self.frame()
+        self.arm.write(100+0x64, struct.pack('<h', 1))
+        self.pc.button(False, 3)
+        self.assertEqual(self.frame(33)[1] & 0x10, 0)
+        self.assertTrue(self.pc.aim_owned)
+        self.assertEqual(self.frame(1)[1] & 0x10, 0x10)
+        self.assertEqual(self.frame(0)[1] & 0x10, 0)
+        self.assertFalse(self.pc.aim_owned)
+
+    def test_other_animations_do_not_retain_aim(self):
+        self.frame()
+        self.arm.write(100+0x64, struct.pack('<h', 0))
+        self.pc.button(False, 3)
+        self.frame(33)
+        self.assertFalse(self.pc.aim_owned)
+
+    def test_focus_loss_and_menus_discard_taps(self):
+        self.tap(19)
+        self.pc.release()
+        self.pc.button(True, 3)
+        self.assertEqual(self.tap(19) & self.FLICKS, 0)
+        self.arm.write(1000+0x61, b'\0')
+        self.tap(19)
+        self.arm.write(1000+0x61, b'\x01')
+        self.assertEqual(self.frame()[1] & self.FLICKS, 0)

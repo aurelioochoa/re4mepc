@@ -123,6 +123,8 @@ For a single session, use `re4mepc run --language es` or `--language saved`. Sup
 | Hold right mouse / X | Aim |
 | Left mouse / Z | Fire |
 | R | Reload |
+| Double-tap a direction while aiming | Sidestep, then aim again |
+| Double-tap S / Down | Quick turn |
 | Hold F, then left mouse / Z | Ready knife, then slash |
 | E / Enter / Space | Context action; Enter / Space advance story text |
 | Escape | Open status; cancel inventory submenu or return to gameplay |
@@ -135,7 +137,7 @@ To pick up a ground item, press Space to select it and again to take it. PC mode
 
 In menus, WASD/D-pad or the right stick moves the cursor, Space/A selects, Enter/B continues or confirms the recognized difficulty slider, and Escape/Start cancels or returns. Normal mouse navigation also works.
 
-Controllers use left stick for movement/tank turns, right stick for look, triggers for aim/fire, A for action, X for reload, Y for knife and Start for status. Physical controller behavior remains unverified. Remap inputs and sensitivities in **Settings & controls**; Tab, F3 and F12 are reserved. Use `re4mepc run --controls touch` for original touch input. See [full controls](docs/advanced-usage.md#controls) and [menu behavior](docs/menu-controls.md).
+Controllers use left stick for movement/tank turns, right stick for look, triggers for aim/fire, A for action, X for reload, Y for knife and Start for status; double-flick the stick for sidesteps and the quick turn. Physical controller behavior remains unverified. Remap inputs and sensitivities in **Settings & controls**; Tab, F3 and F12 are reserved. Use `re4mepc run --controls touch` for original touch input. See [full controls](docs/advanced-usage.md#controls) and [menu behavior](docs/menu-controls.md).
 
 ### Saves and settings
 
@@ -331,6 +333,8 @@ Para una sola sesión, usa `re4mepc run --language es` o `--language saved`. Los
 | Mantener botón derecho / X | Apuntar |
 | Botón izquierdo / Z | Disparar |
 | R | Recargar |
+| Pulsar dos veces una dirección mientras apuntas | Paso lateral y volver a apuntar |
+| Pulsar dos veces S / Abajo | Giro rápido de 180° |
 | Mantener F y pulsar botón izquierdo / Z | Preparar el cuchillo y atacar |
 | E / Enter / Espacio | Acción contextual; Enter / Espacio avanzan el texto |
 | Escape | Abrir estado; cancelar submenú de inventario o volver al juego |
@@ -343,7 +347,7 @@ Para recoger un objeto del suelo, pulsa Espacio para seleccionarlo y otra vez pa
 
 En menús, WASD/cruceta o el stick derecho mueve el cursor, Espacio/A selecciona, Enter/B continúa o confirma el deslizador de dificultad reconocido, y Escape/Start cancela o vuelve. También funciona la navegación normal con ratón.
 
-Los mandos usan el stick izquierdo para moverse/girar, el derecho para mirar, gatillos para apuntar/disparar, A para acción, X para recargar, Y para cuchillo y Start para estado. El comportamiento con mandos físicos sigue sin verificarse. Reasigna entradas y sensibilidades en **Settings & controls**; Tab, F3 y F12 están reservados. Usa `re4mepc run --controls touch` para los controles táctiles originales. Consulta los [controles completos](docs/advanced-usage.md#controls) y el [comportamiento de menús](docs/menu-controls.md) (en inglés).
+Los mandos usan el stick izquierdo para moverse/girar, el derecho para mirar, gatillos para apuntar/disparar, A para acción, X para recargar, Y para cuchillo y Start para estado; mover el stick dos veces en una dirección hace los pasos laterales y el giro rápido. El comportamiento con mandos físicos sigue sin verificarse. Reasigna entradas y sensibilidades en **Settings & controls**; Tab, F3 y F12 están reservados. Usa `re4mepc run --controls touch` para los controles táctiles originales. Consulta los [controles completos](docs/advanced-usage.md#controls) y el [comportamiento de menús](docs/menu-controls.md) (en inglés).
 
 ### Partidas y ajustes
 

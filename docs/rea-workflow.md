@@ -71,10 +71,9 @@ supporting Capstone disassembly and private runtime captures are stored under
 
 The laser draw uses a separate visibility flag. The native difficulty table
 suppresses it on Extreme (index 4), which was also the selected difficulty in
-a private copy of the reported save. PC mode now overrides only
-`Get_Diff_LaserSiteNonDrawFlg` at its return; explicit laser-off requests,
-collision endpoints, recoil, ammunition and other difficulty parameters keep
-their native behavior. Touch mode retains the original suppression.
+a private copy of the reported save. Both PC and touch mode keep that native
+suppression; `Get_Diff_LaserSiteNonDrawFlg` is not overridden. Custom sights
+only reskin the native draw, so they are hidden too.
 
 The native aiming state reads the fire scan, ignores its initialization
 substate, and checks the shot cooldown and previous-press latch. A click that
@@ -92,9 +91,10 @@ SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
   .venv/bin/python tools/test_combat.py --output /tmp/re4-combat/check
 ```
 
-It enters the existing synthetic mission-2 fixture on Extreme, compares pixels
-immediately before/after the native laser draw against a hidden-laser negative
-control, sweeps aim angles and measures ammunition for quick mouse/keyboard
+It enters the existing synthetic mission-2 fixture on Extreme and checks that
+the original and a custom sight draw no pixels immediately before/after the
+native laser draw. For the remaining checks it reports the sight as drawn, as
+a fixture-only positive control, sweeps aim angles and measures ammunition for quick mouse/keyboard
 clicks during startup and recoil. It also checks reload and cancellation. It
 does not qualify a full campaign or physical input hardware.
 

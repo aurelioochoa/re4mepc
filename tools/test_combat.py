@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PIL import ImageChops
 from unicorn import UC_HOOK_CODE
+from unicorn.arm_const import UC_ARM_REG_R0
 from re4pc.game import Game
 from re4pc.paths import game_dir, isolated_game, test_output
 from tools.benchmark import Replay, source_identity
@@ -87,25 +88,31 @@ def check(game, replay, output):
         event('mouse_button', True, 3)
         replay.advance(30)
         assert state() == 2 and pc.last_sample['aiming']
-        # Known negative control: native Extreme deliberately suppresses the
-        # beam. Re-enable only its visibility query for the PC comparison.
-        pc.enabled = False
+        # Extreme suppresses the sight in every input mode, as on mobile.
+        # Request the draw explicitly so only the difficulty flag can hide
+        # it, for the original and a custom sight alike.
         assert arm.call(query, params) == 1
-        arm.call(visibility, laser, 1)
-        hidden = measure('native-extreme-hidden')
-        assert hidden == 0, ('Negative laser control drew pixels', hidden)
-        pc.enabled = True
+        sight = game.graphics.laser
+        hidden = {}
+        for shape, color in (('original', '#ff0000'), ('predator', '#00ffcc')):
+            sight.configure({'laser_shape': shape, 'laser_color': color, 'laser_size': 1.0})
+            arm.call(visibility, laser, 1)
+            hidden[shape] = measure('extreme-hidden-'+shape)
+            assert hidden[shape] == 0, ('Extreme laser drew pixels', shape, hidden[shape])
+        sight.configure(game.settings)
+        # Fixture only: the angle checks below need a drawn sight, so report
+        # this mission as one whose difficulty shows it.
+        query_start = arm.symbols[query] & ~1
+        query_end = query_start+arm.symbol_sizes[query]-4
+        hooks.append(arm.uc.hook_add(UC_HOOK_CODE, lambda uc, *rest: uc.reg_write(UC_ARM_REG_R0, 0),
+                                     begin=query_end, end=query_end))
+        arm.uc.ctl_remove_cache(query_start, query_start+arm.symbol_sizes[query])
         assert arm.call(query, params) == 0
-        # Leaving touch mode releases the desktop capture and its held inputs.
-        # Re-enter aim through the normal event route before measuring PC mode.
-        replay.advance()
-        event('mouse_button', True, 3)
-        replay.advance(45)
         arm.call(visibility, laser, 1)
-        visible = measure('pc-extreme-visible')
-        assert visible >= 20, ('PC laser is not visible', visible)
+        visible = measure('fixture-visible')
+        assert visible >= 20, ('Laser positive control is not visible', visible)
         assert arm.call(difficulty, params) == 4
-        record('extreme_laser', {'native_pixels': hidden, 'pc_pixels': visible,
+        record('extreme_laser', {'hidden_pixels': hidden, 'fixture_pixels': visible,
                                 'difficulty': 4})
 
         for label, dx, dy in (('up', 0, -100), ('down', 0, 200),
@@ -169,10 +176,55 @@ def check(game, replay, output):
             assert ammo() == bullets, (label, 'Unexpected delayed shot', bullets, ammo())
             assert not pc.last_sample['aiming']
             record(label, {'ammunition': ammo(), 'aiming': False})
+
+        # Double taps reuse the touch pad's flick: a sidestep while
+        # aiming, then aim again; down while moving plays the quick turn.
+        def pose():
+            body = arm.u32(arm.u32(pc.player)+0x120)
+            return (struct.unpack('<fff', arm.read(body+0x34, 12)),
+                    struct.unpack('<f', arm.read(body+0xa4, 4))[0])
+
+        def double_tap(key, frames=45, between=None):
+            start = pose()
+            tap(key)
+            replay.advance(2)
+            tap(key)
+            seen = set()
+            for frame in range(frames):
+                replay.advance()
+                seen.add((state(), struct.unpack('<h', arm.read(pc.player+0x64, 2))[0]))
+                if between and frame == 3: between()
+            end = pose()
+            moved = sum((a-b)**2 for a, b in zip(start[0], end[0]))**0.5
+            turned = abs((end[1]-start[1]+32768) % 65536-32768)
+            return seen, round(moved, 3), round(turned)
+
+        # The focus-loss case released the mouse; this click only recaptures.
+        click()
+        replay.advance(45)
+        event('mouse_button', True, 3)
+        replay.advance(45)
+        steps = {}
+        for key in 'wasd':
+            assert state() == 2, ('Not aiming before sidestep', key, state())
+            seen, moved, _ = double_tap(key)
+            assert (33, 1) in seen and state() == 2, ('Sidestep failed', key, seen, state())
+            assert moved > 0, ('Sidestep did not move', key)
+            steps[key] = moved
+        record('aim_sidesteps', steps)
+        seen, _, _ = double_tap('a', between=lambda: event('mouse_button', False, 3))
+        replay.advance(45)
+        assert (33, 1) in seen and state() == 0 and not pc.last_sample['aiming'], (
+            'Aim released during sidestep stayed raised', seen, state())
+        record('aim_release_during_sidestep', {'state': state()})
+        replay.advance(10)
+        seen, _, turned = double_tap('s')
+        assert (33, 0) in seen and state() == 0, ('Quick turn failed', seen, state())
+        assert abs(turned-32768) < 4096, ('Quick turn did not face backward', turned)
+        record('quick_turn', {'turned_degrees': round(turned*360/65536)})
         assert not game.graphics.debug_messages, sorted(game.graphics.debug_messages)
         return report
     finally:
-        pc.enabled = True
         for hook in hooks:
             arm.uc.hook_del(hook)
 
