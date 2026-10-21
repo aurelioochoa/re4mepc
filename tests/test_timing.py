@@ -57,6 +57,28 @@ class TimingTests(unittest.TestCase):
         pacer.wait()
         self.assertAlmostEqual(clock.now, 100.100)
 
+    def test_movie_frames_present_between_ticks_without_moving_the_tick(self):
+        clock = Clock()
+        pacer = FramePacer(clock.time, clock.sleep)
+        frames = [100 + i / 30 for i in range(1, 7)]
+        shown = []
+        def due(): return frames[0] if frames else None
+        def between(): shown.append(clock.now); frames.pop(0)
+        for _ in range(3):
+            pacer.wait(due, between)
+        # Three 20 Hz ticks span 150 ms: four 30 fps frames are due inside it.
+        self.assertEqual(len(shown), 4)
+        for when, expected in zip(shown, (100 + k / 30 for k in range(1, 5))):
+            self.assertAlmostEqual(when, expected)
+        self.assertAlmostEqual(clock.now, 100.15)
+
+    def test_stalled_movie_clock_is_polled_not_spun(self):
+        clock = Clock()
+        calls = []
+        FramePacer(clock.time, clock.sleep).wait(lambda: clock.now - 1, lambda: calls.append(clock.now))
+        self.assertAlmostEqual(clock.now, 100.05)
+        self.assertLessEqual(len(calls), 26)
+
     def test_early_wakeup_waits_remaining_budget(self):
         clock = Clock()
         early = [True]

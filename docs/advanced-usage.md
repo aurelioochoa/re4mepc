@@ -203,6 +203,8 @@ F12 closes the window. PC gameplay controls are enabled by default; the cursor i
 | Hold right mouse / X | Aim |
 | Left mouse / Z | Fire |
 | R | Reload |
+| Double-tap W / A / S / D while aiming | Sidestep in that direction, then aim again |
+| Double-tap S / Down | Quick turn |
 | Hold F, then left mouse / Z | Ready knife, then slash |
 | E / Enter / Space | Context action; Enter / Space advance story text |
 | Escape | Open status; cancel inventory submenu or return to gameplay |
@@ -213,7 +215,14 @@ F12 closes the window. PC gameplay controls are enabled by default; the cursor i
 
 To pick up ammo or another ground item, press Space to select it, then press Space again to take it.
 
-PC aiming keeps the laser visible on every difficulty, including Extreme. Quick fire taps are retained through weapon startup and recoil; releasing aim cancels a waiting shot.
+As on mobile, Extreme hides the laser sight, including custom sights. Quick fire taps are retained through weapon startup and recoil; releasing aim cancels a waiting shot.
+
+Double taps send the same flick as tapping one direction twice on the touch
+pad: the second press must arrive within 5 engine frames (0.25 seconds). While
+aiming, any direction performs the sidestep from basic training; Leon then
+raises his weapon again unless aim was released during the sidestep. Without aim,
+backward performs the quick turn. Arrow keys, the D-pad and the left stick work
+the same way.
 
 PC mode hides the movement pad and gun, knife, and lower-weapon touch buttons. Contextual actions (pickups, doors, ladders, and other interactions), companion commands, scope controls, status displays, and menus remain visible.
 
@@ -306,7 +315,7 @@ When the engine calls an imported function, an ARM trampoline routes that call t
 
 The frame loop polls desktop events, applies queued input and camera changes, calls `native_onDrawFrame`, updates audio/movie playback and swaps the window. It caps updates at **20 FPS**, matching the engine's mission clock (20 updates per game second). Each draw advances game logic, so uncapping this engine also accelerates movement, combat and timers. The previous 45 FPS target could run gameplay too fast.
 
-Frame pacing uses absolute deadlines to avoid accumulating sleep drift, and discards missed deadlines after loading stalls so gameplay does not rush to catch up. FFmpeg audio decoding and movie-process cleanup run on workers; first-use sounds play once ready, and stopping or replacing a sound cancels its pending playback. Decoded audio is cached locally, including movie audio. Register arguments are read in batches and paletted textures expand through Pillow's native routines. Initial resource loading still executes inside the ARM engine and can take several seconds; sustained engine frames above 50 ms still slow gameplay. Higher rendering rates require separating and auditing the original engine's update and draw paths.
+Frame pacing uses absolute deadlines to avoid accumulating sleep drift, and discards missed deadlines after loading stalls so gameplay does not rush to catch up. FFmpeg audio decoding and movie-process cleanup run on workers; first-use sounds play once ready, and stopping or replacing a sound cancels its pending playback. Decoded audio is cached locally, including movie audio. Register arguments are read in batches and paletted textures expand through Pillow's native routines. The engine's compressed `.h2z` resources use raw DEFLATE; `CMN_Unzip::GetData` is answered by host zlib, which yields the same bytes as the original decoder (232 of 232 title-to-village loads matched) in about 0.04 s instead of about 27 s of emulation. Streams zlib rejects still run the original ARM decoder. Float arithmetic in both libraries runs through libgcc soft-float routines inside `libmc_eruption`; their entries branch to VFP instructions that Unicorn executes natively. That libgcc build handles denormals and NaN payloads differently from VFP, so addition, multiplication and division resume the original routine whenever an operand or result is denormal, infinite, NaN or an underflow; conversions and comparisons match for every input. `tools/verify_softfloat.py` compares each helper bit for bit with the original routine using your imported game. Other resource parsing still executes inside the ARM engine, and the longest loading frame remains about 1 s; sustained engine frames above 50 ms still slow gameplay. Higher rendering rates require separating and auditing the original engine's update and draw paths.
 
 | Responsibility | Source |
 | --- | --- |
@@ -319,7 +328,9 @@ Frame pacing uses absolute deadlines to avoid accumulating sleep drift, and disc
 | Native game cadence and frame pacing | [timing.py](../re4pc/timing.py) |
 | FFmpeg audio/movie decoding and SDL2 mixing | [media.py](../re4pc/media.py), [audio.c](../native/audio.c) |
 | Fast memory imports | [fast.py](../re4pc/fast.py), [fast.c](../native/fast.c) |
+| Host zlib for the engine's DEFLATE resources | [native_unzip.py](../re4pc/native_unzip.py) |
 | Desktop launcher and settings | [launcher.py](../re4pc/launcher.py), [settings.py](../re4pc/settings.py) |
+| Shared decoded launcher artwork | [ui_images.py](../re4pc/ui_images.py) |
 | Named actions and controller routing | [actions.py](../re4pc/actions.py), [controllers.py](../re4pc/controllers.py) |
 | Save snapshots and native save boundaries | [backups.py](../re4pc/backups.py), [save_boundary.py](../re4pc/save_boundary.py) |
 | Local achievements and unlock captures | [achievements.py](../re4pc/achievements.py), [achievement_media.py](../re4pc/achievement_media.py) |

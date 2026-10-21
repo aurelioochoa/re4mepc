@@ -3,6 +3,7 @@ import tkinter as tk
 
 from PIL import Image, ImageOps, ImageTk
 from .languages import GAME_LANGUAGES, LAUNCHER_LANGUAGES, widget_translate
+from . import ui_images
 
 
 INK = '#211b13'
@@ -223,9 +224,15 @@ class CaseFileView:
         self.buttons = []
         self.nav = {}
         self.layout_job = None
+        # Decode the launcher's artwork in parallel; the loads below then share it.
+        icons = (('settings', 'settings.png'), ('backups', 'backups.png'),
+                 ('achievements', 'achievement-platinum.png'))
+        for future in ui_images.warm(sources=[(launcher.assets / name, mode) for name, mode in (
+                ('case-file.png', 'RGB'), ('numeral-4.png', 'RGBA'), ('resident-evil-wordmark.png', 'RGBA'),
+                ('icon.png', None), *((filename, 'RGBA') for _, filename in icons))]):
+            future.result()
         try:
-            with Image.open(launcher.assets / 'case-file.png') as image:
-                self.source = image.convert('RGB')
+            self.source = ui_images.source(launcher.assets / 'case-file.png', 'RGB')
         except OSError:
             # Source checkouts with missing artwork still have the complete UI.
             self.source = Image.new('RGB', (1672, 941), '#171810')
@@ -239,27 +246,20 @@ class CaseFileView:
                 pass
         launcher.banner_source = self.source
         try:
-            with Image.open(launcher.assets / 'numeral-4.png') as image:
-                image = image.convert('RGBA')
-                bounds = image.getchannel('A').point(lambda alpha: 255 if alpha > 64 else 0).getbbox()
-                self.numeral_source = image.crop(bounds) if bounds else None
+            self.numeral_source = ui_images.trimmed(ui_images.source(launcher.assets / 'numeral-4.png', 'RGBA'), 64)
         except OSError:
             pass
         try:
-            with Image.open(launcher.assets / 'resident-evil-wordmark.png') as image:
-                self.wordmark_source = image.convert('RGBA')
+            self.wordmark_source = ui_images.source(launcher.assets / 'resident-evil-wordmark.png', 'RGBA')
         except OSError:
             pass
-        for name, filename in (('settings', 'settings.png'), ('backups', 'backups.png'),
-                               ('achievements', 'achievement-platinum.png')):
+        for name, filename in icons:
             try:
-                with Image.open(launcher.assets / filename) as image:
-                    self.icon_sources[name] = image.convert('RGBA')
+                self.icon_sources[name] = ui_images.source(launcher.assets / filename, 'RGBA')
             except OSError:
                 pass
         try:
-            with Image.open(launcher.assets / 'icon.png') as image:
-                launcher.app_icon = ImageTk.PhotoImage(image.resize((64, 64), Image.Resampling.LANCZOS))
+            launcher.app_icon = ImageTk.PhotoImage(ui_images.resized(ui_images.source(launcher.assets / 'icon.png'), (64, 64)))
             launcher.window.iconphoto(True, launcher.app_icon)
         except OSError:
             pass
@@ -460,16 +460,14 @@ class CaseFileView:
         if self.numeral_source:
             numeral_height = max(1, round(260 * art_scale))
             numeral_width = max(1, round(numeral_height * self.numeral_source.width / self.numeral_source.height))
-            self.numeral_image = ImageTk.PhotoImage(self.numeral_source.resize(
-                (numeral_width, numeral_height), Image.Resampling.LANCZOS))
+            self.numeral_image = ImageTk.PhotoImage(ui_images.resized(self.numeral_source, (numeral_width, numeral_height)))
             self.canvas.create_image(title_x, title_y, image=self.numeral_image, anchor='nw')
         else:
             self.text(title_x, title_y, '4', max(32, round(240 * art_scale)), color=RED)
         if self.wordmark_source:
             word_width = max(1, round(440 * art_scale))
             word_height = max(1, round(word_width * self.wordmark_source.height / self.wordmark_source.width))
-            self.wordmark_image = ImageTk.PhotoImage(self.wordmark_source.resize(
-                (word_width, word_height), Image.Resampling.LANCZOS))
+            self.wordmark_image = ImageTk.PhotoImage(ui_images.resized(self.wordmark_source, (word_width, word_height)))
             self.canvas.create_image(title_x + 168 * art_scale, title_y + 115 * art_scale,
                                      image=self.wordmark_image, anchor='nw')
         else:
@@ -488,7 +486,7 @@ class CaseFileView:
         else:
             position(self.app.play_button, (content_x, play_y, content_width, play_height), ui * .9)
         self.app.utility_images = {
-            name: ImageTk.PhotoImage(icon.resize((round(48 * ui), round(48 * ui)), Image.Resampling.LANCZOS))
+            name: ImageTk.PhotoImage(ui_images.resized(icon, (round(48 * ui), round(48 * ui))))
             for name, icon in self.icon_sources.items()}
         utilities = ((self.app.achievements_button, 'achievements'),
                      (self.settings_button, 'settings'), (self.app.backups_button, 'backups'))
@@ -721,11 +719,22 @@ def completion_time(timestamp_ns, *, short=False, zone=None):
     return f'Completion recorded: {date} · {local:%H:%M:%S} UTC{sign}{hours:02d}:{minutes:02d}'
 
 
+# Catalog rows show every achievement at this size.
+CATALOG_ART_SIZE = 72
+
+
 class AchievementArtwork:
     """Only crop/resize original alpha; cache each display size per window."""
     def __init__(self, assets):
         self.assets = assets
         self.images = {}
+
+    def steps(self, item, size):
+        return (self.assets / ('achievement-' + item.id + '.png'), 'RGBA',
+                ('trim', 0), ('contain', (size - 8, size - 8)))
+
+    def warm(self, items, size=CATALOG_ART_SIZE):
+        return ui_images.warm(prepared_items=[self.steps(item, size) for item in items])
 
     def draw(self, canvas, item, size, *, clear=True, x=None, y=None):
         if clear:
@@ -733,13 +742,9 @@ class AchievementArtwork:
         key = (item.id, size)
         if key not in self.images:
             try:
-                from PIL import ImageOps
-                with Image.open(self.assets / ('achievement-' + item.id + '.png')) as source:
-                    rgba = source.convert('RGBA')
-                bounds = rgba.getchannel('A').getbbox()
-                if not bounds:
+                icon = ui_images.prepared(*self.steps(item, size))
+                if icon is None:
                     raise ValueError('Empty achievement artwork')
-                icon = ImageOps.contain(rgba.crop(bounds), (size - 8, size - 8), Image.Resampling.LANCZOS)
                 self.images[key] = ImageTk.PhotoImage(icon)
             except (OSError, ValueError):
                 self.images[key] = None
@@ -1181,7 +1186,7 @@ class AchievementRow(PaperCanvas):
             self.text(w-14, h/2, '›', 30, color=RED, anchor='center')
         else:
             self.rule(h-1, 0, w)
-        self.view.art.draw(self, self.item, 72, clear=False, x=52, y=47)
+        self.view.art.draw(self, self.item, CATALOG_ART_SIZE, clear=False, x=52, y=47)
         earned = self.item.id in self.view.unlocked
         current, target = self.item.progress(self.view.records, self.view.unlocked)
         wide = w > 650
@@ -1209,6 +1214,10 @@ class AchievementsView:
         self.window, self.frame, self.body = self.chrome.window, self.chrome.frame, self.chrome.body
         self.window.view = self
         self.art = AchievementArtwork(app.assets)
+        from .achievements import ACHIEVEMENTS
+        # Decode the catalog artwork in parallel before the rows draw it.
+        for future in self.art.warm(ACHIEVEMENTS):
+            future.result()
         self.selected = None
         self.restoring_focus = None
         self.records, self.unlocked = None, {}

@@ -35,6 +35,16 @@ class VideoTests(unittest.TestCase):
         self.assertEqual(media.video_index, 3)
         media.graphics.draw_video.assert_called_with(b'fourth')
 
+    def test_next_frame_time_follows_the_movie_clock(self):
+        media = self.media()
+        self.assertAlmostEqual(media.next_video_time(), 100 + 1/30)
+        media.video_index = 29
+        self.assertAlmostEqual(media.next_video_time(), 101.0)
+        media.video_started = None
+        self.assertIsNone(media.next_video_time())
+        media.video_started, media.video = 100.0, None
+        self.assertIsNone(media.next_video_time())
+
     def test_decoder_exit_does_not_discard_buffered_frames(self):
         media = self.media()
         media.video_queue.put(b'last')

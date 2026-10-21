@@ -14,7 +14,12 @@ class FramePacer:
         self.deadline = clock()
         self.overruns = 0
 
-    def wait(self):
+    def wait(self, due=None, between=None):
+        """Sleep until the next tick; ``between`` runs whenever ``due()`` passes.
+
+        Movies use this to present at their source rate without advancing the
+        20 Hz simulation, as Android drew them on a separate surface.
+        """
         self.deadline += self.interval
         now = self.clock()
         if now > self.deadline:
@@ -25,5 +30,13 @@ class FramePacer:
                 self.deadline = now
             return
         while now < self.deadline:
-            self.sleep(self.deadline - now)
+            when = due() if due else None
+            if when is not None and when <= now:
+                between()
+                now = self.clock()
+                when = due()
+                # A decoder that has fallen behind is polled, not spun on.
+                if when is not None and when <= now: when = now + 0.002
+            target = self.deadline if when is None else min(when, self.deadline)
+            if target > now: self.sleep(target - now)
             now = self.clock()

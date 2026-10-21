@@ -13,13 +13,27 @@ TURN = 65536.0
 AIM_CENTER = TURN / 2
 AIM_UNITS_PER_DEGREE = 3 * TURN / 360
 MOUSE_DEGREES_PER_PIXEL = 0.15
-PITCH_LIMIT = 45.0
+# Set_LookAt_Bind orbits without a pitch clamp. Stop just short of vertical:
+# at 90 degrees the view direction is parallel to the camera's up vector.
+# While aiming, the [0, 65536] blend range bounds pitch to 60 degrees.
+PITCH_LIMIT = 89.0
 
 # Keep one click through the weapon's short startup/recovery animation.
 # At 20 Hz this expires after one second; menus, damage and releasing aim
 # cancel it sooner. These states/fields are from the supported native player.
 FIRE_BUFFER_FRAMES = 20
 FIRE_BUFFER_STATES = (0, 1, 2, 4, 5, 6, 7, 19)
+
+# LYT_Cmp_VirtualPad posts a flick when a touch lands in the same pad
+# direction as the previous one while its 5-frame counter is running.
+# GM_CtrlLyt_Input turns up, down, left and right into these trigger bits.
+# _State_AtkAimM plays the sidestep for each (motions 0x11-0x14) and
+# then restarts aiming; _State_Move uses down for the quick turn (motion 7).
+DOUBLE_TAP_FRAMES = 5
+DOUBLE_TAP_TRIGGERS = {19: 0x4000, 20: 0x8000, 21: 0x10000, 22: 0x20000}
+# Set_MvtPlay enters this state, then changes to the state at +0x64.
+MVT_PLAY_STATE = 33
+AIM_START_STATE = 1
 
 # Fields in the supported GM_CtrlLyt_Input layout: Pad, ActBtn_Post
 # (lower weapon), ActBtn_Gun and ActBtn_Knif. Event, Ashley, scope and
@@ -49,6 +63,9 @@ class PCControls:
         self.fire_down = self.fire_forwarded = False
         self.fire_pending_until = -1
         self.reload_requested = False
+        self.tap_code = None
+        self.tap_frame = 0
+        self.flick_requested = self.flick_this_frame = 0
         self.story_active = False
         self.item_active = False
         self.item_take_requested = False
@@ -75,13 +92,6 @@ class PCControls:
         aim=self.arm.symbols['_ZN18GM_CtrlMain_Player17_Set_AimStartRotXEP11GM_CtrlMainf']&~1
         self.arm.uc.hook_add(UC_HOOK_CODE,self._aim_start,begin=aim,end=aim)
         if self.enabled:
-            # Extreme difficulty suppresses the native beam. Desktop aiming
-            # still needs its sight: override only this visibility query, so
-            # collision, damage, recoil and explicit laser-off requests keep
-            # running through the original engine. Touch mode stays native.
-            laser_symbol='_ZN12GM_CtrlParam28Get_Diff_LaserSiteNonDrawFlgEv'
-            laser_end=(self.arm.symbols[laser_symbol]&~1)+self.arm.symbol_sizes[laser_symbol]-4
-            self.arm.uc.hook_add(UC_HOOK_CODE,self._desktop_laser,begin=laser_end,end=laser_end)
             item_symbol='_ZN18GM_CtrlLyt_WinItem5FrameEv'
             item_end=(self.arm.symbols[item_symbol]&~1)+self.arm.symbol_sizes[item_symbol]-4
             self.arm.uc.hook_add(UC_HOOK_CODE,self._item_window,begin=item_end,end=item_end)
@@ -90,10 +100,6 @@ class PCControls:
             end=draw+self.arm.symbol_sizes[draw_symbol]-4
             self.arm.uc.hook_add(UC_HOOK_CODE,self._hud_begin,begin=draw,end=draw)
             self.arm.uc.hook_add(UC_HOOK_CODE,self._hud_end,begin=end,end=end)
-
-    def _desktop_laser(self,uc,address,size,context):
-        if self.enabled:
-            uc.reg_write(UC_ARM_REG_R0,0)
 
     def _item_window(self,uc,address,size,context):
         try:
@@ -184,6 +190,11 @@ class PCControls:
         if down and code==23 and code not in self.keys and self.item_active:
             self.item_take_requested=True
         if down and code==12 and code not in self.keys:self.reload_requested=True
+        if down and code in DOUBLE_TAP_TRIGGERS and code not in self.keys:
+            if code==self.tap_code and self.frames-self.tap_frame<=DOUBLE_TAP_FRAMES:
+                # Like the pad, a third tap starts a new pair.
+                self.flick_requested=DOUBLE_TAP_TRIGGERS[code];self.tap_code=None
+            else:self.tap_code,self.tap_frame=code,self.frames
         if down: self.keys.add(code)
         else: self.keys.discard(code)
 
@@ -228,6 +239,8 @@ class PCControls:
         self.previous_scan=0
         self.reload_requested=False
         self.item_take_requested=self.item_take_this_frame=False
+        self.tap_code=None
+        self.flick_requested=self.flick_this_frame=0
         self._clear_fire()
 
     def _clear_fire(self):
@@ -269,6 +282,8 @@ class PCControls:
     def begin_frame(self):
         self.item_take_this_frame=self.item_take_requested
         self.item_take_requested=False
+        self.flick_this_frame=self.flick_requested
+        self.flick_requested=0
         self.item_active=False
         dx,dy=self.motion;self.motion[:]=[0,0]
         if self.active and self.player:
@@ -335,6 +350,8 @@ class PCControls:
             if 11 in self.keys and not knife: scan|=0x100
             if 66 in self.keys or 23 in self.keys or 47 in self.keys: scan|=0x20
             trig=scan & ~self.previous_scan
+            trig|=self.flick_this_frame
+            self.flick_this_frame=0
             if want_aim:
                 self.aim_owned=True
                 # Repeated gun triggers during startup toggle the weapon
@@ -347,6 +364,9 @@ class PCControls:
                 # true. Cancel the startup states too, retaining ownership
                 # until the engine leaves the aiming lifecycle.
                 elif aiming or state in (1,19):trig|=0x10
+                # A sidestep clears the aiming flag, then restarts aim.
+                # Keep ownership so that restart is cancelled as above.
+                elif state==MVT_PLAY_STATE and struct.unpack('<h',self.arm.read(self.player+0x64,2))[0]==AIM_START_STATE:pass
                 else:self.aim_owned=False
             if 11 in self.keys:self.knife_owned=True
             elif self.knife_owned:
