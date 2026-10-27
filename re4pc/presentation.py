@@ -98,10 +98,8 @@ class PresentationWorker:
                     surface.begin_frame()
                     geometry = self.stream.available and self.stream.render()
                     if geometry or self.stream.blit(self.read_framebuffer.value):
-                        if geometry:
-                            surface.draw_controller_cursor()
-                            if self.overlay:
-                                surface.draw_overlay(*self.overlay)
+                        if geometry and self.overlay:
+                            surface.draw_overlay(*self.overlay)
                         surface.present()
                         error = surface.gl.glGetError()
                         if error:

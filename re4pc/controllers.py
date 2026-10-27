@@ -15,11 +15,7 @@ class ControllerInput:
         self.pending = deque()
         self.actions = ActionState()
         self.sent_keys = set()
-        self.sent_touch = False
-        self.cursor = [400.0, 240.0]
-        self.touch_sources = set()
         self.gameplay = False
-        self.menu_actions = False
         if sdl is not None:
             signatures = {'SDL_NumJoysticks': (C.c_int, ()),
                           'SDL_IsGameController': (C.c_int, (C.c_int,)),
@@ -58,20 +54,9 @@ class ControllerInput:
         if down:
             action = self._action(identifier)
             self.buttons[source] = action
-            # Menus can contain touch-only confirmation sliders. The action
-            # button holds a virtual cursor; B/confirm retains keyboard menus.
-            if not self.gameplay and not self.menu_actions and action == 'action':
-                if not self.touch_sources:
-                    self._queue([('touch', True, *map(round, self.cursor))], source)
-                self.touch_sources.add(source)
-            else:
-                self._queue(self.actions.set(source, action, True), source)
+            self._queue(self.actions.set(source, action, True), source)
         else:
             self.buttons.pop(source, None)
-            if source in self.touch_sources:
-                self.touch_sources.remove(source)
-                if not self.touch_sources:
-                    self._queue([('touch', False, *map(round, self.cursor))], source)
             self._queue(self.actions.set(source, None, False), source)
 
     def process(self, event):
@@ -119,11 +104,6 @@ class ControllerInput:
                 scale = 600 * self.settings['controller_sensitivity'] * dt
                 if rx or ry:
                     self._queue([('controller_look', rx * scale, ry * scale)], ('stick', instance, 'look'))
-            elif rx or ry:
-                self.cursor[0] = max(0, min(799, self.cursor[0] + rx * 600 * dt))
-                self.cursor[1] = max(0, min(479, self.cursor[1] + ry * 600 * dt))
-                if self.touch_sources:
-                    self._queue([('motion', *map(round, self.cursor))], ('stick', instance, 'cursor'))
         events = [event for event, source in self.pending]
         self.pending.clear()
         for event in events:
@@ -132,28 +112,22 @@ class ControllerInput:
                     self.sent_keys.add(event[2])
                 else:
                     self.sent_keys.discard(event[2])
-            elif event[0] == 'touch':
-                self.sent_touch = event[1]
         return events
 
     def _reconcile(self):
         # A shared action's only queued down may belong to the removed pad.
         # Compare the remaining queue with the last emitted state so another
         # still-held source receives its down and removed sources get an up.
-        keys, touch = set(self.sent_keys), self.sent_touch
+        keys = set(self.sent_keys)
         for event, source in self.pending:
             if event[0] == 'key':
                 if event[1]:
                     keys.add(event[2])
                 else:
                     keys.discard(event[2])
-            elif event[0] == 'touch':
-                touch = event[1]
         held = {virtual_key(action) for action in self.actions.sources.values()}
         for code in sorted(keys ^ held):
             self._queue([('key',code in held,code)], ('release',None))
-        if touch != bool(self.touch_sources):
-            self._queue([('touch',bool(self.touch_sources),*map(round,self.cursor))], ('release',None))
 
     def release(self, instance=None):
         matches = lambda source: instance is None or source[1] == instance

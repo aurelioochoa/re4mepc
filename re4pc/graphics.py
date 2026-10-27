@@ -395,30 +395,23 @@ class Graphics:
             draw.line(points,fill=(80,220,130,255),width=2)
         self._draw_pixels(panel.tobytes(),rgba=True)
 
-    def draw_controller_cursor(self):
-        if not self.controller.handles or self.controller.gameplay:
-            return
-        from PIL import Image, ImageDraw
-        sprite = Image.new('RGBA',(17,17))
-        draw = ImageDraw.Draw(sprite)
-        draw.ellipse((1,1,15,15),outline=(0,0,0,255),width=3)
-        draw.line((0,8,16,8),fill=(255,255,255,255),width=1)
-        draw.line((8,0,8,16),fill=(255,255,255,255),width=1)
-        x,y = map(round,self.controller.cursor)
-        self._draw_pixels(sprite.tobytes(),rgba=True,size=(17,17),position=(x-8,y-8))
-
-    def draw_menu_hints(self, lines, cursor):
-        from PIL import Image, ImageDraw
-        panel = Image.new('RGBA', (self.width, 36), (0, 0, 0, 190))
-        ImageDraw.Draw(panel).multiline_text((8, 3), '\n'.join(lines), fill='white', spacing=2)
-        self._draw_pixels(panel.tobytes(), rgba=True, size=panel.size, position=(0, self.height-36))
-        sprite = Image.new('RGBA', (17, 17))
-        draw = ImageDraw.Draw(sprite)
-        draw.ellipse((1, 1, 15, 15), fill=(0, 0, 0, 180), outline='white', width=2)
-        draw.line((0, 8, 16, 8), fill='white')
-        draw.line((8, 0, 8, 16), fill='white')
-        x, y = map(round, cursor)
-        self._draw_pixels(sprite.tobytes(), rgba=True, size=sprite.size, position=(x-8, y-8))
+    def draw_menu_focus(self, rect):
+        """Outline the focused menu control in blood red, round for icon buttons."""
+        x, y, w, h = rect
+        round_icon = abs(w - h) <= 4 and w <= 110
+        key = (w, h, round_icon)
+        if getattr(self, '_focus_sprite', (None,))[0] != key:
+            from PIL import Image, ImageDraw
+            pad = 4
+            sprite = Image.new('RGBA', (w + 2*pad, h + 2*pad))
+            draw = ImageDraw.Draw(sprite)
+            shape = draw.ellipse if round_icon else draw.rectangle
+            shape((0, 0, w + 2*pad - 1, h + 2*pad - 1), outline=(0, 0, 0, 200), width=1)
+            shape((1, 1, w + 2*pad - 2, h + 2*pad - 2), outline=(178, 16, 12, 255), width=3)
+            shape((4, 4, w + 2*pad - 5, h + 2*pad - 5), outline=(0, 0, 0, 140), width=1)
+            self._focus_sprite = (key, sprite.tobytes(), sprite.size, pad)
+        _, data, size, pad = self._focus_sprite
+        self._draw_pixels(data, rgba=True, size=size, position=(x - pad, y - pad))
 
     def _draw_pixels(self, data, rgba=False, size=None, position=(0,0)):
         gl = self.gl

@@ -228,7 +228,7 @@ PC mode hides the movement pad and gun, knife, and lower-weapon touch buttons. C
 
 During PC gameplay, mouse capture centers and hides the pointer and confines it to the window. Left click fires without activating touch buttons. Tab releases or captures the pointer immediately. With the pointer released, visible menu and contextual action buttons accept clicks; clicking the scene restores capture without firing. Menus and `--controls touch` retain normal pointer input.
 
-In PC mode, Enter/B continues through recognized menus and confirms the difficulty slider once per press. WASD/D-pad or the right stick moves the menu cursor; Space/A clicks it, including inventory items and their context menus. Escape/Start cancels a recognized inventory submenu, then returns from inventory to gameplay. Current bindings appear on screen. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work. See [desktop menu controls](../docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `re4mepc run --controls touch`.
+In PC mode, WASD/arrows, the D-pad or the left stick move a red focus outline between the game's own menu buttons and list rows; Enter/Space/A/B press the focused control, including inventory items and their context menus, and drag the difficulty confirmation slider once per press. Left/Right adjusts a focused counter such as difficulty. Escape/Start cancels a recognized inventory submenu, then returns from inventory to gameplay. No pointer or hint bar is drawn. Focus loss, disconnect and menu transitions cancel pending gestures. Ordinary mouse clicks and dragging continue to work and hide the focus until the next key press. See [desktop menu controls](../docs/menu-controls.md). For the original mouse-as-touch controls and their full interface, launch `re4mepc run --controls touch`.
 
 Mouse look uses 0.15 degrees per pixel, with vertical movement limited to
 45 degrees up or down. Holding and releasing aim preserves the vertical look
@@ -242,14 +242,14 @@ SDL2 controllers use these default bindings:
 
 | Controller input | Action |
 | --- | --- |
-| Left stick | Forward/backward and tank turns |
-| Right stick | Look; move the touch cursor in menus |
+| Left stick | Forward/backward and tank turns; menu focus |
+| Right stick | Look |
 | Left / right trigger | Aim / fire |
-| A | Context action; click the menu cursor |
+| A | Context action; press the focused menu control |
 | X / Y | Reload / knife |
 | Start | Open status; cancel inventory submenu or return to gameplay |
 | D-pad | Menu navigation |
-| B | Continue or confirm the recognized slider |
+| B | Press the focused menu control |
 
 Use **Settings & controls** to remap inputs and adjust mouse sensitivity, controller sensitivity, invert Y and stick dead zone. Tab, F3 and F12 are reserved. Explicit `run` options override saved settings, for example `re4mepc run --window-mode fullscreen --controller-sensitivity 2`. Resizing and HiDPI preserve the original 800 × 480 image with letterboxing.
 

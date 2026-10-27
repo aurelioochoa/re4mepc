@@ -98,9 +98,8 @@ class Game:
         self.recapture_click = False
         self.gameplay_click = False
         self.pc = PCControls(self.arm,controls=='pc')
-        self.menu = MenuControls(self.arm, self.touch, enabled=controls=='pc',
-                                 cursor=self.graphics.controller.cursor, settings=self.settings)
-        self.graphics.controller.menu_actions = controls=='pc'
+        self.menu = MenuControls(self.arm, self.touch, enabled=controls=='pc', settings=self.settings,
+                                 gameplay=lambda: self.pc.active or self.media.video is not None)
         self.pc.sensitivity = self.settings.get('sensitivity', 1.0)
         self.pc.invert_y = self.settings.get('invert_y', False)
         self.mouse_captured=False
@@ -146,7 +145,7 @@ class Game:
             if self.presentation_rate != ENGINE_HZ:
                 from .render_stream import RenderStream
                 self.graphics.render_stream = RenderStream()
-            log.info('Engine ready; %d FPS native cadence; WASD move, RMB aim, LMB fire, R reload, Tab cursor, F12 quit',ENGINE_HZ)
+            log.info('Engine ready; %d FPS native cadence; WASD move, RMB aim, LMB fire, R reload, Tab cursor, arrows/Enter menus, F12 quit',ENGINE_HZ)
 
     def touch(self, action, x, y):
         # Only visible UI targets accept a released gameplay pointer. Hidden
@@ -276,7 +275,7 @@ class Game:
                 return True
             if getattr(self, 'menu', None) and self.menu.active:
                 self.menu.cancel()
-                self.menu.cursor[:] = event[2:]
+                self.menu.pointer_moved()
             down,x,y = event[1:]
             if down and self.media.video is not None:
                 self.media.end_video()
@@ -286,7 +285,7 @@ class Game:
             else: self.desktop_input.enqueue(event)
         elif kind=='motion':
             if getattr(self, 'menu', None) and self.menu.active:
-                self.menu.cursor[:] = event[1:]
+                self.menu.pointer_moved()
             if not self.mouse_captured and not self.skipping_touch and (
                     getattr(self, 'gameplay_click', False) or not (self.pc.enabled and self.pc.active)):
                 self.desktop_input.enqueue(event)
@@ -393,9 +392,9 @@ class Game:
         unlocks = tuple(self.achievements.new_unlocks)
         self.achievements.new_unlocks.clear()
         self.unlock_capture.tick(self.graphics.capture_image, unlocks)
-        self.graphics.draw_controller_cursor()
-        if self.menu.active and self.media.video is None:
-            self.graphics.draw_menu_hints(self.menu.hints(), self.menu.cursor)
+        focus = self.menu.focus_rect() if self.media.video is None else None
+        if focus:
+            self.graphics.draw_menu_focus(focus)
         self.update_mouse_capture()
         self.frames += 1
         if self.frames == 3:

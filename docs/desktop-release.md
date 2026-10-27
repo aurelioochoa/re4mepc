@@ -56,16 +56,15 @@ The user supplies the APK; packages contain no game libraries or assets.
 Game rendering uses an 800 × 480 logical framebuffer. Resizable/HiDPI drawable
 sizes use an aspect-preserving blit with black letterboxes. SDL mouse coordinates
 map through that same transform; presses in bars are ignored and releases during
-a drag are clamped to the logical edge. Movies, diagnostics and controller
-cursor draw into that logical surface. Screenshots capture its 800 × 480 pixels.
+a drag are clamped to the logical edge. Movies, diagnostics and the menu
+focus outline draw into that logical surface. Screenshots capture its 800 × 480 pixels.
 Alt+Enter toggles borderless desktop fullscreen, F3 diagnostics, Tab cursor,
 F12 quit. Held input is released on focus loss, device removal and remapping.
 
 Default controllers use left-stick tank movement, right-stick look, triggers
 for aim/fire, A action, X reload, Y knife, Start status, and D-pad navigation.
-In PC menus the right stick moves the cursor, A clicks the current selection,
-and B confirms through a verified native action or a bounded slider gesture.
-In touch mode A holds the virtual cursor for dragging. All devices share named
+In PC menus the D-pad or left stick moves the focus between the game's buttons
+and A or B presses the focused one; there is no virtual cursor. All devices share named
 actions, with independent physical sources and press-selected release routes.
 Bindings use SDL keycodes, button numbers, and controller names in settings.
 Tab, F3 and F12 are reserved. Explicit run options override saved settings.

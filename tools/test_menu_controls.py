@@ -85,10 +85,11 @@ def check(game, output, device):
 
     def press(down, action='confirm'):
         if device == 'keyboard':
-            code = {'confirm':13, 'action':32, 'status':27, 'right':ord('d'), 'left':ord('a')}[action]
+            code = {'confirm':13, 'action':32, 'status':27, 'right':ord('d'), 'left':ord('a'),
+                    'up':ord('w'), 'down':ord('s')}[action]
             send(('key', down, code))
         else:
-            button = {'confirm':1, 'action':0, 'status':6, 'right':14, 'left':13}[action]
+            button = {'confirm':1, 'action':0, 'status':6, 'right':14, 'left':13, 'up':11, 'down':12}[action]
             send(('controller_button', down, instance[0], button))
 
     def tap(action='confirm', ticks=3):
@@ -103,21 +104,48 @@ def check(game, output, device):
     game.arm.call('_ZN13Bio4_UserData19SetMissionClearFlagEllb', user, 0, 0, 1)
     game.arm.call('_ZN13Bio4_UserData16SetLastMissionIDEhs', user, 0, 1)
     game.arm.call('_ZN13Bio4_UserData12SetMissionIDEs', user, 1)
+    def focused(kind=None):
+        target = game.menu.focused()
+        assert target and game.menu.focus_rect(), ('No visible focus', game.menu.state, game.menu.targets)
+        assert kind is None or target.kind == kind, ('Unexpected focus', target, kind)
+        return target
+
+    def settle(ticks=40):
+        # Layout scenes animate in; let rects reach their resting place.
+        advance(ticks)
+
     wait('title')
+    assert game.menu.focus_rect() is None
     tap()
     wait('title_top')
+    settle()
+    start = focused('Button')
+    tap('down')
+    assert focused().rect[1] > start.rect[1], 'Down did not move focus'
+    tap('up')
+    assert focused().component == start.component, 'Up did not return focus'
+    game.graphics.screenshot(output/(device+'-title-focus.png'))
     tap()
     wait('difficulty')
+    settle()
+    assert focused('Button').component == game.arm.u32(game.menu.task+0x0c), 'OK is not the default focus'
     counter = game.arm.u32(game.menu.task+0x18)
     getter = '_ZNK15LYT_Cmp_Counter8GetValueEv'
     initial = game.arm.call(getter, counter)
-    tap('right')
+    tap('up')
+    assert focused('Counter').component == counter
+    game.graphics.screenshot(output/(device+'-difficulty-focus.png'))
+    tap('right', 3); advance(10)
     changed = game.arm.call(getter, counter)
-    tap('left')
+    tap('left', 3); advance(10)
     restored = game.arm.call(getter, counter)
     assert changed != initial and restored == initial, ('Difficulty did not change and restore', initial, changed, restored)
+    tap('down')
+    focused('Button')
     tap()
     wait('confirmation')
+    settle()
+    focused('SliderButton')
     for cancel in (('focus_lost',), ('controller_removed', instance[0])):
         press(True)
         advance()
@@ -141,10 +169,33 @@ def check(game, output, device):
     press(False)
     advance(5)
     wait('notice')
+    settle()
+    focused('Button')
     tap()
     wait('mission')
+    settle()
+    first = focused('TableViewItem')
+    table = game.menu.tables[first.component]
+    rows = (game.arm.u32(table+0xb8), game.arm.u32(table+0xbc))
+    print('MENU_MISSION_ROWS', device, rows, flush=True)
+    base = game.menu._index(first.component)
+    first_top = struct.unpack('<i', game.arm.read(table+0xcc, 4))[0]
+    # Walk past the last visible row so the native table scrolls, then back.
+    for step in range(1, rows[1] + 2):
+        tap('down'); advance(4)
+        assert game.menu._index(focused('TableViewItem').component) == base + step, ('List focus/scroll', step)
+    top = struct.unpack('<i', game.arm.read(table+0xcc, 4))[0]
+    assert top > first_top, 'Table did not scroll'
+    game.graphics.screenshot(output/(device+'-mission-scrolled.png'))
+    for step in range(rows[1], -1, -1):
+        tap('up'); advance(4)
+        assert game.menu._index(focused('TableViewItem').component) == base + step, ('List focus/scroll back', step)
+    assert struct.unpack('<i', game.arm.read(table+0xcc, 4))[0] == first_top, 'Table did not scroll back'
+    game.graphics.screenshot(output/(device+'-mission-focus.png'))
     tap()
     wait('mission_description')
+    settle()
+    assert focused('Button').component == game.arm.u32(game.menu.task+0x20), 'Select is not the default focus'
     tap()
     # Mission preparation then the existing Space/Enter story action.
     for _ in range(500):
@@ -156,12 +207,15 @@ def check(game, output, device):
     wait('gameplay')
     tap('status')
     wait('inventory')
-    # Cursor movement and click on the native item list; ordinary engine
-    # inventory handlers continue to choose/validate items and actions.
-    tap('right', 5)
-    tap('left', 5)
+    settle()
+    # Focus and press on the native item list; ordinary engine inventory
+    # handlers continue to choose/validate items and actions.
+    focused('TableViewItem')
+    game.graphics.screenshot(output/(device+'-inventory-focus.png'))
     tap('action')
     wait('inventory_submenu')
+    settle()
+    focused('Button')
     game.graphics.screenshot(output/(device+'-inventory-action.png'))
     tap('status')
     wait('inventory')
@@ -171,7 +225,7 @@ def check(game, output, device):
     report = {'device': device, 'source':source_identity(),
               'driver_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'states': samples, 'difficulty': [initial, changed, restored],
-              'held_confirmation_once': True, 'focus_and_disconnect_cancel': True,
+              'held_confirmation_once': True, 'focus_navigation': True, 'mission_rows': rows, 'focus_and_disconnect_cancel': True,
               'inventory_back_to_gameplay':True,
               'save_roundtrip': game.save_verified, 'engine_hz': 20,
               'fixture': 'tutorial clear and mission selection set synthetically; no campaign claim'}
