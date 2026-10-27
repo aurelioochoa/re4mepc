@@ -11,6 +11,7 @@ from .graphics import Graphics
 from .jni import JNI
 from .media import Media
 from .fast import Fast
+from .native_math import NativeMath
 from .native_unzip import NativeUnzip
 from .input import DesktopInput
 from .pc_controls import PCControls
@@ -33,7 +34,7 @@ KEYS = {
 }
 
 class Game:
-    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language=None, controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True, import_profile=False, fast_graphics=True):
+    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language=None, controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True, import_profile=False, fast_graphics=True, native_math='on'):
         self.initialized = False
         self.telemetry = telemetry
         self.diagnostics = Diagnostics(profile=profile, native_hooks=bool(native_profiles), import_hooks=import_profile) if diagnostics else None
@@ -44,6 +45,9 @@ class Game:
         self.settings = settings or {}
         self.presentation_rate = self.settings.get('presentation_rate', ENGINE_HZ)
         self.fast_graphics = fast_graphics and not import_profile and profile is None
+        if native_math not in ('on', 'off', 'shadow'):
+            raise ValueError('native_math must be on, off or shadow')
+        self.native_math_mode = native_math
         self.startup_started = time.monotonic()
         from contextlib import nullcontext
         self.phase = self.diagnostics.phase if self.diagnostics else lambda *args, **kwargs: nullcontext()
@@ -119,6 +123,8 @@ class Game:
                 self.arm.graphics_bridge = GLBridge(self.arm)
             self.unzip=NativeUnzip(self.arm)
             self.unzip.install()
+            if self.native_math_mode != 'off':
+                NativeMath(self.arm, shadow=self.native_math_mode == 'shadow').install()
             self.arm.relocate()
             self.pc.install()
             self.menu.install()
@@ -477,6 +483,7 @@ class Game:
         stats['graphics_bridge'] = self.arm.graphics_bridge.metrics() if self.arm.graphics_bridge else {'enabled': False}
         stats['diagnostics'] = self.diagnostics.metrics() if self.diagnostics else {'enabled':False}
         stats['texture_cache'] = self.graphics.texture_cache.metrics()
+        stats['native_math'] = self.arm.native_math.metrics() if self.arm.native_math else {'enabled': False}
         stats['native_unzip'] = {'calls': self.unzip.calls, 'fallbacks': self.unzip.fallbacks,
                                  'bytes': self.unzip.bytes}
         stats['pending_audio_decodes'] = sum(not future.done() for future in self.media.decoding.values())

@@ -146,3 +146,27 @@ work entirely in the host. The resulting renderer copies submission state and
 geometry, then interpolates it in a shared context on a separate presentation
 thread. It never calls an extra native draw or restores guest memory snapshots.
 See [rendering audit](render-audit.md) and [FPS verification](fps-performance.md).
+
+## Engine math investigation — 2026-10-27
+
+Gameplay diagnostics attributed nearly all tick time to ARM execution inside
+Unicorn. A temporary Rust basic-block counter (a Unicorn `UC_HOOK_BLOCK` hook
+over the engine mapping) and a return-address counter on libgcc's soft-float
+entries located the work: about 205,000 soft-float calls per gameplay tick,
+60% from `_mceBoneDeformer_transPoints`, `mceVector3D_dot` and
+`_mceTransform_multiply2`. Those probes were investigation-only and are not
+shipped. The same REA 6.4.0/Ghidra 12.1.4/JDK 21 toolchain decompiled the
+three routines and their helpers `_mceTransform_isIdentity` and
+`_mceTransform_copy`:
+
+```bash
+rea decompile /external/game/lib/libmc_eruption_for_android_jni.so _mceBoneDeformer_transPoints \
+  --provider ghidra --snapshot /external/analysis/eruption-snapshot.json --format json
+```
+
+Ghidra names `__addsf3` as `_edata` in this library; Capstone confirms the
+calls. Each routine begins with two 16-bit Thumb-1 instructions without PC
+use, which the host relocates into a trampoline. `native/math.rs` follows the
+decompiled operation order; `make math-test` compares every replaced call with
+the original routine on your imported game. See
+[measurements](fps-performance.md#native-engine-math--2026-10-27).

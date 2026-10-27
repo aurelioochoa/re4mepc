@@ -5,6 +5,23 @@ No original game libraries, extracted assets, dumps or save files are
 part of the repository or required by the component suite. The README's reviewed
 gameplay mosaic is a documentation image; component tests need no gameplay captures.
 
+## Native engine math verification — 2026-10-27
+
+Bone skinning, vector dot products and transform multiplication now run as
+Rust code (`native/math.rs`), with the original ARM routine taking over for any
+value outside the verified soft-float domain or any aliasing output. `make
+check` builds the crate and runs 14 synthetic Unicorn regressions covering
+replacement, fallback, aliasing, identity caches, skinning duplicates and
+shadow mismatch reporting.
+
+`make math-test` ran the title-to-village fixture and 200 gameplay ticks in
+shadow mode: 2,345,740 calls matched the original routines with zero
+mismatches, and 7 multiply2 calls during loading used the original routine.
+Two alternating timing pairs measured median gameplay tick work of
+43.6 → 27.3 ms and 41.5 → 26.6 ms. Details are in the
+[FPS/performance guide](docs/fps-performance.md#native-engine-math--2026-10-27).
+This does not qualify a full campaign.
+
 ## FPS and graphics verification — 2026-10-23
 
 Current source adds independent geometry presentation at 30/60/90/120/144/165/240

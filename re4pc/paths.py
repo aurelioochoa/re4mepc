@@ -56,7 +56,7 @@ def isolated_game(source, output):
 
 def native_library(name):
     """Resolve helpers beside application code in source and staged releases."""
-    if name not in ('libre4audio.so', 'libre4fast.so'):
+    if name not in ('libre4audio.so', 'libre4fast.so', 'libre4math.so'):
         raise ValueError('Unknown native helper')
     return Path(__file__).resolve().parent.parent / 'build' / name
 

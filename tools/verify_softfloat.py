@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from re4pc.arm import ArmRuntime
 from re4pc.assets import validate_libraries
-from re4pc.eabi import SOFT_FLOAT, SOFT_FLOAT_MODULE, install, redirect_soft_float
+from unicorn.arm_const import UC_ARM_REG_CPSR, UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3
+from re4pc.eabi import FLAG_COMPARE, SOFT_FLOAT, SOFT_FLOAT_MODULE, install, redirect_soft_float
 from re4pc.paths import game_dir
 
 SPECIAL = sorted({
@@ -61,11 +62,21 @@ def singles(seed, count):
     return values
 
 
-def compare(arm, original, helper, inputs, unary):
+FLAG_STATE = (UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3)
+
+
+def flag_call(arm, address, *arguments):
+    """NZCV and r0-r3 after a flag-returning comparison (r2/r3 seeded)."""
+    arm.call(address, *arguments, 0x2468ace0, 0x13579bdf)
+    return (arm.uc.reg_read(UC_ARM_REG_CPSR) >> 28,) + tuple(arm.uc.reg_read(r) for r in FLAG_STATE)
+
+
+def compare(arm, original, helper, inputs, unary, flags=False):
     mismatches = []
+    call = (lambda address, *a: flag_call(arm, address, *a)) if flags else arm.call
     for value in inputs:
         arguments = (value,) if unary else value
-        expected, actual = arm.call(original, *arguments), arm.call(helper, *arguments)
+        expected, actual = call(original, *arguments), call(helper, *arguments)
         if expected != actual:
             mismatches.append((arguments, expected, actual))
     return mismatches
@@ -87,11 +98,11 @@ def main():
         for symbol in SOFT_FLOAT:
             one = symbol in ('__aeabi_i2f', '__aeabi_ui2f', '__aeabi_f2iz')
             inputs = unary if one else binary
-            mismatches = compare(arm, arm.symbols[symbol], arm.soft_float[symbol], inputs, one)
-            print(f'{symbol:14} {len(inputs):7} cases  {len(mismatches)} mismatches', flush=True)
+            flags = SOFT_FLOAT[symbol][2] in FLAG_COMPARE
+            mismatches = compare(arm, arm.symbols[symbol], arm.soft_float[symbol], inputs, one, flags)
+            print(f'{symbol:16} {len(inputs):7} cases  {len(mismatches)} mismatches', flush=True)
             for arguments, expected, actual in mismatches[:8]:
-                print('   ', ' '.join(f'{value:08x}' for value in arguments),
-                      f'original={expected:08x} helper={actual:08x}')
+                print('   ', ' '.join(f'{value:08x}' for value in arguments), f'original={expected} helper={actual}')
             failed |= bool(mismatches)
         # The patched entries and the routines that fall into them.
         redirect_soft_float(arm)
@@ -99,6 +110,8 @@ def main():
                                        ('__aeabi_frsub', 0x3f800000, 0x40400000, 2.0),
                                        ('__aeabi_fadd', 0x3f800000, 0x40000000, 3.0),
                                        ('__aeabi_fcmplt', 0x3f800000, 0x40000000, 1),
+                                       ('__aeabi_fcmpge', 0x7fc00000, 0x3f800000, 0),
+                                       ('__aeabi_fcmpgt', 0x40000000, 0x3f800000, 1),
                                        ('__aeabi_fcmpeq', 0x7fc00000, 0x7fc00000, 0)):
             result = arm.call(arm.symbols[symbol], a, b)
             value = struct.unpack('<f', struct.pack('<I', result))[0] if isinstance(expected, float) else result

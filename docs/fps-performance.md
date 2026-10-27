@@ -120,6 +120,133 @@ countdown by exactly three seconds over 60 native ticks. A native stage
 transition runs with presentation active. This synthetic fixture does not
 qualify a full campaign or physical input devices.
 
+## Native engine math — 2026-10-27
+
+The supported engine has no hardware float ABI; every float multiply, add and
+comparison is a libgcc call. A guest basic-block profile of the gameplay replay
+attributed 55–60% of executed ARM instructions to those calls, about 205,000 per
+tick, while GL submission and host services took under 1% of tick time. Three
+routines in `libmc_eruption` issue about 60% of the calls:
+
+| Routine | Share of soft-float calls | Work |
+|---|---:|---|
+| `_mceBoneDeformer_transPoints` | 34% | Skins points by up to N weighted bone matrices |
+| `mceVector3D_dot` | 14% | Three-component dot product |
+| `_mceTransform_multiply2` | 12% | Affine 4×4 product with identity shortcuts and cached flags |
+
+REA/Ghidra decompilation showed pure arithmetic with ordered writes, so
+`native/math.rs` reproduces each one with the same operation order. Its float
+operations accept only the domain in which the existing VFP helpers equal
+libgcc bit for bit; anything else, and any output that would alias an input,
+runs the original routine. The replacement is on by default; use
+`--no-native-math` to compare.
+
+`make math-test` (or `tools/verify_native_math.py`) first runs the replay in
+shadow mode, where every call executes the original routine and is compared
+with the Rust result, then alternates timed runs with the replacements off and
+on. On the reference host:
+
+| Check | Result |
+|---|---|
+| Shadow-verified calls (transPoints / dot / multiply2) | 4,560 / 1,963,210 / 377,970 |
+| Mismatches | 0 |
+| Calls returned to the original routine | 7 multiply2 calls during loading |
+| Gameplay tick work p50, off → on (two pairs) | 43.6 → 27.3 ms, 41.5 → 26.6 ms |
+| Gameplay tick work p95, off → on | 49.2 → 31.4 ms, 46.7 → 29.8 ms |
+| Busy loading time, title to village | 26.1 → 22.3 s, 25.1 → 21.4 s |
+
+These figures come from the synthetic mission-2 fixture with SDL's offscreen
+driver; desktop activity was uncontrolled. The longest loading frame (about
+1 s) involves other routines and is unchanged.
+
+### Collision math and comparisons
+
+A later instruction-count sample of 300 village gameplay ticks, with helper
+work charged to its caller, found the next costs in collision code and in the
+libgcc comparison wrappers:
+
+| Routine | Share of sampled ARM instructions |
+|---|---:|
+| `__aeabi_cfcmple` and the `fcmp*` wrappers around it | ~11% |
+| `ERP_CalcMath::Mul` (a call to `__aeabi_fmul`) | 10.9% |
+| `GM_Util_Collision` / `GM_Util_CollCheck` routines | ~30% |
+| `ERP_CalcVec::Get_Dis_Pos` | 4.9% |
+
+The `fcmp*` entries in `libmc_eruption` reached `__cmpsf2` through `cfcmple`
+or `cfrcmple`, about 20 instructions per comparison. `re4pc/eabi.py` now
+redirects all seven to VFP comparisons. For ordered operands VFP's NZCV equals
+libgcc's; unordered operands set V, so those resume the original routine.
+`cfrcmple` also returns with r0/r1 swapped, as the original does.
+`tools/verify_softfloat.py` compares the flag-returning entries' NZCV and
+r0–r3, not only R0: 252,116 cases each, 0 mismatches.
+
+`native/math.rs` adds six `libbio4af` routines, each decompiled with Ghidra
+12.1.4 and read instruction by instruction for operand order:
+`Check_ReiCrossPlane`, `Check_InsideTriangle`, `Check_ReiCrossSphere`,
+`Set_ReiPlane_CrossPoint`, `Get_PointCrossLinePt` and `Get_Dis_Pos`. Distances
+use the engine's table-driven `mceUtil3D_sqrt`, reproduced in integer
+arithmetic. Python checks that routine's SHA-256 before Rust reads its table,
+and `make math-test` compares the copy with the engine on 212,999 inputs
+covering every exponent, sign and table row.
+
+| Check | Result |
+|---|---|
+| Shadow-verified calls, 400 gameplay ticks (plane / inside / sphere / plane point / line point / distance) | 656,685 / 123,872 / 86,879 / 124,281 / 260,637 / 352,786 |
+| Mismatches, all nine functions | 0 |
+| Gameplay tick work p50, before → after (two clean pairs) | 26.1 → 13.7 ms, 25.8 → 13.6 ms |
+| Gameplay tick work p95, before → after | 30.5 → 15.6 ms, 30.0 → 15.4 ms |
+| Gameplay CPU, one sampled run per build | ~60–80% → ~35–50% of one core |
+| Title to village, longest loading frame | unchanged (~63 s, ~1 s) |
+
+"Before" disables only these changes; the three earlier routines stay native
+in both arms. A third pair ran under heavy desktop contention (41.1 → 18.3 ms
+p50) and is excluded. Title-to-village time is dominated by paced menu input
+waits.
+
+### Next targets
+
+Shares are from the profile above, taken before these changes, so the
+remaining work is now a larger share of a smaller tick. Re-profile before
+starting each target.
+
+1. **`GM_Util_CollCheck::Hit_Tri_Sph` and `Hit_Tri_SphFall`** (about 1 KB of
+   Thumb code each). Ghidra's call graph makes these the hub: reached from
+   `Hit_Sph_Tris`, `Check_HitAll`, `Check_AimSph` and `Check_Fall`, they call
+   all six new leaves plus `Get_Tri_NearPos`, `Set_MoveVec`,
+   `mceVector3D_normalize`, `ERP_CalcVec::Set`/`Sub` and `Mul`. As whole
+   functions they would cost one hook per triangle instead of one per leaf
+   test, and they cover the remaining instructions in their own bodies
+   (3.5% and 3.2%). The fifth argument is a float on the stack, but the
+   shadow trampoline pushes two words before calling the original, so shadow
+   mode first needs a variant that copies stack arguments.
+2. **`ERP_CalcMath::Mul`** (10.9% including its `__aeabi_fmul`). The wrapper
+   only stores both arguments, calls through the PLT and returns, so a Rust
+   hook would cost more than the work. Better: an in-guest Thumb-2 VFP body
+   with the same domain checks as `eabi.py`'s arithmetic helpers, falling back
+   to the original routine.
+3. **`mceUtil3D_sin`** (5.0%). Table interpolation like `mceUtil3D_sqrt`, plus
+   soft-float corrections; `mceUtil3D_sqrt` itself is another 1.1% when called
+   outside distances.
+4. **Smaller routines** (each under 2%): `_mceTransform_setRotateEulerXYZ`,
+   `_mceStructArray_setCopy`, `Check_ReiCrossColumn`,
+   `GM_Util_BoundStage::Check_HitAll`/`Check_Fall`, `mceVector3D_normalize`
+   and `_mceTransform_copy`.
+5. **Loading** (unchanged by all of the above). The longest loading frame is
+   about 1 s, involving `CMN_HizArchive::_calcChecksum` and `rcx::font` glyph
+   code; it needs its own profile of slow loading frames.
+
+Moving GL submission to another thread was considered and not pursued: CPU
+graphics submission is about 1.8 s against about 69 s of native execution in
+a loading profile, and under 1% of gameplay tick time.
+
+The profile sampled program counters every 50,000 guest instructions
+(`emu_start` count slices) while the benchmark replay drove village
+gameplay, charging soft-float helper samples to the link register's
+function. It counts instructions, not time, and slows emulation about tenfold.
+Static analysis used Ghidra 12.1.4 headless (`analyzeHeadless` with short Java
+post-scripts for decompilation and call graphs) on copies of the libraries;
+Ghidra rejects project paths containing dot-prefixed directories.
+
 ## Local measurements — 2026-10-23
 
 Reference host: AMD Ryzen 9 6900HS, Radeon 680M, Mesa 26.2.5, Arch Linux

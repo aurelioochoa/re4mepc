@@ -29,7 +29,7 @@ class DesktopTests(unittest.TestCase):
         self.home.mkdir()
         self.root = base / 'checkout with spaces \' "$`%\\'
         self.root.mkdir()
-        for name in ('re4pc.sh', '.venv/bin/python', 'build/libre4audio.so', 'build/libre4fast.so'):
+        for name in ('re4pc.sh', '.venv/bin/python', 'build/libre4audio.so', 'build/libre4fast.so', 'build/libre4math.so'):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')

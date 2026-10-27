@@ -3,9 +3,10 @@ import unittest
 from pathlib import Path
 
 from keystone import Ks, KS_ARCH_ARM, KS_MODE_ARM
+from unicorn.arm_const import UC_ARM_REG_CPSR, UC_ARM_REG_R0, UC_ARM_REG_R1
 
 from re4pc.arm import ArmRuntime
-from re4pc.eabi import SOFT_FLOAT, SOFT_FLOAT_MODULE, install
+from re4pc.eabi import FLAG_COMPARE, SOFT_FLOAT, SOFT_FLOAT_MODULE, install
 
 MARKER = 42  # Returned by the synthetic "original" routine bodies.
 
@@ -30,9 +31,10 @@ class SoftFloatTests(unittest.TestCase):
         base = self.arm.base + 0x40000
         self.arm.modules.append({'path': Path(SOFT_FLOAT_MODULE), 'base': base})
         body = bytes(assembler.asm(f'mov r0, #{MARKER}; bx lr')[0])
-        for index, (symbol, (original, _, _)) in enumerate(SOFT_FLOAT.items()):
+        for index, (symbol, (original, _, helper)) in enumerate(SOFT_FLOAT.items()):
             entry = base + 0x100 * index
-            self.arm.write(entry, struct.pack('<I', original) + body)
+            words = (original,) + (FLAG_COMPARE[helper][3] if helper in FLAG_COMPARE else ())
+            self.arm.write(entry, struct.pack(f'<{len(words)}I', *words) + body)
             self.arm.symbols[symbol] = entry
 
     def call(self, symbol, *arguments):
@@ -79,6 +81,24 @@ class SoftFloatTests(unittest.TestCase):
             self.assertEqual(self.call(symbol, bits(2.0), bits(1.0)), 1)
             self.assertEqual(self.call(symbol, 0x80000000, 0), 0)
             self.assertEqual(self.call(symbol, 0x7fc00000, bits(1.0)), unordered)
+
+    def test_flag_comparisons_return_libgcc_flags_and_registers(self):
+        install(self.arm)
+        less, equal, greater = 0b1000, 0b0110, 0b0010  # NZCV
+        for symbol, swapped in (('__aeabi_cfcmple', False), ('__aeabi_cfrcmple', True)):
+            for a, b, flags in ((bits(1.0), bits(2.0), less), (bits(2.0), bits(1.0), greater),
+                                (bits(2.0), bits(2.0), equal), (0x80000000, 0, equal)):
+                self.call(symbol, a, b)
+                registers = (self.arm.uc.reg_read(UC_ARM_REG_R0), self.arm.uc.reg_read(UC_ARM_REG_R1))
+                self.assertEqual(self.arm.uc.reg_read(UC_ARM_REG_CPSR) >> 28, greater if swapped and flags == less
+                                 else less if swapped and flags == greater else flags, (symbol, hex(a), hex(b)))
+                self.assertEqual(registers, (b, a) if swapped else (a, b))
+            # Unordered operands resume the original routine.
+            self.assertEqual(self.call(symbol, 0x7fc00000, bits(1.0)), MARKER)
+        for symbol, expected in (('__aeabi_fcmplt', 1), ('__aeabi_fcmple', 1), ('__aeabi_fcmpeq', 0),
+                                 ('__aeabi_fcmpge', 0), ('__aeabi_fcmpgt', 0)):
+            self.assertEqual(self.call(symbol, bits(1.0), bits(2.0)), expected, symbol)
+            self.assertEqual(self.call(symbol, 0x7fc00000, bits(2.0)), 0, symbol)
 
     def test_unexpected_code_is_never_patched(self):
         entry = self.arm.symbols['__aeabi_fmul']

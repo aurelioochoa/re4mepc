@@ -254,7 +254,7 @@ def main():
         shutil.copy2(ROOT / 'requirements.txt', context / 'requirements.txt')
         (context / 'Dockerfile').write_text('''FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends python3.10 python3.10-venv python3-tk python3-pip gcc pkg-config libsdl2-dev ffmpeg ca-certificates file desktop-file-utils libfuse2 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends python3.10 python3.10-venv python3-tk python3-pip gcc cargo pkg-config libsdl2-dev ffmpeg ca-certificates file desktop-file-utils libfuse2 && rm -rf /var/lib/apt/lists/*
 RUN python3.10 -m venv /opt/re4venv
 COPY requirements.txt /tmp/requirements.txt
 RUN /opt/re4venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt

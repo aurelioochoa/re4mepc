@@ -52,6 +52,7 @@ class ArmRuntime:
         self.uc.hook_add(UC_HOOK_MEM_INVALID, self._invalid_memory)
         self.pending_error = None
         self.fast = None
+        self.native_math = None
         self.graphics_bridge = None
         # Reuse the native register buffers instead of constructing four
         # ctypes objects and crossing the FFI four times per import.
@@ -353,6 +354,9 @@ class ArmRuntime:
             self.graphics_bridge.close()
             self.graphics_bridge = None
         # Destroy Unicorn before releasing memory used by its translated code.
+        if self.native_math:
+            self.native_math.close()
+            self.native_math = None
         if self.fast: self.fast.close()
         self.uc = None
         self.libc.munmap.argtypes = (C.c_void_p, C.c_size_t)

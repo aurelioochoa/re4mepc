@@ -139,7 +139,7 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
     root = Path(root).resolve()
     launcher, entry, installed_icon = locations()
     required = (root / 're4pc.sh', root / '.venv/bin/python',
-                root / 'build/libre4audio.so', root / 'build/libre4fast.so')
+                root / 'build/libre4audio.so', root / 'build/libre4fast.so', root / 'build/libre4math.so')
     if not all(path.is_file() for path in required):
         raise ValueError('Run make install (or make setup / ./setup.sh) to create the Python environment and native helpers')
     if not os.access(required[0], os.X_OK) or not os.access(required[1], os.X_OK):

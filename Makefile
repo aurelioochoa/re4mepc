@@ -115,7 +115,7 @@ uninstall-desktop: ## Remove the per-user launcher and icon; preserve game and s
 ##@ Development
 .PHONY: dev build run
 dev: run ## Launch the game for local development
-build: ## Compile native audio and memory helpers
+build: ## Compile native audio, memory and math helpers
 	$(PYTHON) -u tools/build_native.py
 run: ## Launch the game with live terminal logs (ARGS adds options)
 	./re4pc.sh run $(ARGS)
@@ -152,16 +152,18 @@ fmt: ## Explain formatter availability
 	$(call NA,'No automatic formatter is configured for this project.')
 
 ##@ Visible game checks
-.PHONY: visible-test controls-test
+.PHONY: visible-test controls-test math-test
 visible-test: ## Open the game and verify startup, rendering and audio
 	$(PYTHON) -u tools/test_visible.py $(TEST_ARGS)
 controls-test: ## Open the game and exercise PC gameplay controls
 	$(PYTHON) -u tools/test_pc_controls.py $(TEST_ARGS)
+math-test: build ## Verify the Rust engine-math replacements against the original game code
+	$(PYTHON) -u tools/verify_native_math.py $(TEST_ARGS)
 
 ##@ Cleaning
 .PHONY: clean distclean
 clean: ## Remove compiled helpers and Python caches; preserve game and saves
-	rm -f build/libre4audio.so build/libre4fast.so build/libunicorn.so.2
+	rm -f build/libre4audio.so build/libre4fast.so build/libre4math.so build/libunicorn.so.2
 	find re4pc tests tools -type d -name __pycache__ -prune -exec rm -rf {} +
 distclean: clean ## Also remove the local Python environment
 	rm -rf .venv

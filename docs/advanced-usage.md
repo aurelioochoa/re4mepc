@@ -34,9 +34,9 @@ Mission completion is deferred to the user's later playtest. The previous runtim
 
 ## Setup and play
 
-Source setup requires Linux **x86_64**, Python 3.10 or later with `venv` and Tk, GNU Make, a C compiler, `pkg-config`, SDL2 development headers, desktop OpenGL with a compatibility profile, and FFmpeg. Portable releases bundle the application dependencies and need the host's graphics drivers. Run from your desktop session with your normal display and audio device available.
+Source setup requires Linux **x86_64**, Python 3.10 or later with `venv` and Tk, GNU Make, a C compiler, Rust (`cargo`), `pkg-config`, SDL2 development headers, desktop OpenGL with a compatibility profile, and FFmpeg. Portable releases bundle the application dependencies and need the host's graphics drivers. Run from your desktop session with your normal display and audio device available.
 
-On Arch Linux, install `python tk make gcc pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`. On Debian/Ubuntu, install `python3-venv python3-tk build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic`.
+On Arch Linux, install `python tk make gcc rust pkgconf sdl2-compat ffmpeg mesa noto-fonts-cjk`. On Debian/Ubuntu, install `python3-venv python3-tk build-essential cargo pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg fonts-ipafont-gothic`.
 
 ```bash
 git clone https://github.com/aurelioochoa/re4mepc.git
@@ -317,6 +317,8 @@ The frame loop polls desktop events, applies queued input and camera changes, ca
 
 Frame pacing uses absolute deadlines to avoid accumulating sleep drift, and discards missed deadlines after loading stalls so gameplay does not rush to catch up. FFmpeg audio decoding and movie-process cleanup run on workers; first-use sounds play once ready, and stopping or replacing a sound cancels its pending playback. Decoded audio is cached locally, including movie audio. Register arguments are read in batches and paletted textures expand through Pillow's native routines. The engine's compressed `.h2z` resources use raw DEFLATE; `CMN_Unzip::GetData` is answered by host zlib, which yields the same bytes as the original decoder (232 of 232 title-to-village loads matched) in about 0.04 s instead of about 27 s of emulation. Streams zlib rejects still run the original ARM decoder. Float arithmetic in both libraries runs through libgcc soft-float routines inside `libmc_eruption`; their entries branch to VFP instructions that Unicorn executes natively. That libgcc build handles denormals and NaN payloads differently from VFP, so addition, multiplication and division resume the original routine whenever an operand or result is denormal, infinite, NaN or an underflow; conversions and comparisons match for every input. `tools/verify_softfloat.py` compares each helper bit for bit with the original routine using your imported game. Other resource parsing still executes inside the ARM engine, and the longest loading frame remains about 1 s; sustained engine frames above 50 ms still slow gameplay. Higher rendering rates require separating and auditing the original engine's update and draw paths.
 
+Those soft-float calls dominate gameplay: about 205,000 per tick, and nearly all tick time is ARM execution rather than host services. Bone skinning (`_mceBoneDeformer_transPoints`), `mceVector3D_dot` and `_mceTransform_multiply2` issue about 60% of them, so they run as Rust code from `native/math.rs`, as do the hottest collision tests (plane, triangle and sphere crossings, nearest points and `Get_Dis_Pos`). Each function's entry branches to a Thumb trampoline whose hook computes the result with the same single-precision rounding. Any denormal, infinite, NaN or underflowing value, invalid pointer, or output that overlaps an input returns to the original ARM routine before anything is written. `make math-test` checks every call against the original routine in shadow mode, then times both paths; `--no-native-math` runs the original code for comparisons. See [the measurements](fps-performance.md#native-engine-math--2026-10-27).
+
 | Responsibility | Source |
 | --- | --- |
 | APK restoration and engine validation | [assets.py](../re4pc/assets.py) |
@@ -328,6 +330,7 @@ Frame pacing uses absolute deadlines to avoid accumulating sleep drift, and disc
 | Native game cadence and frame pacing | [timing.py](../re4pc/timing.py) |
 | FFmpeg audio/movie decoding and SDL2 mixing | [media.py](../re4pc/media.py), [audio.c](../native/audio.c) |
 | Fast memory imports | [fast.py](../re4pc/fast.py), [fast.c](../native/fast.c) |
+| Native engine math | [native_math.py](../re4pc/native_math.py), [math.rs](../native/math.rs) |
 | Host zlib for the engine's DEFLATE resources | [native_unzip.py](../re4pc/native_unzip.py) |
 | Desktop launcher and settings | [launcher.py](../re4pc/launcher.py), [settings.py](../re4pc/settings.py) |
 | Shared decoded launcher artwork | [ui_images.py](../re4pc/ui_images.py) |

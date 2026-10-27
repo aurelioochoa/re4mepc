@@ -99,14 +99,14 @@ class PackagingTests(unittest.TestCase):
         self.stage = Path(temporary.name)
         for name in ('AppRun', 're4mepc.desktop', 'usr/bin/python3', 'usr/bin/ffmpeg',
                      'usr/lib/re4mepc/re4pc/__main__.py', 'usr/lib/re4mepc/build/libre4audio.so',
-                     'usr/lib/re4mepc/build/libre4fast.so'):
+                     'usr/lib/re4mepc/build/libre4fast.so', 'usr/lib/re4mepc/build/libre4math.so'):
             path = self.stage / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'synthetic')
 
     def test_content_manifest_hashes_every_member(self):
         records = write_manifest(self.stage)
-        self.assertEqual(len(records), 7)
+        self.assertEqual(len(records), 8)
         self.assertEqual(len(records['AppRun']['sha256']), 64)
         self.assertEqual(write_manifest(self.stage), records)
 
@@ -144,7 +144,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_manifest_detects_changed_and_unlisted_contents(self):
         write_manifest(self.stage)
-        self.assertEqual(len(verify_manifest(self.stage)), 7)
+        self.assertEqual(len(verify_manifest(self.stage)), 8)
         (self.stage / 'AppRun').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError, 'manifest mismatch'):
             verify_manifest(self.stage)

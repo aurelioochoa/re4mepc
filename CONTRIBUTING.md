@@ -32,7 +32,7 @@ make setup
 make check
 ```
 
-The source setup requires Python 3.10+, venv, Tk, Make, a C compiler, pkg-config, SDL2 development headers and FFmpeg. `make setup` creates `.venv`, installs Python dependencies and builds native helpers. Synthetic tests require no APK. Real-game checks need your own compatible APK and a graphical desktop with an OpenGL compatibility profile.
+The source setup requires Python 3.10+, venv, Tk, Make, a C compiler, Rust (cargo), pkg-config, SDL2 development headers and FFmpeg. `make setup` creates `.venv`, installs Python dependencies and builds native helpers. Synthetic tests require no APK. Real-game checks need your own compatible APK and a graphical desktop with an OpenGL compatibility profile.
 
 ### Changes and verification
 
@@ -96,7 +96,7 @@ make setup
 make check
 ```
 
-La preparación desde código requiere Python 3.10 o posterior, venv, Tk, Make, compilador de C, pkg-config, cabeceras de desarrollo de SDL2 y FFmpeg. `make setup` crea `.venv`, instala las dependencias de Python y compila los helpers nativos. Las pruebas sintéticas no necesitan APK. Las pruebas reales requieren tu propio APK compatible y un escritorio gráfico con perfil de compatibilidad de OpenGL.
+La preparación desde código requiere Python 3.10 o posterior, venv, Tk, Make, compilador de C, Rust (cargo), pkg-config, cabeceras de desarrollo de SDL2 y FFmpeg. `make setup` crea `.venv`, instala las dependencias de Python y compila los helpers nativos. Las pruebas sintéticas no necesitan APK. Las pruebas reales requieren tu propio APK compatible y un escritorio gráfico con perfil de compatibilidad de OpenGL.
 
 ### Cambios y pruebas
 
