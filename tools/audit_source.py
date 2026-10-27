@@ -118,7 +118,7 @@ SOURCE_FILES = {
               'display', 'postprocess'),
     'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
               'migrate_local', 'probe_input', 'test_components', 'verify_softfloat',
-              'test_pc_controls', 'test_combat', 'test_laser', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session', 'probe_render', 'test_presentation', 'verify_native_math'),
+              'test_pc_controls', 'test_combat', 'test_laser', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session', 'probe_render', 'test_presentation', 'verify_native_math', 'verify_camera_turns'),
     'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_desktop', 'test_graphics',
               'test_input', 'test_key_routing', 'test_mouse_capture', 'test_laser', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',

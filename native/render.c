@@ -58,7 +58,8 @@ struct state {
 };
 struct command {
     int clear;
-    GLbitfield mask;
+    int previous, pass;
+    GLbitfield mask, pass_mask;
     GLfloat clear_color[4], clear_depth;
     GLint clear_stencil;
     struct state state;
@@ -75,10 +76,13 @@ struct renderer {
     struct frame previous, current, next;
     int recording, units, lights, sync_supported;
     uint64_t captures, replays, interpolated, resets, rejected;
+    uint64_t matched_draws, unmatched_draws, changed_sequences;
     pthread_mutex_t mutex;
     struct pixels pixels[3]; int published;
     GLsync consumed;
 };
+
+static void match_history(struct renderer *r);
 
 static void release_array(struct array *a) { free(a->data); free(a->mixed); }
 static void release_frame(struct frame *f) {
@@ -329,6 +333,7 @@ void re4_render_end(void *handle, int eligible) {
     if (r->sync_supported) { r->next.fence=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0); glFlush(); }
     else glFinish();
     r->previous=r->current; r->current=r->next; memset(&r->next,0,sizeof(r->next));
+    match_history(r);
     pthread_mutex_unlock(&r->mutex);
 }
 static void enable(GLenum cap, GLboolean value) { if (value) glEnable(cap); else glDisable(cap); }
@@ -445,6 +450,56 @@ static int matching(struct renderer *r, const struct command *a, const struct co
     }
     return 1;
 }
+/* Visibility changes insert/remove draws during camera turns. Match surviving
+ * geometry by its owned array identity instead of requiring identical command
+ * counts/positions. Resolve once per tick, not at every display refresh.
+ * Ambiguous instances snap; a previous draw can never feed two current draws.
+ * Clear boundaries delimit passes so history cannot cross a render pass. */
+static unsigned history_bucket(const struct command *c) {
+    uintptr_t key=c->vertex.identity;
+    key^=key>>17; key^=(uintptr_t)c->count*2654435761u;
+    key^=(uintptr_t)c->pass*2246822519u;
+    return (unsigned)key & (MAX_COMMANDS*2-1);
+}
+static void match_history(struct renderer *r) {
+    int heads[MAX_COMMANDS*2], next[MAX_COMMANDS], owner[MAX_COMMANDS];
+    for (size_t i=0; i<MAX_COMMANDS*2; ++i) heads[i]=-1;
+    for (size_t i=0; i<MAX_COMMANDS; ++i) owner[i]=-1;
+    int pass=0;
+    GLbitfield pass_mask=0;
+    for (size_t i=0; i<r->previous.count; ++i) {
+        struct command *c=&r->previous.commands[i];
+        if (c->clear) { ++pass; pass_mask=c->mask; continue; }
+        c->pass=pass; c->pass_mask=pass_mask;
+        unsigned bucket=history_bucket(c);
+        next[i]=heads[bucket]; heads[bucket]=(int)i;
+    }
+    if (r->previous.valid && r->previous.count!=r->current.count) ++r->changed_sequences;
+    pass=0; pass_mask=0;
+    for (size_t i=0; i<r->current.count; ++i) {
+        struct command *c=&r->current.commands[i]; c->previous=-1;
+        if (c->clear) { ++pass; pass_mask=c->mask; continue; }
+        c->pass=pass; c->pass_mask=pass_mask;
+        int found=-1;
+        if (r->previous.valid) for (int j=heads[history_bucket(c)]; j>=0; j=next[j]) {
+            const struct command *p=&r->previous.commands[j];
+            if (p->pass!=pass || p->pass_mask!=pass_mask || !matching(r,p,c)) continue;
+            if (found>=0) { found=-1; break; }
+            found=j;
+        }
+        if (found<0) continue;
+        if (owner[found]!=-1) {
+            if (owner[found]>=0) r->current.commands[owner[found]].previous=-1;
+            owner[found]=-2;
+        } else {
+            c->previous=found; owner[found]=(int)i;
+        }
+    }
+    for (size_t i=0; i<r->current.count; ++i) if (!r->current.commands[i].clear) {
+        if (r->current.commands[i].previous>=0) ++r->matched_draws;
+        else ++r->unmatched_draws;
+    }
+}
 static const void *array_data(struct array *a, const struct array *old, int vertices, float alpha) {
     if (!old || a->type!=GL_FLOAT) return a->data;
     if (alpha<=0) return old->data;
@@ -466,7 +521,6 @@ int re4_render_present(void *handle, float alpha) {
     if (!r->current.valid || !r->current.count) { pthread_mutex_unlock(&r->mutex); return 0; }
     if (r->current.fence) glWaitSync(r->current.fence,0,GL_TIMEOUT_IGNORED);
     alpha=fmaxf(0,fminf(1,alpha));
-    int same_sequence=r->previous.valid && r->previous.count==r->current.count;
     int compatible=0;
     GLint active,client,mode;
     glGetIntegerv(GL_ACTIVE_TEXTURE,&active); glGetIntegerv(GL_CLIENT_ACTIVE_TEXTURE,&client); glGetIntegerv(GL_MATRIX_MODE,&mode);
@@ -475,7 +529,7 @@ int re4_render_present(void *handle, float alpha) {
     for (int i=0; i<r->units; ++i) { glActiveTexture(GL_TEXTURE0+i); glMatrixMode(GL_TEXTURE); glPushMatrix(); }
     for (size_t i=0; i<r->current.count; ++i) {
         struct command *c=&r->current.commands[i];
-        const struct command *old=same_sequence && matching(r,&r->previous.commands[i],c)?&r->previous.commands[i]:NULL;
+        const struct command *old=c->previous>=0?&r->previous.commands[c->previous]:NULL;
         if (c->clear) {
             masks(&c->state); glClearColor(c->clear_color[0],c->clear_color[1],c->clear_color[2],c->clear_color[3]);
             glClearDepth(c->clear_depth); glClearStencil(c->clear_stencil); glClear(c->mask); continue;
@@ -515,6 +569,8 @@ uint64_t re4_render_measure(void *handle, unsigned key) {
     case 3:result=r->resets; break; case 4:result=r->rejected; break;
     case 5:result=r->current.bytes+r->previous.bytes+r->next.bytes; break;
     case 6:result=r->current.valid && r->current.count; break;
+    case 7:result=r->matched_draws; break; case 8:result=r->unmatched_draws; break;
+    case 9:result=r->changed_sequences; break;
     }
     pthread_mutex_unlock(&r->mutex);
     return result;

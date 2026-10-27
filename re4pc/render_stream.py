@@ -84,7 +84,10 @@ class RenderStream:
     def metrics(self):
         names = ('captured_draws', 'replayed_frames', 'interpolated_frames',
                  'history_resets', 'rejected_draws', 'snapshot_bytes')
-        return dict(zip(names, (self.lib.re4_render_measure(self.handle, i) for i in range(len(names)))))
+        result = dict(zip(names, (self.lib.re4_render_measure(self.handle, i) for i in range(len(names)))))
+        result.update(zip(('matched_draws', 'unmatched_draws', 'changed_sequences'),
+                          (self.lib.re4_render_measure(self.handle, i) for i in (7, 8, 9))))
+        return result
 
     def close(self):
         if self.handle:

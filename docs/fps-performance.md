@@ -247,6 +247,59 @@ Static analysis used Ghidra 12.1.4 headless (`analyzeHeadless` with short Java
 post-scripts for decompilation and call graphs) on copies of the libraries;
 Ghidra rejects project paths containing dot-prefixed directories.
 
+## Camera-turn interpolation — 2026-10-27
+
+Camera turns change which native objects are visible. The earlier renderer
+required consecutive snapshots to have the same command count and draw order;
+one appearing or disappearing object could stop interpolation for the scene.
+The renderer now matches surviving geometry using its array identities, layout,
+topology, projection and textures within the same clear pass. New or ambiguous
+instances snap individually. Camera cuts, resource invalidation and the existing
+motion bounds still discard incompatible history. Compatibility and vertex
+checks run once per native tick rather than at every display refresh.
+
+To exercise visibility changes, rapid mouse sweeps and aim transitions against
+the supported imported game:
+
+```bash
+SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
+  .venv/bin/python tools/verify_camera_turns.py --output /tmp/re4-camera-turns
+```
+
+The verifier uses isolated fresh saves, compares every native endpoint pixel,
+hashes all guest memory around extra presentations, and checks service/tick
+counters. It requires visibility changes with distinct intermediate motion,
+then runs the normal 60 FPS worker without readbacks. An optional
+`--baseline-library /external/before/libre4fast.so` captures the identical native
+submissions through an older compiled renderer for paired comparisons. These
+are synthetic village checks and host submission timings, not GPU or physical
+display timings; native 20 FPS mode does not interpolate.
+
+See the [REA culling investigation](rea-workflow.md#camera-turn-investigation--2026-10-27).
+
+One 120-tick paired sweep on the reference host preserved distinct intermediate
+motion through **56 of 56** draw-count changes; the previous renderer preserved
+none of those 56. All 120 endpoint images matched exactly and all guest-memory
+and service-counter checks passed. Median replay submission time changed from
+**0.218 to 0.186 ms**, with p95 changing from **0.291 to 0.259 ms**. These are
+CPU submission timings from alternating renderers receiving identical draws;
+they do not measure native tick speedup or GPU execution.
+
+The subsequent paced 120-tick sweep presented at **60.00 FPS** over about six
+seconds, with p99 refresh intervals of **17.31 ms** and a maximum of **17.39 ms**
+in the worker's last 239 intervals (about four seconds).
+This run used the original 800×480 render surface with SDL's offscreen driver
+and dummy audio. Evidence is in `/tmp/re4-stutter/camera-final/results.json`.
+The source regression tests also fail against the saved older library for
+inserted, removed and reordered geometry, and pass with the rebuilt library.
+
+A separate paced sweep using the locally saved **2× rendering, 16:9, no MSAA**
+preferences also held **60.00 FPS** over 120 ticks. Its p99 refresh interval was
+**16.97 ms**, with a maximum of **17.06 ms** over the same bounded interval window.
+These six-second offscreen samples
+do not establish campaign-wide or physical-display frame pacing. That report
+and screenshot are under `/tmp/re4-stutter/saved-settings`.
+
 ## Local measurements — 2026-10-23
 
 Reference host: AMD Ryzen 9 6900HS, Radeon 680M, Mesa 26.2.5, Arch Linux

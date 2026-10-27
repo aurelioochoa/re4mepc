@@ -170,3 +170,34 @@ use, which the host relocates into a trampoline. `native/math.rs` follows the
 decompiled operation order; `make math-test` compares every replaced call with
 the original routine on your imported game. See
 [measurements](fps-performance.md#native-engine-math--2026-10-27).
+
+## Camera-turn investigation — 2026-10-27
+
+REA 6.7.0 with the existing Ghidra 12.1.4/JDK 21 installations inspected
+`_mceCollision3D_viewCulling` in the supported eruption library. Its SHA-256
+matched `25109c3b799045312073243b644f6053726689d7baf05bcf09b7acd786cff4f6`.
+The ELF Thumb entry is `0x462dc`; REA/Ghidra reports `0x562dc`, retaining the
+known `0x10000` loader delta. Eight entry instructions were compared against
+ELF/Capstone. The decompilation tests the bounding sphere against six normalized
+view planes and can exit early. Ghidra's `_edata` arithmetic label remains a
+decompiler limitation, as described in the math investigation above.
+
+```bash
+rea decompile /external/game/lib/libmc_eruption_for_android_jni.so _mceCollision3D_viewCulling \
+  --provider ghidra --snapshot /external/analysis/camera-snapshot.json --json
+rea instructions /external/game/lib/libmc_eruption_for_android_jni.so _mceCollision3D_viewCulling \
+  --provider ghidra --snapshot /external/analysis/camera-snapshot.json --json
+```
+
+A camera-sweep basic-block profile with the existing native math enabled still
+showed collision and soft-float work. The probe flushed Unicorn's translation
+cache after installing its block hook to include previously translated code;
+profiled tick times are not treated as performance results. Separately, paired
+host snapshot captures demonstrated that changing native visibility changes
+draw counts and causes the old renderer's whole-sequence test to reject history.
+This supports fixing host history matching without changing engine culling,
+collision or simulation behavior.
+
+Raw REA output, the eight-instruction check and temporary profiles are under
+`/tmp/re4-stutter`, outside the checkout. The repeatable gameplay verifier and
+its limits are documented in the [FPS guide](fps-performance.md#camera-turn-interpolation--2026-10-27).

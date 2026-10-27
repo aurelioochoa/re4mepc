@@ -109,6 +109,77 @@ class RenderStreamTests(unittest.TestCase):
         self.assertEqual(self.stream.render(), 0)
         self.assertEqual(self.stream.metrics()['rejected_draws'], 1)
 
+    def scene(self, draws, mask=0x4100):
+        """Draw independent objects; the red object is the motion oracle."""
+        self.stream.begin()
+        self.gl.glClearColor(0, 0, 0, 1)
+        self.stream.clear(mask)
+        self.gl.glClear(mask)
+        for vertices, x, red in draws:
+            self.matrix[12] = x
+            self.gl.glMatrixMode(0x1700)
+            self.gl.glLoadMatrixf(C.addressof(self.matrix))
+            self.gl.glVertexPointer(3, 0x1406, 0, C.addressof(vertices))
+            self.gl.glColor4f(red, 1-red, 0, 1)
+            self.stream.draw('glDrawElements', (4, 3, 0x1403, C.addressof(self.indices)))
+            self.gl.glDrawElements(4, 3, 0x1403, C.addressof(self.indices))
+        self.stream.end()
+        return self.graphics.capture_image()
+
+    def test_visibility_changes_and_reordering_preserve_surviving_object_motion(self):
+        a, b = (C.c_float*9)(*self.vertices), (C.c_float*9)(*self.vertices)
+        for old, new in (
+                ([(self.vertices, -.5, 1)], [(a, 2, 0), (self.vertices, .5, 1)]),
+                ([(a, 2, 0), (self.vertices, -.5, 1)], [(self.vertices, .5, 1)]),
+                ([(a, 2, 0), (self.vertices, -.5, 1), (b, 2, 0)],
+                 [(b, 2, 0), (a, 2, 0), (self.vertices, .5, 1)])):
+            with self.subTest(draw_counts=(len(old), len(new))):
+                self.stream.reset()
+                before, after = self.scene(old), self.scene(new)
+                self.assertEqual(self.stream.render(.5), 2)
+                middle = self.graphics.capture_image()
+                self.assertAlmostEqual(self.center(middle), (self.center(before)+self.center(after))/2, delta=1)
+                metrics = self.stream.metrics()
+                for alpha in (.1, .5, 1): self.stream.render(alpha)
+                self.assertEqual(self.stream.metrics()['matched_draws'], metrics['matched_draws'])
+                self.assertEqual(self.graphics.capture_image().tobytes(), after.tobytes())
+                self.assertEqual(self.gl.glGetError(), 0)
+        self.assertGreaterEqual(self.stream.metrics()['changed_sequences'], 2)
+
+    def test_reused_geometry_with_ambiguous_instances_snaps(self):
+        for old, new in (
+                ([(self.vertices, -.5, 1), (self.vertices, -.25, 1)], [(self.vertices, .5, 1)]),
+                ([(self.vertices, -.5, 1)], [(self.vertices, .25, 1), (self.vertices, .5, 1)])):
+            self.stream.reset()
+            self.scene(old)
+            expected = self.scene(new)
+            self.assertEqual(self.stream.render(.5), 1)
+            self.assertEqual(self.graphics.capture_image().tobytes(), expected.tobytes())
+
+    def test_history_does_not_cross_clear_boundaries_or_camera_cuts(self):
+        self.scene([(self.vertices, -.5, 1)])
+        self.scene([(self.vertices, .5, 1)], mask=0x4000)
+        self.assertEqual(self.stream.render(.5), 1)
+        self.capture(-.5)
+        self.stream.begin()
+        self.stream.clear(0x4100)
+        self.stream.clear(0x0100)
+        self.matrix[12] = .5
+        self.gl.glMatrixMode(0x1700)
+        self.gl.glLoadMatrixf(C.addressof(self.matrix))
+        self.stream.draw('glDrawElements', (4, 3, 0x1403, C.addressof(self.indices)))
+        self.stream.end()
+        self.assertEqual(self.stream.render(.5), 1)
+        self.capture(300)
+        self.capture(-300)
+        self.assertEqual(self.stream.render(.5), 1)
+        self.capture(0)
+        self.matrix[0] = 2
+        self.gl.glMatrixMode(0x1701)
+        self.gl.glLoadMatrixf(C.addressof(self.matrix))
+        self.capture(0)
+        self.assertEqual(self.stream.render(.5), 1)
+
     def test_shared_context_presents_while_native_thread_is_busy_and_stops_cleanly(self):
         from re4pc.presentation import PresentationWorker
         self.capture(-.5)
