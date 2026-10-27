@@ -33,14 +33,17 @@ KEYS = {
 }
 
 class Game:
-    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language=None, controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True, import_profile=False):
+    def __init__(self, root, width=800, height=480, hidden=False, trace=False, skip_videos=False, language=None, controls='pc', *, settings=None, profile=None, native_profiles=(), cache=False, cache_dir=None, telemetry=None, diagnostics=True, import_profile=False, fast_graphics=True):
         self.initialized = False
         self.telemetry = telemetry
         self.diagnostics = Diagnostics(profile=profile, native_hooks=bool(native_profiles), import_hooks=import_profile) if diagnostics else None
         if telemetry:
             telemetry.diagnostics = self.diagnostics
         self.overlay = False
+        self.presenter = None
         self.settings = settings or {}
+        self.presentation_rate = self.settings.get('presentation_rate', ENGINE_HZ)
+        self.fast_graphics = fast_graphics and not import_profile and profile is None
         self.startup_started = time.monotonic()
         from contextlib import nullcontext
         self.phase = self.diagnostics.phase if self.diagnostics else lambda *args, **kwargs: nullcontext()
@@ -112,6 +115,9 @@ class Game:
             bio = self.arm.load(self.root / 'lib/libbio4af.so', 2 * 1024 * 1024)
             install(self.arm)
             self.fast=Fast(self.arm)
+            if self.fast_graphics:
+                from .gl_bridge import GLBridge
+                self.arm.graphics_bridge = GLBridge(self.arm)
             self.unzip=NativeUnzip(self.arm)
             self.unzip.install()
             self.arm.relocate()
@@ -137,6 +143,9 @@ class Game:
             self.jni.native('native_onSurfaceCreated', self.jni.activity, self.jni.activity, 800, 480, 0)
             self.jni.native('native_onSurfaceChanged', self.jni.activity, 800, 480)
             self.initialized = True
+            if self.presentation_rate != ENGINE_HZ:
+                from .render_stream import RenderStream
+                self.graphics.render_stream = RenderStream()
             log.info('Engine ready; %d FPS native cadence; WASD move, RMB aim, LMB fire, R reload, Tab cursor, F12 quit',ENGINE_HZ)
 
     def touch(self, action, x, y):
@@ -330,12 +339,34 @@ class Game:
         self.graphics.controller.configure(settings)
         self.pc.sensitivity = settings['sensitivity']
         self.pc.invert_y = settings['invert_y']
+        if self.graphics.render_stream:
+            self.graphics.render_stream.reset()
         self.graphics.laser.configure(settings)
         self.settings = settings
+        was_presenting = bool(self.presenter)
+        if self.presenter and self.presentation_rate != settings['presentation_rate']:
+            self.presenter.close()
+            self.presenter = None
+        self.presentation_rate = settings['presentation_rate']
+        if self.presentation_rate != ENGINE_HZ and not self.graphics.render_stream:
+            from .render_stream import RenderStream
+            self.graphics.render_stream = RenderStream()
+        elif self.graphics.render_stream:
+            self.graphics.render_stream.reset()
+            if self.presentation_rate == ENGINE_HZ:
+                self.graphics.render_stream.close()
+                self.graphics.render_stream = None
+        if was_presenting and self.presentation_rate != ENGINE_HZ:
+            self.start_presentation()
 
     def frame(self):
+        if self.presenter:
+            self.presenter.check()
         start=time.monotonic()
         self.graphics.begin_frame()
+        stream = self.graphics.render_stream
+        if stream:
+            stream.begin()
         with self.phase('input'):
             controller = getattr(self.graphics, 'controller', None)
             if controller:
@@ -349,6 +380,12 @@ class Game:
             result=self.jni.native('native_onDrawFrame',self.jni.activity)
             self.menu.end_observation()
             if result==1: self.jni.native('native_setStereoHard',self.jni.activity,0)
+        if stream:
+            identity = (self.pc.main, self.pc.player)
+            if identity != getattr(self, '_render_identity', identity):
+                stream.reset()
+            self._render_identity = identity
+            stream.end(self.pc.active and not self.pc.story_active and self.media.video is None)
         with self.phase('media_audio'):
             self.media.update_audio()
         with self.phase('media_video'):
@@ -374,12 +411,29 @@ class Game:
         if self.overlay and self.diagnostics:
             with self.phase('diagnostics_overlay'):
                 self.graphics.draw_overlay(self.diagnostics.overlay_lines(self), self.diagnostics.graph())
+        if self.presenter:
+            self.presenter.overlay = (self.diagnostics.overlay_lines(self), self.diagnostics.graph()) if self.overlay and self.diagnostics else None
 
     def present(self):
+        if self.presenter:
+            self.presenter.check()
+            with self.presenter.lock:
+                self.graphics.render_stream.publish(self.graphics.width,self.graphics.height)
+            return
+        self._present_native()
+
+    def _present_native(self):
         with self.phase('swap'):
             self.graphics.swap()
         if self.diagnostics:
             self.diagnostics.presentation()
+
+    def start_presentation(self):
+        if self.graphics.render_stream and not self.presenter:
+            from .presentation import PresentationWorker
+            self.presenter = PresentationWorker(self.graphics, self.graphics.render_stream, self.presentation_rate,
+                                                self.diagnostics.presentation if self.diagnostics else None)
+            self.presenter.start()
 
     def present_video(self):
         """Show a due movie frame between engine ticks without simulating."""
@@ -392,7 +446,7 @@ class Game:
     def statistics(self, pacer=None, elapsed=None):
         """Legacy fields retain their meanings; new fields have a versioned schema."""
         stats = {'schema_version': 2,
-                 'frames':self.frames,'presentations':self.graphics.presentations,
+                 'frames':self.frames,'presentations':self.graphics.presentations+(self.presenter.frames if self.presenter else 0),
                  'draw_calls':self.graphics.draws,'texture_uploads':self.graphics.textures,
                  'input_events':self.input_events,'audio_loads':self.media.loaded,'audio_decoded':len(self.media.decoded),'videos_played':self.media.videos_played,
                  'heap_bytes':self.arm.heap-(self.arm.base+16*1024*1024),
@@ -402,7 +456,7 @@ class Game:
                  'gl_messages':sorted(self.graphics.debug_messages),
                  'save_roundtrip_verified':self.save_verified,
                  'successful_saves':self.save_boundary.completed,'failed_saves':self.save_boundary.failed,
-                 'engine_hz':ENGINE_HZ, 'presentation_hz':ENGINE_HZ,
+                 'engine_hz':ENGINE_HZ, 'presentation_hz':self.presentation_rate,
                  'frame_overruns':pacer.overruns if pacer else 0,
                  'startup_seconds':round(self.startup_seconds, 6),
                  'elapsed_seconds':round(elapsed if elapsed is not None else time.monotonic()-self.startup_started,3),
@@ -416,6 +470,12 @@ class Game:
         import resource
         stats['peak_process_rss_bytes_since_process_start'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
         stats['settings'] = self.settings
+        stats['presentation'] = {'mode': 'native' if self.presentation_rate == ENGINE_HZ else 'geometry_interpolation',
+                                 'interpolation_latency_ms': 0 if self.presentation_rate == ENGINE_HZ else 1000/ENGINE_HZ,
+                                 'snapshots': self.graphics.render_stream.metrics() if self.graphics.render_stream else {}}
+        if self.presenter:
+            stats['presentation']['worker'] = self.presenter.metrics()
+        stats['graphics_bridge'] = self.arm.graphics_bridge.metrics() if self.arm.graphics_bridge else {'enabled': False}
         stats['diagnostics'] = self.diagnostics.metrics() if self.diagnostics else {'enabled':False}
         stats['texture_cache'] = self.graphics.texture_cache.metrics()
         stats['native_unzip'] = {'calls': self.unzip.calls, 'fallbacks': self.unzip.fallbacks,
@@ -456,6 +516,7 @@ class Game:
         pacer = FramePacer()
         run_started = time.monotonic()
         try:
+            self.start_presentation()
             while running and (not frames or self.frames < frames):
                 with self.phase('input_poll'):
                     for event in self.graphics.events():
@@ -507,6 +568,9 @@ class Game:
             self.close()
 
     def close(self):
+        if getattr(self, 'presenter', None):
+            self.presenter.close()
+            self.presenter = None
         if getattr(self, 'menu', None):
             try: self.menu.cancel()
             except Exception as error: log.warning('[shutdown input] %s', error)

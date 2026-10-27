@@ -4,8 +4,11 @@ F3 toggles an overlay with measured simulation Hz, presentation FPS, a bounded
 frame-work graph, p50/p95/p99, overruns, guest memory and queued audio activity.
 The host records the active operation before ARM calls and imported blocking
 services. Periodic logs can report a stalled operation without waiting for a
-frame to finish. The OpenGL context, guest execution and input consumption stay
-on the main thread.
+frame to finish. Native OpenGL rendering, guest execution and input consumption
+stay on the main thread. Higher presentation rates use a separate thread with
+its own shared OpenGL context; it renders copied host geometry or complete
+menu/movie frames. The [FPS guide](fps-performance.md) describes the modes and
+their measured behavior.
 
 `run --stats PATH` writes an atomic JSON report with `schema_version: 2`.
 Existing fields retain their meanings:
@@ -13,6 +16,9 @@ Existing fields retain their meanings:
 | Field | Meaning |
 |---|---|
 | frames | Executed native simulation ticks |
+| presentations | Completed window presentations, including the independent worker and repeated menu/movie frames |
+| engine_hz | Authoritative simulation target, 20 Hz |
+| presentation_hz | Requested presentation target; 0 means uncapped, not a measured rate |
 | mean_engine_ms / max_engine_ms | Legacy full frame work: queued input, native callback, imported host calls and media service; excludes polling, swap and pacing |
 | heap_bytes | Guest heap high-water address extent, including free blocks |
 | draw_calls / texture_uploads | Native GL draw/import upload counts; exclude host presentation blits |
@@ -24,6 +30,27 @@ Existing fields retain their meanings:
 New fields include separate presentation count, startup time, effective settings,
 engine hashes, pending audio requests, successful/failed save transactions,
 cache metrics and `diagnostics` (its own schema version 1).
+
+Higher-rate runs also expose:
+
+| Field | Meaning |
+|---|---|
+| presentation.mode | `native` or `geometry_interpolation` |
+| presentation.interpolation_latency_ms | Configured interpolation delay: 0 in native mode, up to one 50 ms tick in higher modes |
+| presentation.worker.frames / recent_fps | Worker presentation count and measured rate over its latest 240 timestamps |
+| presentation.worker.mean_render_and_swap_ms | Mean worker wall time for rendering and swapping; not GPU execution time |
+| presentation.snapshots.captured_draws / replayed_frames | Native submissions copied and host geometry frames replayed |
+| presentation.snapshots.interpolated_frames | Replays with compatible draw history and an intermediate interpolation factor; stationary geometry can still produce identical pixels |
+| presentation.snapshots.history_resets / rejected_draws | History invalidations and unsupported/oversized submissions; loading and resource updates normally reset history |
+| presentation.snapshots.snapshot_bytes | Copied array storage; excludes GL textures/framebuffers and snapshot metadata |
+| graphics_bridge.enabled / calls | Whether native GL state imports are active and how many they executed |
+
+The worker reports timing separately from main-thread diagnostic phases.
+Its render/swap time must not be added to those exclusive phases as if it were
+sequential work. Native GL service times are attributed in batches to
+`graphics_submission`. `--no-fast-graphics`, `--profile-imports`, or `--profile`
+selects the Python GL state-import path; tracing therefore changes the path and
+cannot establish the native bridge's unprofiled speedup.
 
 `diagnostics.phases.*.seconds` is exclusive measured **wall time**: a child
 phase is subtracted from its parent. `max_inclusive_seconds` includes child

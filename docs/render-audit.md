@@ -1,6 +1,51 @@
 # Supported-engine rendering audit
 
-The presentation gate is **closed**. Simulation and presentation remain 20 Hz.
+## Current host presentation — 2026-10-23
+
+Independent host geometry interpolation is now available at 30, 60, 90, 120,
+144, 165 and 240 FPS, or uncapped (`--fps 0`). Native simulation still runs at
+20 Hz. The default and existing saved 20 FPS preferences retain native
+presentation. Select a higher rate in Settings or run `make run ARGS="--fps 60"`.
+
+This implementation does not call extra native Draw/Render functions. A native
+C renderer copies the fixed-function state, matrices, indices and enabled client
+arrays at actual native submissions. A separate shared OpenGL context presents
+those snapshots while ARM execution continues. Matching draw identities blend
+model/view matrices and floating-point vertex/normal data. Texture identity,
+indices, projection, array layouts and UVs must agree; incompatible draws snap
+to current geometry. Large transform steps, player lifecycle changes, resource
+updates, loading, story overlays and menu transitions invalidate history.
+
+The two contexts own separate framebuffers and client state. A hidden SDL
+surface hosts native rendering; the visible surface belongs to presentation.
+GPU fences publish textures and protect reuse. Menu and authored movie frames
+use a bounded three-texture handoff; a higher display rate does not invent
+additional movie frames. Host snapshot arrays are bounded to 32 MiB per frame
+and never retain guest pointers as replayable data.
+
+Interpolation has up to one native tick (50 ms) of visual latency. Simulation,
+input sampling, movement, collision, combat, audio requests, mission seconds,
+saves and replay frame numbers retain native tick semantics. Requested FPS is
+a target; actual throughput depends on the host and driver. Detailed import or
+JSONL tracing uses the Python GL path so per-import attribution stays complete.
+
+Reproduce the game-free driver checks with `make check`, and the isolated
+supported-engine checks with:
+
+```bash
+.venv/bin/python tools/test_presentation.py --output /tmp/re4-presentation
+```
+
+The engine check compares native/replayed endpoint pixels, demonstrates distinct
+intermediate images, hashes all 256 MiB of guest memory before/after extra
+presentations, checks native service counts, runs paired GL-bridge measurements,
+measures independent display FPS and mission time, and exercises a native stage
+transition. Its mission setup is synthetic; it does not establish campaign or
+physical-controller coverage. See [FPS implementation and measurements](fps-performance.md).
+
+## Earlier native-render feasibility audit — 2026-10-12
+
+The extra-native-draw gate was **closed**. Simulation and presentation remained 20 Hz.
 30 and 60 are rejected by settings and CLI validation. Re-presenting the same
 frame is not offered as smoother motion. Frame limits and replay frame numbers
 continue to count authoritative simulation ticks.

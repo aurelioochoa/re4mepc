@@ -45,6 +45,8 @@ class RuntimeLog:
         self.interval = interval
         self.diagnostics = diagnostics
         self.snapshot = ('startup', 0, 0, 0, False)
+        self.presenter = None
+        self.native_presentations = 0
         self.started = self.sampled = time.monotonic()
         self.stopped = threading.Event()
         self.thread = None
@@ -62,22 +64,28 @@ class RuntimeLog:
                  'gameplay' if game.pc.active else 'menu/loading')
         self.snapshot = (state, game.frames, game.graphics.draws,
                          game.input_events, game.mouse_captured)
+        self.presenter = getattr(game, 'presenter', None)
+        self.native_presentations = getattr(game.graphics, 'presentations', 0)
 
     def _run(self):
         previous_frames = 0
+        previous_presentations = 0
         previous_time = self.started
         while not self.stopped.wait(self.interval):
             now = time.monotonic()
             state, frames, draws, inputs, captured = self.snapshot
-            fps = (frames-previous_frames)/(now-previous_time)
+            simulation = (frames-previous_frames)/(now-previous_time)
+            presentations = self.native_presentations+(self.presenter.frames if self.presenter else 0)
+            fps = (presentations-previous_presentations)/(now-previous_time)
             active = self.diagnostics.active_operation if self.diagnostics else None
             waiting = (' | operation=%s (%.2fs)' % (active['name'], active['seconds'])
                        if active else ' | waiting for engine/startup' if frames == previous_frames else '')
-            log.info('runtime: %s | %.1f FPS | frame=%d draws=%d inputs=%d mouse=%s%s',
-                     state, fps, frames, draws, inputs,
+            log.info('runtime: %s | %.1f Hz simulation | %.1f FPS presentation | frame=%d draws=%d inputs=%d mouse=%s%s',
+                     state, simulation, fps, frames, draws, inputs,
                      'captured' if captured else 'free',
                      waiting)
             previous_frames, previous_time = frames, now
+            previous_presentations = presentations
 
     def __exit__(self, *args):
         self.stopped.set()

@@ -52,6 +52,7 @@ class ArmRuntime:
         self.uc.hook_add(UC_HOOK_MEM_INVALID, self._invalid_memory)
         self.pending_error = None
         self.fast = None
+        self.graphics_bridge = None
         # Reuse the native register buffers instead of constructing four
         # ctypes objects and crossing the FFI four times per import.
         self._arg_registers = (C.c_int * 4)(*REGS)
@@ -284,6 +285,8 @@ class ArmRuntime:
                     if self.pending_error:
                         raise self.pending_error
                 finally:
+                    if self.graphics_bridge:
+                        self.graphics_bridge.collect()
                     # A timeout/error can bypass selected functions' returns.
                     while self._profile_stack:
                         self._profile_stack.pop()[2].__exit__(*sys.exc_info())
@@ -346,6 +349,9 @@ class ArmRuntime:
                         self.call(address)
 
     def close(self):
+        if self.graphics_bridge:
+            self.graphics_bridge.close()
+            self.graphics_bridge = None
         # Destroy Unicorn before releasing memory used by its translated code.
         if self.fast: self.fast.close()
         self.uc = None

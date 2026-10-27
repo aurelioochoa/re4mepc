@@ -5,6 +5,27 @@ import time
 # PLT_Application::Check_FpsUpDate always returns true: every draw advances
 # gameplay. Raising the presentation rate therefore speeds up the simulation.
 ENGINE_HZ = 20
+PRESENTATION_RATES = (20, 30, 60, 90, 120, 144, 165, 240, 0)
+
+
+class PresentationClock:
+    """Independent deadlines; slow renders drop work instead of queuing bursts.
+
+    Uncapped presentation yields a short poll interval so input and movies
+    remain serviced, rather than making the 20 Hz simulation a busy loop.
+    """
+    def __init__(self, rate, clock=time.monotonic):
+        if type(rate) is not int or rate not in PRESENTATION_RATES:
+            raise ValueError('Unsupported presentation rate')
+        self.clock = clock
+        self.interval = 1/rate if rate else 0.001
+        self.deadline = clock()
+
+    def reset(self):
+        self.deadline = self.clock()
+
+    def presented(self):
+        self.deadline = max(self.deadline+self.interval, self.clock())
 
 
 class FramePacer:

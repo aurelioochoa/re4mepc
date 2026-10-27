@@ -467,7 +467,7 @@ class CaseFileDialogTests(LauncherGuiFixture):
         with patch('re4pc.settings.Settings.load', return_value=Settings.load(path)):
             view = self.app.settings()
         for key, invalid in (('window_width', '239'), ('sensitivity', 'nan'),
-                             ('achievement_clip_seconds', '16'), ('presentation_rate', '30'),
+                             ('achievement_clip_seconds', '16'), ('presentation_rate', '21'),
                              (('keyboard', 'forward'), 'Tab'), (('mouse', 'forward'), 'Unknown'),
                              (('controller', 'forward'), 'not-a-button')):
             with self.subTest(field=key):

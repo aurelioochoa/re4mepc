@@ -44,8 +44,12 @@ Source installations need a Japanese font such as `fonts-ipafont-gothic` on
 Debian/Ubuntu or `noto-fonts-cjk` on Arch Linux.
 
 Settings expose keyboard/controller/mouse bindings, mouse
-and controller sensitivity, invert Y, stick dead zone, window mode and the
-currently qualified presentation rate. Settings tabs scroll on smaller windows.
+and controller sensitivity, invert Y, stick dead zone, window mode and
+presentation rate. Current source offers native 20 FPS and interpolated
+30/60/90/120/144/165/240 FPS or Uncapped, with the qualification scope described
+in the [FPS guide](fps-performance.md). The frozen 2026-10-14 packages predate
+that feature and retain their original 20 FPS mode. Settings tabs scroll on
+smaller windows.
 Import requires an unused destination.
 The user supplies the APK; packages contain no game libraries or assets.
 

@@ -1,0 +1,165 @@
+# FPS and graphics performance
+
+After updating source, run `make build` once. Run interpolated gameplay at a
+higher presentation rate:
+
+```bash
+make run ARGS="--fps 60"
+make run ARGS="--fps 120"
+make run ARGS="--fps 0"
+```
+
+The launcher offers the same options in Settings → Display & sensitivity →
+Presentation rate. Supported targets are 20, 30, 60, 90, 120, 144, 165 and
+240 FPS, plus Uncapped (`0`). Native 20 FPS remains the default and preserves
+existing preferences. `--presentation-rate` is an alias for `--fps`.
+
+## Save a preference or return to native presentation
+
+`--fps` overrides the saved setting for that run only. To save 60 FPS from the
+checkout, then launch using the saved preference:
+
+```bash
+make cli ARGS="settings --set presentation_rate 60"
+make run
+```
+
+To save the original mode again, use
+`make cli ARGS="settings --set presentation_rate 20"`. The launcher saves the
+same `presentation_rate` setting, and changes apply on the next launch. Settings
+live at `$XDG_CONFIG_HOME/re4mepc/settings.json`, or
+`~/.config/re4mepc/settings.json` when that variable is unset.
+
+The native graphics bridge is enabled in both native and interpolated modes.
+For a comparison through the Python GL state-import path, run
+`make run ARGS="--fps 60 --no-fast-graphics"`. To compare the original
+presentation and Python state-import paths together, use
+`make run ARGS="--fps 20 --no-fast-graphics"`.
+
+These options describe the current source. The frozen
+`v0.1.0-experimental.20261014` AppImage/archive predate this implementation;
+their existing qualification does not cover the FPS feature. New distribution
+builds require their own package checks.
+
+## What higher FPS changes
+
+The game still simulates at 20 Hz. Higher modes interpolate matching model/view
+transforms and floating-point vertex/normal arrays, including animated geometry,
+in a separate GL context on a presentation thread. They add up to 50 ms of visual
+latency. Input, collision, damage, mission time and saves keep their native
+cadence. Menus and movies use complete native frames; 30 FPS movies retain their
+authored motion cadence. Uncapped presentation yields briefly between frames;
+throughput still depends on CPU/GPU/driver limits.
+
+## Inspect the running rate
+
+F3 shows simulation Hz and presentation FPS separately. Periodic runtime logs
+also report both. To retain a JSON report:
+
+```bash
+make run ARGS="--fps 60 --stats /tmp/re4-fps-stats.json"
+```
+
+The report is written when the game exits. `presentation_hz` is the requested
+target (`0` means uncapped); `presentation.worker.recent_fps` and
+`diagnostics.presentation_fps` are measured rates. `frames` still counts native
+simulation ticks. Repeated menu/movie frames count as presentations, so that
+counter alone does not prove interpolated gameplay motion. See the
+[diagnostics field reference](diagnostics.md) for bridge and snapshot counters.
+
+## Implementation
+
+- `native/gl.c` forwards 40 frequent GL state imports directly from Unicorn to
+  desktop GL, including matrix loads, pointers, material/lighting and texture
+  parameters. It validates guest pointers and reports calls and CPU submission
+  time in batches. It caches no GL state. Draws, resource uploads, queries and
+  custom sights retain the Python bridge. `--no-fast-graphics` selects the old
+  state-import path for comparisons. Import profiling and JSONL traces also use
+  that path to retain complete per-call records.
+- `native/render.c` owns copied draw data and fixed-function snapshots. Indices,
+  textures, UVs, array layout and projection identify compatible submissions.
+  Matching draws blend transforms and float geometry; incompatible draws snap.
+  Large matrix changes, loading, resource updates and player lifecycle changes
+  discard history. Buffers are bounded; invalid or oversized draws reject that
+  snapshot. Original engine libraries and resources are unchanged.
+- `re4pc/presentation.py` owns a shared GL context, its own framebuffer and a
+  hidden native-render surface. A mutex protects snapshot publication. GPU
+  fences synchronize resource publication and reuse. Three bounded textures
+  transfer complete menu/movie frames without CPU pixel readback. Native GL
+  state, input and guest memory remain on the engine thread.
+
+The [REA investigation](rea-workflow.md#fps-and-graphics-investigation--2026-10-23)
+used REA 6.4.0/Ghidra 12.1.4/JDK 21 against the supported library hash. Dossiers
+and load-image observations were checked against ELF/Capstone entries. They
+confirm the unconditional FPS check, consecutive framework exec/draw dispatch
+and mission seconds per 20 active ticks. The host never repeats a native render
+function to obtain extra FPS.
+
+## Verification
+
+`make check` covers real offscreen GL interpolation, immutable array ownership,
+driver-state restoration, shared-context rendering, menu/movie handoff, bounded
+inputs, all 40 accelerated GL imports, settings, CLI rates and existing behavior.
+
+With the supported imported game available:
+
+```bash
+.venv/bin/python tools/test_presentation.py --output /tmp/re4-presentation
+```
+
+The test copies game inputs into a new external fixture with fresh saves. It
+enters the existing synthetic mission-2 setup, checks walking/turning/aiming/
+firing/holstering snapshots, compares native endpoint pixels and demonstrates
+distinct intermediate motion. Hashes of all 256 MiB of guest memory and native
+service counters must remain equal across extra presentations.
+
+The FPS check enables a ten-minute countdown through the native
+`GM_MisConduct::Set_LimitTime` API because this story mission normally leaves
+its timer disabled. Each tested presentation rate must advance elapsed time and
+countdown by exactly three seconds over 60 native ticks. A native stage
+transition runs with presentation active. This synthetic fixture does not
+qualify a full campaign or physical input devices.
+
+## Local measurements — 2026-10-23
+
+Reference host: AMD Ryzen 9 6900HS, Radeon 680M, Mesa 26.2.5, Arch Linux
+x86_64, Python 3.14.8 and Unicorn 2.1.4. Gameplay used SDL's offscreen driver;
+these are submission/presentation measurements, not physical monitor refresh
+or GPU execution timings. Raw evidence, fixtures and captures are external at
+`/tmp/re4-fps/verification/results.json` and its neighboring files.
+
+| Check | Recorded result |
+|---|---|
+| Native versus replayed endpoint pixels | Exact match in all seven cases |
+| Distinct intermediate motion | Demonstrated in five cases |
+| Guest memory across extra presentations | All 256 MiB unchanged |
+| Extra native service calls during replay | None |
+| Native stage transition with presentation active | Passed |
+| Snapshot array storage at final sample | 1,988,000 bytes |
+
+Three alternating paired blocks in the same scene measured median tick work of
+39.707 ms through Python GL imports and 35.556 ms through the native bridge:
+about **10.5% less tick work**. Each block measured 30 ticks after five warm-up
+ticks, with snapshots enabled and the presentation thread stopped. These figures
+describe this scene and host; they do not establish a loading or campaign-wide
+speedup. Desktop background activity was uncontrolled.
+
+| Presentation target | Recent measured FPS | Native ticks | Native mission seconds | Wall seconds |
+|---|---:|---:|---:|---:|
+| 60 | 60.03 | 60 | 3 | 2.996 |
+| 120 | 120.00 | 60 | 3 | 2.996 |
+| Uncapped | 994.80 | 60 | 3 | 4.567 |
+
+Uncapped presentation saturated the host enough to slow simulation in this
+offscreen run. A 60 or 120 FPS target preserved real-time simulation and avoids
+that unnecessary work. The engine clock still counted exactly 20 native ticks
+per mission second in every mode. Higher numbered targets remain options, with
+timing and driver tests covering scheduling; they are not all gameplay-qualified.
+
+An additional X11 startup/CLI check completed 80 native ticks at a 120 FPS target
+(120.01 recent presentation FPS), with no GL messages and clean shutdown. Its
+scope was menus/loading, separate from the offscreen gameplay fixture.
+
+The previously documented intermittent native difficulty-initialization
+exception remains outside this change. Neither these checks nor interpolation
+establish full-campaign, physical-controller, Intel or NVIDIA qualification.

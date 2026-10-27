@@ -1,8 +1,8 @@
 # Launcher artwork
 
-Environmental and utility artwork was generated using the built-in image generation tool for this project. The title wordmark and numeral were extracted from the logo reference supplied by the user on 12 October 2026, as requested. No artwork was extracted from an APK. Runtime files live in `re4pc/ui_assets/` and are explicitly included in the release allowlist. Utility icons preserve their generated alpha channels; runtime Pillow processing only crops and resizes images for display.
+Environmental and utility artwork was generated using the built-in image generation tool for this project. The title wordmark and numeral are native text; earlier logo-reference extractions are excluded from current source and releases. No artwork is extracted from an APK. Runtime files live in `re4pc/ui_assets/` and are explicitly included in the release allowlist. Utility icons preserve their generated alpha channels; runtime Pillow processing only crops and resizes images for display.
 
-The case-file redesign follows the user-selected `03-village-case-file.png` concept. The concept remains a build artifact; the runtime uses a cleaned background plate and transparent numeral with live Tk text, focusable canvas buttons and a native path entry. The Play button displays a crop of the numeral's printed ink texture. Native window decorations remain under the desktop window manager's control. The portable runtime bundles DejaVu Serif alongside its existing sans-serif and monospace fonts.
+The case-file redesign follows the user-selected `03-village-case-file.png` concept. The concept remains a build artifact; the runtime uses a cleaned background plate with live Tk text, focusable canvas buttons and a native path entry. Native window decorations remain under the desktop window manager's control. The portable runtime bundles DejaVu Serif alongside its existing sans-serif and monospace fonts.
 
 ## case-file.png
 
@@ -10,13 +10,14 @@ Generated with the built-in image generation tool, using the selected concept as
 
 > Use case: precise-object-edit. Edit the supplied launcher reference into a CLEAN BACKGROUND PLATE for a real interactive native desktop launcher. Preserve the exact full-image 16:9 composition and positions: very dark olive/charcoal textured background, aged cream parchment occupying x 1.4%-47.7%, y 8.7%-90.5%; red occult stamp on parchment at upper right with NO letters in stamp, faint map and faded cursive marks as texture; pinned slightly tilted photograph occupying the right half x 48.5%-99%, y 6.7%-68.2%, paperclip at its top. Preserve the EXACT village photograph atmosphere/composition, rural stone church, smoky wooden village, mountain sky. REMOVE ALL UI AND ALL READABLE TEXT everywhere: top navigation/brand/window controls, all Resident Evil 4 Mobile lettering and numeral, tagline, play button INCLUDING its entire red rectangle, readiness icon/text, settings gear and typewriter icons/text/chevrons, separator rules, photo caption, Installation heading, input and buttons, bottom status/links/hints/footer rules. Fill removed areas seamlessly with original surrounding parchment or dark texture as appropriate. Left parchment should be empty for overlaying real title and controls, retaining only worn edges/faint map/red stamp. Bottom right retain subtle map texture but remove readable 'Pueblo' lettering. No new artwork composition, no extra panels, no text, no icons, no controls, no dividers. This is a background plate only, not a UI screenshot. Output same 16:9 aspect ratio as supplied.
 
-## Original title branding — 12 October 2026
+## Native title branding — 26 October 2026
 
-`resident-evil-wordmark.png` is a transparent RGBA 1084 × 266 extraction of the original distressed lowercase lettering from the user's supplied logo. Its white background and pale studio shadow were removed; the letters use the launcher's existing dark ink `#211b13`. This preserves the reference letter shapes and spacing without requiring an installed font.
-
-`numeral-4.png` is a transparent RGBA 526 × 953 extraction of the same reference's stylized numeral. Its silhouette and engraved wear were isolated from the white background and cast shadow, then recolored to the launcher's existing oxblood ink `#741810`; pale scratches reveal the parchment beneath. It replaces the generated serif numeral. The two assets are arranged beside each other and resized proportionally, with no stretching. No image generation was used for these extractions.
-
-Native text places `MOBILE` directly under the Resident Evil wordmark, with a smaller `PC PORT` line beneath it. Both align with the lettering to the right of the numeral.
+The launcher renders its title and numeral with native text. The two earlier
+logo-reference extractions, `resident-evil-wordmark.png` and `numeral-4.png`,
+are excluded from the source index and release allowlist. The publication
+checker rejects either file if it is added again. Previously published Git
+history still contains those images; this change does not rewrite that history.
+Documentation screenshots remain rendered application captures.
 
 ## launcher-preview.png
 

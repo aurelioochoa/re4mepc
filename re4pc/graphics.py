@@ -38,6 +38,7 @@ class Graphics:
         self.fullscreen = False
         self.diagnostics = self.texture_cache = None
         self.laser = None
+        self.render_stream = None
         self._mouse_touch = False
         self.mouse_captured = False
         self._fullscreen_enter = False
@@ -54,6 +55,7 @@ class Graphics:
         self.gl_errors = {}
         self.signature('SDL_Init', C.c_int, C.c_uint)
         self.signature('SDL_GetError', C.c_char_p)
+        self.signature('SDL_GetWindowID', C.c_uint, C.c_void_p)
         self.signature('SDL_GL_SetAttribute', C.c_int, C.c_int, C.c_int)
         self.signature('SDL_CreateWindow', C.c_void_p, C.c_char_p, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint)
         self.signature('SDL_GL_CreateContext', C.c_void_p, C.c_void_p)
@@ -80,6 +82,7 @@ class Graphics:
                 0x2fff0000, 0x2fff0000, width, height, flags)
         if not self.window:
             raise RuntimeError(self.sdl.SDL_GetError().decode())
+        self.window_id = self.sdl.SDL_GetWindowID(self.window)
         self.context = self.sdl.SDL_GL_CreateContext(self.window)
         if not self.context:
             raise RuntimeError(self.sdl.SDL_GetError().decode())
@@ -218,6 +221,9 @@ class Graphics:
         function.restype, function.argtypes = result, args
 
     def forward(self, name, signature, function):
+        draw = name in ('glDrawArrays', 'glDrawElements')
+        resource = name in ('glTexImage2D', 'glTexSubImage2D', 'glCompressedTexImage2D',
+                            'glCopyTexImage2D', 'glDeleteTextures')
         def invoke(*unused):
             values = self.arm.args(len(signature))
             for i, kind in enumerate(signature):
@@ -227,6 +233,11 @@ class Graphics:
                     values[i] = signed(values[i])
                 elif kind == 'p' and values[i]:
                     self.arm.check(values[i])
+            stream = self.render_stream
+            if stream and resource:
+                stream.dirty()
+            if stream and name == 'glClear':
+                stream.clear(values[0])
             if name == 'glCompressedTexImage2D' and 0x8b90 <= values[2] <= 0x8b99:
                 target,level,fmt,width,height,border,length,pointer = values
                 with self._phase('texture_conversion'):
@@ -242,10 +253,16 @@ class Graphics:
                 # ArmRuntime's import scope already attributes submission and
                 # upload, including argument marshaling. Avoid a second scope
                 # for every GL import; compressed conversion still nests above.
-                if name in ('glDrawArrays', 'glDrawElements') and self.laser and self.laser.stage:
-                    result = self.laser.draw(function, values)
+                if draw and stream and stream.recording:
+                    def submit(*arguments):
+                        stream.draw(name, arguments)
+                        return function(*arguments)
                 else:
-                    result = function(*values)
+                    submit = function
+                if draw and self.laser and self.laser.stage:
+                    result = self.laser.draw(submit, values)
+                else:
+                    result = submit(*values)
             if name == 'glGetString':
                 return self.arm.cstring(C.string_at(result)) if result else 0
             if name in ('glDrawArrays', 'glDrawElements'):
@@ -260,6 +277,9 @@ class Graphics:
         while self.sdl.SDL_PollEvent(event):
             data = event.raw
             kind = struct.unpack_from('<I', data)[0]
+            if kind in (0x200,0x300,0x301,0x400,0x401,0x402) and getattr(self,'window_id',None):
+                if struct.unpack_from('<I',data,8)[0] != self.window_id:
+                    continue
             if kind == 0x100:
                 yield ('quit',)
             elif kind == 0x200:
@@ -449,6 +469,9 @@ class Graphics:
         self._draw_pixels(data)
 
     def close(self):
+        if getattr(self, 'render_stream', None):
+            self.render_stream.close()
+            self.render_stream = None
         if getattr(self, 'laser', None):
             self.laser.close()
         if getattr(self,'controller',None):

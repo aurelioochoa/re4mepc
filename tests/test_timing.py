@@ -1,6 +1,6 @@
 """Frame pacing follows the native simulation cadence without drift/bursts."""
 import unittest
-from re4pc.timing import ENGINE_HZ, FramePacer
+from re4pc.timing import ENGINE_HZ, FramePacer, PresentationClock
 
 
 class Clock:
@@ -17,6 +17,30 @@ class Clock:
 
 
 class TimingTests(unittest.TestCase):
+    def test_higher_presentation_rate_keeps_twenty_authoritative_ticks(self):
+        for rate in (30, 60, 120, 144, 0):
+            clock = Clock()
+            pacer = FramePacer(clock.time, clock.sleep)
+            display = PresentationClock(rate, clock.time)
+            presentations = []
+            def present():
+                presentations.append(clock.now)
+                display.presented()
+            for _ in range(20):
+                pacer.wait(lambda: display.deadline, present)
+            self.assertAlmostEqual(clock.now, 101)
+            self.assertGreater(len(presentations), 20)
+            if rate:
+                self.assertAlmostEqual(len(presentations), rate, delta=1)
+
+    def test_slow_presentation_discards_work_and_uncapped_yields(self):
+        clock = Clock()
+        display = PresentationClock(120, clock.time)
+        clock.now += 3
+        display.presented()
+        self.assertGreaterEqual(display.deadline, clock.now)
+        self.assertGreater(PresentationClock(0, clock.time).interval, 0)
+
     def test_fast_frames_follow_native_seconds(self):
         self.assertEqual(ENGINE_HZ, 20)
         clock = Clock()

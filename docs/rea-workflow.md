@@ -128,3 +128,21 @@ SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
 ```
 
 All game fixtures, screenshots and analysis stay outside the checkout.
+
+## FPS and graphics investigation — 2026-10-23
+
+REA 6.4.0 with Ghidra 12.1.4/JDK 21 inspected
+`PLT_Application::Check_FpsUpDate`, `GM_MisConduct::Frame` and
+`Bio4_FrameWork::doMain`. The exact engine digest, Ghidra load-image source
+mapping, ELF Thumb entries and first instructions were compared against the
+existing Capstone verifier. Ghidra's measured image delta was `0x10000`.
+Raw dossiers and verification records are under `/tmp/re4-fps/rea-*.json`,
+outside the checkout.
+
+The FPS check returns true unconditionally. Mission time increments after 20
+native ticks. Framework execution and drawing occur consecutively in `doMain`.
+These observations support retaining 20 Hz native calls and doing extra graphics
+work entirely in the host. The resulting renderer copies submission state and
+geometry, then interpolates it in a shared context on a separate presentation
+thread. It never calls an extra native draw or restores guest memory snapshots.
+See [rendering audit](render-audit.md) and [FPS verification](fps-performance.md).

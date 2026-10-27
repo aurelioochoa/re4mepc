@@ -26,6 +26,9 @@ class PackagingTests(unittest.TestCase):
             environment.pop('PYTHONPATH', None)
             result = subprocess.run([sys.executable, '-c',
                 "from re4pc.settings import validate; from re4pc.languages import translate, LAUNCHER_LANGUAGES; "
+                "from re4pc.game import Game; from re4pc.gl_bridge import GLBridge; "
+                "from re4pc.render_stream import RenderStream; from re4pc.presentation import PresentationWorker; "
+                "from re4pc.laser import LaserSight; "
                 "assert all(validate({'game_language': 'en', 'launcher_language': code})['launcher_language'] == code "
                 "for code in LAUNCHER_LANGUAGES); "
                 "assert translate('Play', 'ja') == 'プレイ'; print('STAGED_LANGUAGES_PASS')"],

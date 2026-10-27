@@ -11,10 +11,10 @@ APPLICATION_MODULES = (
     'fast.py', 'filesystem.py', 'game.py', 'graphics.py', 'input.py', 'jni.py',
     'launcher.py', 'launcher_ui.py', 'languages.py', 'case_dialog.py', 'media.py', 'menu_controls.py', 'native_unzip.py', 'packaging.py', 'paths.py', 'pc_controls.py',
     'runtime_log.py', 'save_boundary.py', 'settings.py', 'texture_cache.py',
-    'textures.py', 'timing.py', 'ui_images.py')
-NATIVE_INPUTS = ('audio.c', 'fast.c')
+    'textures.py', 'timing.py', 'ui_images.py', 'laser.py', 'render_stream.py', 'gl_bridge.py', 'presentation.py')
+NATIVE_INPUTS = ('audio.c', 'fast.c', 'render.c', 'gl.c')
 APPLICATION_ASSETS = ('forest.png', 'icon.png', 'settings.png', 'backups.png',
-                     'case-file.png', 'numeral-4.png', 'resident-evil-wordmark.png', 'paper.png', 'case-paper-v2.png',
+                     'case-file.png', 'paper.png', 'case-paper-v2.png',
                      'case-seal.png', 'ribbon-spools.png', 'paperclip.png',
                      'achievement-village.png', 'achievement-gigante.png',
                      'achievement-ashley.png', 'achievement-verdugo.png',

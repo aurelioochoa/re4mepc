@@ -2,7 +2,7 @@
 
 Settings, Achievements and Save backups open as separate native windows from the launcher. Their parchment forms, olive navigation, serif headings and oxblood focus indicators share the launcher palette.
 
-Settings opens at 1280 × 720 and supports 640 × 520. Its six sections preserve every existing setting and binding name. Tab reaches native controls; Up and Down move between section buttons. Focused fields scroll into view. At narrow widths, labels stack above fields. Save validates through the existing settings validator before the atomic write; field errors keep the window open. Cancel, Escape and the window close button confirm unsaved edits. Settings apply to the next game launch, and the validated presentation rate remains 20 Hz.
+Settings opens at 1280 × 720 and supports 640 × 520. Its six sections preserve every existing setting and binding name. Tab reaches native controls; Up and Down move between section buttons. Focused fields scroll into view. At narrow widths, labels stack above fields. Save validates through the existing settings validator before the atomic write; field errors keep the window open. Cancel, Escape and the window close button confirm unsaved edits. Settings apply to the next game launch. Presentation rate offers native 20 FPS, interpolated 30/60/90/120/144/165/240 FPS and Uncapped; simulation remains 20 Hz.
 
 ![Settings](settings-preview.png)
 

@@ -12,7 +12,7 @@ Play the original **Resident Evil 4 Mobile Android** engine in a Linux desktop w
 
 **Bring your own game:** supply a compatible APK. The project does not include or download the game. Imported libraries, resources and saves stay outside the checkout. Full campaign completion has not been validated.
 
-[Gameplay](#gameplay) · [Quick start](#quick-start) · [Game files](#game-files) · [How the port works](#how-the-port-works) · [Controls](#controls) · [Development](#development)
+[Gameplay](#gameplay) · [Quick start](#quick-start) · [FPS and performance](#fps-and-performance) · [Game files](#game-files) · [How the port works](#how-the-port-works) · [Controls](#controls) · [Development](#development)
 
 ### Gameplay
 
@@ -53,6 +53,19 @@ re4mepc run
 
 If the command is not found, add `~/.local/bin` to `PATH` with `export PATH="$HOME/.local/bin:$PATH"`, or run `~/.local/bin/re4mepc`. From the checkout, use `make import APK="/path/to/game.apk"`, `make check-game` and `make run`.
 
+#### FPS and performance
+
+After updating the checkout, rebuild the native helpers and select a presentation rate:
+
+```sh
+make build
+make run ARGS="--fps 60"
+```
+
+Use `--fps 120` for a 120 FPS target, `--fps 0` for uncapped presentation, or `--fps 20` for the original mode. The launcher's **Settings & controls → Display & sensitivity → Presentation rate** saves your choice for future launches; command-line overrides apply to one session.
+
+Higher FPS uses geometry interpolation while gameplay stays at **20 Hz**, with up to **50 ms** of added visual latency. The local test held 60/120 presentation FPS and measured **10.5% less tick work** through the native GL bridge. Uncapped rendering slowed simulation under contention in that test. See [the FPS guide](docs/fps-performance.md) for all rates, saved-setting commands, measurements and verification. This feature is in the current source; the older published packages below were not rebuilt for it.
+
 #### Portable builds
 
 The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014) provides an AppImage, portable archive and `SHA256SUMS`. Check the chosen download against the hashes in the [qualification summary](docs/qualification-summary.md). These packages contain no game data and are not fully campaign-qualified.
@@ -78,7 +91,7 @@ The original Android ARM32 libraries still execute the game logic. A Python host
 2. **Share memory and supply Android services.** A **256 MiB** mapping below 4 GiB uses the same addresses in Unicorn and the Linux process, allowing host bridges to access validated guest buffers directly. ARM trampolines dispatch imported calls to Python or C. A limited JNI implementation supplies objects, strings, arrays and native method registration; the host runs library constructors, `JNI_OnLoad` and lifecycle callbacks. Bionic/libc and EABI bridges provide files, saves, allocation and imported math helpers.
 3. **Bridge graphics and media.** Fixed-function OpenGL ES 1 calls map to desktop OpenGL's compatibility profile; OES paletted textures are expanded before upload. SDL2 supplies the window, input and audio output. FFmpeg decodes original sounds and movies, with decoded audio cached locally and mixed through a native callback.
 4. **Feed the original controls.** Menus receive the engine's key/touch callbacks. During gameplay, hooks tied to the supported engine's symbols translate keyboard, mouse and controller actions into its control state and camera angles. Mouse look adjusts the native camera orbit before wall-collision checks. File services route native saves to the installation's save directory, with host snapshots around save boundaries.
-5. **Preserve the engine clock.** Each loop polls SDL input, applies controls, calls `native_onDrawFrame`, updates movie playback and swaps the window. Updates run at **20 Hz** because each draw also advances game logic. Raising that rate speeds up movement, combat and mission timers; higher rendering rates require separating the engine's update and draw paths.
+5. **Preserve the engine clock and unlock presentation.** Updates run at **20 Hz** because each native draw also advances game logic. Select 30/60/90/120/144/165/240 FPS or Uncapped in Settings, or run `make run ARGS="--fps 60"`. A separate GL context interpolates copied geometry while the emulator works; it adds up to 50 ms of visual latency without accelerating gameplay. Native C imports reduce graphics bridge overhead. [Implementation and measurements](docs/fps-performance.md).
 
 Source entry points: [ARM/ELF runtime](re4pc/arm.py), [JNI](re4pc/jni.py), [lifecycle and frame loop](re4pc/game.py), [graphics](re4pc/graphics.py), [desktop controls](re4pc/pc_controls.py), and [media](re4pc/media.py). See the [architecture reference](docs/advanced-usage.md#how-it-works) for the full source map. Engine-specific symbols, offsets and service coverage limit compatibility to the validated libraries; full campaign support remains unverified.
 
@@ -170,7 +183,7 @@ Use an ID listed by `backups`. Import creates an inactive snapshot; restore acti
 
 Linux x86_64 is the target. The host needs shared memory below 4 GiB and OpenGL compatibility functions. Resizing, HiDPI, controllers and borderless fullscreen are implemented, but physical controllers, display/HiDPI and audible speakers still lack qualification.
 
-Visible tests have exercised the title, English menus, original audio/video and village gameplay. Gameplay and presentation run at **20 Hz** to preserve the engine's mission clock; higher rates also speed up game logic. ARM execution and Python bridges add overhead, especially during loading. A safe higher rendering rate has not been established.
+Visible tests have exercised the title, English menus, original audio/video and village gameplay. Simulation remains **20 Hz**; optional independent geometry interpolation unlocks higher presentation FPS. Native 20 FPS remains the default. ARM execution still limits simulation throughput, especially during loading. Higher display FPS does not increase input or simulation sampling rates.
 
 **Full campaign completion is unverified.** The earlier two-hour soak stopped at its preserved 2,880.043-second checkpoint and remains incomplete. An intermittent native difficulty-initialization exception is unresolved; no loading optimization met the performance gate.
 
@@ -222,7 +235,7 @@ Ejecuta el motor original de **Resident Evil 4 Mobile para Android** en una vent
 
 **Debes aportar tu propio juego:** proporciona un APK compatible. El proyecto no incluye ni descarga el juego. Las bibliotecas importadas, recursos y partidas se guardan fuera del repositorio. La campaña completa no está validada.
 
-[Jugabilidad](#jugabilidad) · [Inicio rápido](#inicio-rápido) · [Archivos del juego](#archivos-del-juego) · [Cómo funciona el port](#cómo-funciona-el-port) · [Controles](#controles) · [Desarrollo](#desarrollo)
+[Jugabilidad](#jugabilidad) · [Inicio rápido](#inicio-rápido) · [FPS y rendimiento](#fps-y-rendimiento) · [Archivos del juego](#archivos-del-juego) · [Cómo funciona el port](#cómo-funciona-el-port) · [Controles](#controles) · [Desarrollo](#desarrollo)
 
 ### Jugabilidad
 
@@ -263,6 +276,19 @@ re4mepc run
 
 Si no se encuentra el comando, añade `~/.local/bin` a `PATH` con `export PATH="$HOME/.local/bin:$PATH"` o ejecuta `~/.local/bin/re4mepc`. Desde el repositorio, usa `make import APK="/ruta/al/juego.apk"`, `make check-game` y `make run`.
 
+#### FPS y rendimiento
+
+Después de actualizar el código, recompila los componentes nativos y elige una frecuencia de presentación:
+
+```sh
+make build
+make run ARGS="--fps 60"
+```
+
+Usa `--fps 120` para un objetivo de 120 FPS, `--fps 0` para presentación sin límite o `--fps 20` para el modo original. **Ajustes y controles → Pantalla y sensibilidad → Frecuencia** guarda la elección para futuros inicios; las opciones de terminal solo afectan a esa sesión.
+
+Los FPS superiores usan interpolación geométrica y conservan la simulación a **20 Hz**, con hasta **50 ms** de latencia visual adicional. La prueba local mantuvo 60/120 FPS de presentación y midió **10,5 % menos trabajo por tick** con el puente GL nativo. El modo sin límite ralentizó la simulación por contención en esa prueba. La [guía de FPS](docs/fps-performance.md) incluye frecuencias, ajustes persistentes, mediciones y verificación. Esta función está en el código actual; los paquetes publicados anteriores no se recompilaron para incluirla.
+
 #### Versiones portátiles
 
 La [preversión experimental](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014) ofrece un AppImage, un archivo portátil y `SHA256SUMS`. Comprueba la descarga elegida con los hashes del [resumen de validación](docs/qualification-summary.md) (en inglés). Los paquetes no incluyen el juego y no están completamente validados para la campaña.
@@ -288,7 +314,7 @@ Las bibliotecas ARM32 originales de Android siguen ejecutando la lógica del jue
 2. **Compartir memoria y proporcionar servicios de Android.** Una región de **256 MiB** bajo los 4 GiB usa las mismas direcciones en Unicorn y en el proceso Linux, permitiendo acceder directamente a búferes emulados tras validarlos. Pequeñas rutinas ARM dirigen las llamadas importadas a Python o C. Una implementación limitada de JNI proporciona objetos, cadenas, arrays y registro de métodos nativos; el host ejecuta los constructores, `JNI_OnLoad` y los callbacks del ciclo de vida. Los puentes Bionic/libc y EABI proporcionan archivos, partidas, asignación de memoria y funciones matemáticas importadas.
 3. **Conectar gráficos y medios.** Las llamadas de función fija de OpenGL ES 1 se traducen al perfil de compatibilidad de OpenGL de escritorio; las texturas con paleta OES se expanden antes de enviarlas a la GPU. SDL2 proporciona ventana, entrada y salida de audio. FFmpeg decodifica los sonidos y vídeos originales; el audio decodificado se guarda en caché local y se mezcla mediante un callback nativo.
 4. **Alimentar los controles originales.** Los menús reciben los callbacks de teclas y toques del motor. Durante el juego, enlaces asociados a los símbolos del motor admitido traducen las acciones de teclado, ratón y mando a su estado de control y ángulos de cámara. El ratón ajusta la órbita nativa antes de comprobar colisiones con paredes. Los servicios de archivos dirigen las partidas nativas a la carpeta de guardados de la instalación, con copias del host alrededor de las operaciones de guardado.
-5. **Conservar el reloj del motor.** Cada iteración recoge la entrada SDL, aplica los controles, llama a `native_onDrawFrame`, actualiza los vídeos y presenta la ventana. Las actualizaciones funcionan a **20 Hz** porque cada dibujado también avanza la lógica. Aumentar esa frecuencia acelera movimiento, combate y temporizadores; una frecuencia de renderizado superior requiere separar actualización y dibujado dentro del motor.
+5. **Conservar el reloj y desbloquear la presentación.** La simulación funciona a **20 Hz**. Elige 30/60/90/120/144/165/240 FPS o Sin límite en Ajustes, o ejecuta `make run ARGS="--fps 60"`. Un contexto GL independiente interpola copias de la geometría mientras trabaja el emulador, con hasta 50 ms de latencia visual y sin acelerar el juego. Las llamadas GL frecuentes usan un puente C. [Implementación y mediciones](docs/fps-performance.md).
 
 Puntos de entrada del código: [runtime ARM/ELF](re4pc/arm.py), [JNI](re4pc/jni.py), [ciclo de vida y bucle de fotogramas](re4pc/game.py), [gráficos](re4pc/graphics.py), [controles de escritorio](re4pc/pc_controls.py) y [medios](re4pc/media.py). La [referencia de arquitectura](docs/advanced-usage.md#how-it-works) incluye el mapa completo (en inglés). Los símbolos y desplazamientos específicos del motor y los servicios implementados limitan la compatibilidad a las bibliotecas validadas; la campaña completa sigue sin verificarse.
 
@@ -380,7 +406,7 @@ Usa un ID mostrado por `backups`. Importar crea una copia inactiva; restaurar la
 
 La plataforma objetivo es Linux x86_64. El host necesita memoria compartida por debajo de 4 GiB y funciones de compatibilidad de OpenGL. Redimensionado, HiDPI, mandos y pantalla completa sin bordes están implementados, pero faltan las comprobaciones físicas de mando, pantalla/HiDPI y altavoces.
 
-Las pruebas visibles han ejercitado el título, los menús en inglés, audio/vídeo originales y juego en la aldea. La lógica y presentación funcionan a **20 Hz** para conservar el reloj de misiones; aumentar la frecuencia también acelera la lógica. La ejecución ARM y los puentes de Python añaden sobrecarga, especialmente al cargar. No se ha establecido una frecuencia de renderizado superior segura.
+Las pruebas visibles han ejercitado el título, los menús en inglés, audio/vídeo originales y juego en la aldea. La simulación conserva **20 Hz**; la interpolación geométrica opcional permite FPS de presentación superiores. El modo nativo de 20 FPS sigue siendo el predeterminado. La ejecución ARM todavía limita la simulación, especialmente al cargar; los FPS superiores no aumentan la frecuencia de entrada ni de simulación.
 
 **La campaña completa no está verificada.** La prueba anterior de dos horas se detuvo en su punto conservado de 2.880,043 segundos y sigue incompleta. Una excepción nativa intermitente al inicializar la dificultad continúa sin resolverse; ninguna optimización de carga cumplió el criterio de rendimiento.
 

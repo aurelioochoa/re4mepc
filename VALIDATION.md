@@ -5,6 +5,43 @@ No original game libraries, extracted assets, dumps or save files are
 part of the repository or required by the component suite. The README's reviewed
 gameplay mosaic is a documentation image; component tests need no gameplay captures.
 
+## FPS and graphics verification — 2026-10-23
+
+Current source adds independent geometry presentation at 30/60/90/120/144/165/240
+FPS or uncapped, while native simulation remains 20 Hz. The existing 20 FPS
+preference remains the default. This supersedes the older source-only
+presentation restrictions below; the dated package qualifications still apply
+only to their frozen artifact bytes. No portable release was rebuilt for this
+change.
+
+`make check` passed **408 component tests**, including real offscreen GL
+interpolation, copied array ownership, state restoration, shared-context
+presentation, menu/movie transfer, all 40 accelerated GL imports, CLI/settings
+and staged renderer imports. `make audit-source` passed the complete source and
+history audit. All six implementation acceptance gates passed.
+
+REA 6.4.0/Ghidra 12.1.4/JDK 21 verified the native timing and exec/draw boundaries
+against the supported engine hash and ELF/Capstone mappings. The isolated
+mission fixture produced exact native/replayed endpoint pixels in seven cases,
+distinct intermediate images in five, unchanged hashes of all 256 MiB of guest
+memory across extra presentations, and no extra native service calls. A native
+stage transition passed with presentation active.
+
+On Ryzen 9 6900HS/Radeon 680M with Mesa 26.2.5, the gameplay test measured
+60.03/120.00 presentation FPS at the corresponding targets. An explicitly
+enabled native countdown and elapsed timer each advanced three seconds over
+60 native ticks. Three paired blocks measured median tick work of
+39.707 → 35.556 ms, about 10.5% less work with native GL state imports.
+Uncapped rendering caused contention and slower wall-clock simulation in that
+offscreen run. A separate X11 startup check completed at 120.01 recent FPS,
+without GL messages, and shut down cleanly.
+
+Reproduction commands, hardware scope, visual latency, measured tables and
+external evidence locations are in the [FPS/performance guide](docs/fps-performance.md).
+The fixture does not qualify a full campaign, physical controllers or other
+GPU vendors. The existing intermittent native difficulty-initialization
+exception remains unresolved.
+
 ## Repeatable source-only verification
 
 The aiming/shooting investigation on 2026-10-14 adds nine combat component
@@ -182,11 +219,14 @@ transactions, zero failed saves and no OpenGL messages. Captures and versioned
 reports are preserved locally under build/release-validation; imported engine
 fixtures, captures and logs are excluded from publication.
 
-The supported-hash rendering audit leaves the independent-presentation gate
-closed. Native drawing changes event-button and interaction-message state;
+At this 2026-10-11 checkpoint, the supported-hash rendering audit left the
+independent-presentation gate closed. Native drawing changes event-button and
+interaction-message state;
 virtual task/camera/animation dispatch has no proven interpolation contract.
-Only 20 Hz is selectable. No 30/60 FPS equivalence or interpolated motion is
-claimed. See docs/render-audit.md for entry points and unresolved coupling.
+Only 20 Hz was selectable at that checkpoint. No 30/60 FPS equivalence or
+interpolated motion was claimed then. The 2026-10-23 host-snapshot implementation
+above does not repeat those coupled native draw routines. See
+[the rendering audit](docs/render-audit.md) for both investigations.
 
 ## Benchmark qualification and limitations
 

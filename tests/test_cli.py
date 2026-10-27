@@ -31,10 +31,13 @@ class CLITests(unittest.TestCase):
         self.assertEqual(argument_parser().parse_args(['run', '--no-invert-y']).invert_y, False)
         self.assertTrue(argument_parser().parse_args(['run', '--cache']).cache)
 
-    def test_unqualified_render_rates_are_rejected(self):
+    def test_render_rates_and_fps_alias(self):
+        for flag in ('--fps', '--presentation-rate'):
+            for rate in (0, 20, 30, 60, 120, 144, 240):
+                self.assertEqual(argument_parser().parse_args(['run', flag, str(rate)]).presentation_rate, rate)
         with patch('sys.stderr'):
             with self.assertRaises(SystemExit):
-                argument_parser().parse_args(['run', '--presentation-rate', '30'])
+                argument_parser().parse_args(['run', '--presentation-rate', '21'])
 
     def test_settings_and_backup_cli_share_xdg_data_without_engine_import(self):
         with tempfile.TemporaryDirectory() as temporary:

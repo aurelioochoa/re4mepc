@@ -1,7 +1,12 @@
 # Performance, engine and desktop roadmap results
 
-This roadmap preserves Linux x86_64 and the authoritative 20 Hz simulation.
-The work does not qualify a completed campaign or a higher presentation rate.
+This is the historical 2026-10-12 roadmap record. Current source later added
+[independent geometry presentation and a native GL bridge](fps-performance.md)
+on 2026-10-23. The measurements and native-draw coupling findings below retain
+their original scope; frozen release packages were not rebuilt for that feature.
+
+This roadmap preserved Linux x86_64 and the authoritative 20 Hz simulation.
+That work did not qualify a completed campaign or a higher presentation rate.
 Phase results below distinguish implemented interfaces, measured checks and
 remaining qualification gates. Raw game fixtures, captures, profiler output and
 REA evidence are external under

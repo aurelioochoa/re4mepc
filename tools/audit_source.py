@@ -14,7 +14,7 @@ TOP_LEVEL = {'.gitignore', 'LICENSE', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md',
              'Makefile', 'README.md', 'README.es.md', 'VALIDATION.md',
              'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
              'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md', 'docs/advanced-usage.md',
-             'docs/render-audit.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
+             'docs/render-audit.md', 'docs/fps-performance.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
              'docs/qualification-summary.md', 'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md', 'docs/portable-captures.md', 'docs/campaign-coverage.md'}
 # Only reviewed artwork, host UI screenshots and explicitly requested gameplay
 # documentation images may be binary.
@@ -98,25 +98,32 @@ DOCUMENTATION_IMAGES = {
     'docs/achievements-minimum-preview.png':
         '5f71a7660329891aa979bcb4d3a376083a5fe1659697e78f76568801586b8a00',
 }
+# Recognize these already-published blobs during history inspection, but never
+# permit the extracted logo files in the current index or source checkout.
+HISTORICAL_ONLY_IMAGES = {
+    're4pc/ui_assets/resident-evil-wordmark.png',
+    're4pc/ui_assets/numeral-4.png',
+}
+
 SOURCE_FILES = {
     're4pc': ('__init__', '__main__', 'arm', 'assets', 'bionic', 'desktop', 'eabi', 'fast',
               'filesystem', 'game', 'graphics', 'input', 'jni', 'laser', 'media',
               'paths', 'pc_controls', 'menu_controls', 'capture_exports', 'runtime_log', 'textures', 'timing',
               'actions', 'controllers', 'settings', 'languages', 'backups', 'save_boundary',
               'launcher', 'launcher_ui', 'case_dialog', 'packaging', 'diagnostics', 'texture_cache', 'achievements', 'achievement_media',
-              'native_unzip', 'ui_images'),
+              'native_unzip', 'ui_images', 'gl_bridge', 'render_stream', 'presentation'),
     'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
               'migrate_local', 'probe_input', 'test_components', 'verify_softfloat',
-              'test_pc_controls', 'test_combat', 'test_laser', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session', 'probe_render'),
+              'test_pc_controls', 'test_combat', 'test_laser', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session', 'probe_render', 'test_presentation'),
     'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_desktop', 'test_graphics',
               'test_input', 'test_key_routing', 'test_mouse_capture', 'test_laser', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',
               'test_actions', 'test_controllers', 'test_settings', 'test_languages', 'test_backups',
               'test_save_boundary', 'test_launcher', 'test_packaging', 'test_diagnostics',
               'test_texture_cache', 'test_cli', 'test_setup_commands', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_capture_exports', 'test_rea_workflow',
-              'test_native_unzip', 'test_softfloat', 'test_ui_images'),
+              'test_native_unzip', 'test_softfloat', 'test_ui_images', 'test_gl_bridge', 'test_render_stream'),
 }
-PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c'} | {
+PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c', 'native/gl.c', 'native/render.c'} | {
     f'{folder}/{name}.py' for folder, names in SOURCE_FILES.items() for name in names}
 MAX_SOURCE_BYTES = 256 * 1024
 MAX_DOCUMENTATION_IMAGE_BYTES = 4 * 1024 * 1024
@@ -130,7 +137,9 @@ def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.PIPE)
 
 
-def check_entry(path, mode, kind='blob'):
+def check_entry(path, mode, kind='blob', *, historical=False):
+    if path in HISTORICAL_ONLY_IMAGES and not historical:
+        raise AuditError(f'Original logo extraction forbidden in current source: {path}')
     if path not in PUBLISH_FILES:
         raise AuditError(f'Forbidden publication path: {path}')
     if mode not in ('100644', '100755') or kind != 'blob':
@@ -166,6 +175,7 @@ def check_blob(data, identifier, path=None):
 
 def audit(root, worktree=False):
     checked_entries = set()
+    historical_logo_paths = set()
 
     def check_content(path, blob):
         if (path, blob) not in checked_entries:
@@ -189,7 +199,9 @@ def audit(root, worktree=False):
         for entry in filter(None, git(root, 'ls-tree', '-r', '-z', commit).split(b'\0')):
             metadata, path = entry.split(b'\t', 1)
             mode, kind, blob = metadata.decode().split()
-            check_entry(path.decode('utf-8'), mode, kind)
+            check_entry(path.decode('utf-8'), mode, kind, historical=True)
+            if path.decode('utf-8') in HISTORICAL_ONLY_IMAGES:
+                historical_logo_paths.add(path.decode('utf-8'))
             check_content(path.decode('utf-8'), blob)
     objects = git(root, 'cat-file', '--batch-all-objects',
                   '--batch-check=%(objectname) %(objecttype) %(objectsize)').decode().splitlines()
@@ -214,6 +226,8 @@ def audit(root, worktree=False):
             check_entry(path, '100755' if target.stat().st_mode & 0o111 else '100644')
             check_blob(target.read_bytes(), 'worktree:' + path, path)
             working += 1
+    if historical_logo_paths:
+        print('HISTORY_NOTICE: previously published logo extractions remain in history; current source excludes them')
     print(f'SOURCE_AUDIT_PASS: {indexed} index files, {len(commits)} commits, {blobs} blobs, {working} working files')
 
 

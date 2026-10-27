@@ -43,6 +43,7 @@ class VideoOverlayTests(unittest.TestCase):
             for kind in (0x401, 0x400, 0x402):
                 event = C.create_string_buffer(64)
                 struct.pack_into('<I', event, 0, kind)
+                struct.pack_into('<I', event, 8, graphics.window_id)
                 if kind != 0x400: event[16] = b'\x01'
                 struct.pack_into('<iiii', event, 20, -200, 2000, 14, -9)
                 self.assertEqual(graphics.sdl.SDL_PushEvent(event), 1)

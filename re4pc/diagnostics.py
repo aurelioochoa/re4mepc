@@ -124,6 +124,14 @@ class Diagnostics:
         with self.phase(name, operation):
             return callback(*arguments)
 
+    def external_graphics(self, seconds, calls, maximum):
+        """Attribute native bridge CPU time once per engine call, never as GPU time."""
+        self._seconds['graphics_submission'] += seconds
+        self._counts['graphics_submission'] += calls
+        self._maximum['graphics_submission'] = max(self._maximum['graphics_submission'], maximum)
+        if self._stack:
+            self._stack[-1].children += seconds
+
     @contextmanager
     def operation(self, name):
         previous = self._active

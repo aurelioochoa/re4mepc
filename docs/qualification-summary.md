@@ -1,5 +1,9 @@
 # Experimental public test qualification — 2026-10-14
 
+This document qualifies the frozen 2026-10-14 package bytes. The later
+[FPS/graphics implementation](fps-performance.md) is a current-source feature;
+these packages were not rebuilt for it and their qualification does not cover it.
+
 [Release v0.1.0-experimental.20261014](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014)
 is **experimental and not fully campaign-qualified**. Linux x86_64 only;
 authoritative simulation and presentation remain at 20 Hz. Users supply their
@@ -14,8 +18,9 @@ deferred; this refresh qualifies packaging, languages and the startup/inventory 
 | re4mepc-linux-x86_64.tar.gz | 2454aabd36526d3c8f8d9eb726cf6bcc1772b25d4682f3bfc595a5008df293c2 |
 
 Both formats were rebuilt from the same Ubuntu 22.04 AppDir. Its audited manifest
-contains 2,338 files/links. All application modules and artwork match the current
-source. The runtime code is unchanged from commit `3052793`; its measured source
+contains 2,338 files/links. All application modules and artwork matched the source
+at that release. The runtime code is unchanged from commit `3052793`; its measured
+source
 digest, including native inputs and the benchmark identity helper, is
 `d826e79b9f13eaf7612c350b261914daa06994b4bb446301b89fcb97d4a6943d`.
 The release commit additionally includes the packaging fix, validation harness

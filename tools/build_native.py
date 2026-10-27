@@ -22,9 +22,9 @@ def build(root=None, package=None):
         subprocess.run(['cc','-shared','-fPIC','-O2','-Wall','-Wextra','-Werror',
                         str(root/'native/audio.c'),'-o',str(stage/'libre4audio.so'),*flags],check=True)
         subprocess.run(['cc','-shared','-fPIC','-O2','-Wall','-Wextra','-Werror',
-                        str(root/'native/fast.c'),'-o',str(stage/'libre4fast.so'),
+                        str(root/'native/fast.c'),str(root/'native/render.c'),str(root/'native/gl.c'),'-o',str(stage/'libre4fast.so'),
                         '-I'+str(package/'include'),'-L'+str(package/'lib'),
-                        '-l:libunicorn.so.2','-Wl,-rpath,$ORIGIN'],check=True)
+                        '-l:libunicorn.so.2','-lGL','-lm','-pthread','-Wl,-rpath,$ORIGIN'],check=True)
         shutil.copy2(package/'lib/libunicorn.so.2',stage/'libunicorn.so.2')
         for name in ('libre4audio.so','libre4fast.so','libunicorn.so.2'):
             with (stage/name).open('rb') as stream:

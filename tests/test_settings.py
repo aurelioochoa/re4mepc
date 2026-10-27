@@ -35,14 +35,20 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(),original)
             self.assertEqual(list(Path(directory).glob('.settings-*')),[])
 
-    def test_invalid_settings_and_unaudited_rates_rejected(self):
-        for values in ({'presentation_rate':30},{'presentation_rate':60},{'invert_y':1},
+    def test_invalid_settings_and_rates_rejected(self):
+        for values in ({'presentation_rate':19},{'presentation_rate':61},{'presentation_rate':True},{'invert_y':1},
                        {'sensitivity':float('nan')},{'stick_dead_zone':1},{'version':2},
                        {'window_width':True},{'unexpected':1}):
             with self.subTest(values=values), self.assertRaises(ValueError):validate(values)
         values=validate({})
         values['bindings']['keyboard']['fire']=[119]
         with self.assertRaises(ValueError):validate(values)
+
+    def test_independent_presentation_rates_and_existing_preferences(self):
+        from re4pc.timing import PRESENTATION_RATES
+        self.assertEqual(validate({})['presentation_rate'], 20)
+        for rate in PRESENTATION_RATES:
+            self.assertEqual(validate({'presentation_rate': rate})['presentation_rate'], rate)
 
     def test_corruption_is_explicit_and_does_not_overwrite_file(self):
         with tempfile.TemporaryDirectory() as directory:

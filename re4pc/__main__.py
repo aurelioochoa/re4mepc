@@ -60,7 +60,10 @@ def argument_parser():
     run.add_argument('--width', type=int, help='Override saved window width')
     run.add_argument('--height', type=int, help='Override saved window height')
     run.add_argument('--window-mode', choices=('windowed', 'fullscreen'))
-    run.add_argument('--presentation-rate', type=int, choices=(20,), help='Validated rates only; independent rendering gate is closed')
+    from .timing import PRESENTATION_RATES
+    run.add_argument('--presentation-rate', '--fps', type=int, choices=PRESENTATION_RATES,
+                     help='Presentation FPS with geometry interpolation; 0 uncapped, 20 native. Simulation stays 20 Hz')
+    run.add_argument('--no-fast-graphics', action='store_true', help='Use Python GL state imports for performance comparisons')
     run.add_argument('--sensitivity', type=float)
     run.add_argument('--controller-sensitivity', type=float)
     run.add_argument('--dead-zone', type=float)
@@ -143,6 +146,7 @@ def main(argv=None):
                 game = Game(args.game, settings['window_width'], settings['window_height'], False,
                     args.trace_jni, args.skip_videos, settings['game_language'], args.controls,
                     settings=settings, profile=args.profile, native_profiles=args.native_profile,
+                    fast_graphics=not args.no_fast_graphics,
                     cache=args.cache, cache_dir=args.cache_dir, telemetry=telemetry,
                     diagnostics=not args.no_diagnostics, import_profile=args.profile_imports)
                 stats = game.run(args.frames, args.screenshot, args.script)

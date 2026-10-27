@@ -32,9 +32,10 @@ from re4pc.timing import FramePacer
 def source_identity(root=None):
     """Bind measurements to the actual source bytes, including local changes."""
     root = Path(root or Path(__file__).resolve().parent.parent)
-    from re4pc.packaging import APPLICATION_MODULES
+    from re4pc.packaging import APPLICATION_MODULES, NATIVE_INPUTS
     paths = [root/'re4pc'/name for name in APPLICATION_MODULES]
-    paths += [root/'native/audio.c', root/'native/fast.c', root/'tools/benchmark.py']
+    paths += [root/'native'/name for name in NATIVE_INPUTS]
+    paths += [root/'tools/benchmark.py', root/'tools/build_native.py']
     digest = hashlib.sha256()
     for path in sorted(paths):
         digest.update(path.relative_to(root).as_posix().encode() + b'\0')
