@@ -67,7 +67,11 @@ class Game:
             with self.phase('startup_host'):
                 self.arm = ArmRuntime(diagnostics=self.diagnostics)
                 self.bionic = Bionic(self.arm, self.root)
-                self.graphics = Graphics(self.arm, width, height, hidden, logical_size=(800, 480))
+                from .display import Display
+                display = Display(self.settings, logical=(800, 480))
+                # A widescreen surface needs a window at least as wide as its aspect.
+                width = max(width, round(height*display.surface_width/480))
+                self.graphics = Graphics(self.arm, width, height, hidden, logical_size=(800, 480), display=display)
                 self.graphics.diagnostics = self.diagnostics
                 self.graphics.controller.configure(self.settings)
                 if self.settings.get('window_mode') == 'fullscreen':
@@ -397,7 +401,7 @@ class Game:
             self.media.update_video()
         unlocks = tuple(self.achievements.new_unlocks)
         self.achievements.new_unlocks.clear()
-        self.unlock_capture.tick(self.graphics.capture_image, unlocks)
+        self.unlock_capture.tick(lambda: self.graphics.capture_image(engine_area=True), unlocks)
         focus = self.menu.focus_rect() if self.media.video is None else None
         if focus:
             self.graphics.draw_menu_focus(focus)
@@ -423,7 +427,8 @@ class Game:
         if self.presenter:
             self.presenter.check()
             with self.presenter.lock:
-                self.graphics.render_stream.publish(self.graphics.width,self.graphics.height)
+                self.graphics.resolve()
+                self.graphics.render_stream.publish(*self.graphics.render_size)
             return
         self._present_native()
 
@@ -471,6 +476,8 @@ class Game:
         stats['engine_hashes'] = COMPATIBLE_LIBRARIES
         stats['graphics'] = {'renderer':self.graphics.renderer, 'version':self.graphics.version,
                              'logical_size':[self.graphics.width,self.graphics.height],
+                             'render_size':list(self.graphics.render_size),
+                             'display':self.graphics.display.describe() | {'msaa': self.graphics.samples},
                              'window_size':self.graphics.window_size, 'drawable_size':self.graphics.drawable_size}
         import resource
         stats['peak_process_rss_bytes_since_process_start'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024

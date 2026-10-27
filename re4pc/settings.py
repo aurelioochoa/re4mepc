@@ -8,6 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 from .actions import DEFAULT_BINDINGS, NATIVE_CODES, CONTROLLER_INPUTS, RESERVED_KEYS
 from .timing import PRESENTATION_RATES
+from .display import ASPECT_RATIOS, DISPLAY_FILTERS, MSAA_SAMPLES, RENDER_SCALES, TEXTURE_FILTERS
 
 DEFAULTS = {'version': 1, 'bindings': DEFAULT_BINDINGS, 'sensitivity': 1.0,
             'controller_sensitivity': 1.0, 'invert_y': False, 'stick_dead_zone': 0.18,
@@ -15,7 +16,9 @@ DEFAULTS = {'version': 1, 'bindings': DEFAULT_BINDINGS, 'sensitivity': 1.0,
             'presentation_rate': 20, 'achievement_capture': 'screenshot',
             'achievement_clip_seconds': 10, 'game_language': 'en',
             'launcher_language': 'en', 'laser_color': '#ff0000',
-            'laser_shape': 'original', 'laser_size': 1.0}
+            'laser_shape': 'original', 'laser_size': 1.0,
+            'render_scale': 1, 'msaa': 0, 'texture_filtering': 'original',
+            'display_filter': 'bilinear', 'aspect_ratio': 'original'}
 
 
 def settings_path():
@@ -62,6 +65,13 @@ def validate(values):
             raise ValueError(f'{name} must be an integer between 240 and 16384')
     if type(result['presentation_rate']) is not int or result['presentation_rate'] not in PRESENTATION_RATES:
         raise ValueError('presentation_rate must be 20, 30, 60, 90, 120, 144, 165, 240 or 0 (uncapped)')
+    for name, choices in (('render_scale', RENDER_SCALES), ('msaa', MSAA_SAMPLES)):
+        if type(result[name]) is not int or result[name] not in choices:
+            raise ValueError(name + ' must be one of: ' + ', '.join(map(str, choices)))
+    for name, choices in (('texture_filtering', TEXTURE_FILTERS), ('display_filter', DISPLAY_FILTERS),
+                          ('aspect_ratio', tuple(ASPECT_RATIOS))):
+        if not isinstance(result[name], str) or result[name] not in choices:
+            raise ValueError(name + ' must be one of: ' + ', '.join(choices))
     bindings = result['bindings']
     if not isinstance(bindings, dict) or set(bindings) != {'keyboard', 'mouse', 'controller'}:
         raise ValueError('bindings must contain keyboard, mouse and controller')

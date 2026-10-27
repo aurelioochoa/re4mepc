@@ -11,8 +11,9 @@ APPLICATION_MODULES = (
     'fast.py', 'filesystem.py', 'game.py', 'graphics.py', 'input.py', 'jni.py',
     'launcher.py', 'launcher_ui.py', 'languages.py', 'case_dialog.py', 'media.py', 'menu_controls.py', 'native_math.py', 'native_unzip.py', 'packaging.py', 'paths.py', 'pc_controls.py',
     'runtime_log.py', 'save_boundary.py', 'settings.py', 'texture_cache.py',
-    'textures.py', 'timing.py', 'ui_images.py', 'laser.py', 'render_stream.py', 'gl_bridge.py', 'presentation.py')
-NATIVE_INPUTS = ('audio.c', 'fast.c', 'render.c', 'gl.c', 'Cargo.toml', 'Cargo.lock', 'math.rs')
+    'textures.py', 'timing.py', 'ui_images.py', 'laser.py', 'render_stream.py', 'gl_bridge.py', 'presentation.py',
+    'display.py', 'postprocess.py')
+NATIVE_INPUTS = ('audio.c', 'fast.c', 'render.c', 'gl.c', 'display.c', 'Cargo.toml', 'Cargo.lock', 'math.rs')
 APPLICATION_ASSETS = ('forest.png', 'icon.png', 'icon-village.png', 'icon-seal.png', 'icon-bell.png', 'settings.png', 'backups.png',
                      'case-file.png', 'paper.png', 'case-paper-v2.png',
                      'case-seal.png', 'ribbon-spools.png', 'paperclip.png',

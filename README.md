@@ -66,6 +66,10 @@ Use `--fps 120` for a 120 FPS target, `--fps 0` for uncapped presentation, or `-
 
 Higher FPS uses geometry interpolation while gameplay stays at **20 Hz**, with up to **50 ms** of added visual latency. The local test held 60/120 presentation FPS and measured **10.5% less tick work** through the native GL bridge. Uncapped rendering slowed simulation under contention in that test. Rust replacements for the engine's hottest float and collision routines, plus direct VFP float comparisons, cut median gameplay tick work from about **42 ms to under 14 ms** of the 50 ms budget, verified call for call against the original code. See [the FPS guide](docs/fps-performance.md) for all rates, saved-setting commands, measurements and verification. This feature is in the current source; the older published packages below were not rebuilt for it.
 
+#### Graphics quality
+
+Settings & controls → **Graphics** adds internal resolution scaling up to 4×, MSAA, trilinear/anisotropic texture filtering, sharpen/FXAA/pixel/CRT display filters and experimental 16:9 or 21:9 widescreen. The HUD and menus keep their original 5:3 layout. For example, `make run ARGS="--render-scale 2 --msaa 4 --texture-filtering anisotropic"`. Original game assets are unchanged. See [the graphics guide](docs/graphics-quality.md).
+
 #### Portable builds
 
 The [experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014) provides an AppImage, portable archive and `SHA256SUMS`. Check the chosen download against the hashes in the [qualification summary](docs/qualification-summary.md). These packages contain no game data and are not fully campaign-qualified.
@@ -288,6 +292,10 @@ make run ARGS="--fps 60"
 Usa `--fps 120` para un objetivo de 120 FPS, `--fps 0` para presentación sin límite o `--fps 20` para el modo original. **Ajustes y controles → Pantalla y sensibilidad → Frecuencia** guarda la elección para futuros inicios; las opciones de terminal solo afectan a esa sesión.
 
 Los FPS superiores usan interpolación geométrica y conservan la simulación a **20 Hz**, con hasta **50 ms** de latencia visual adicional. La prueba local mantuvo 60/120 FPS de presentación y midió **10,5 % menos trabajo por tick** con el puente GL nativo. El modo sin límite ralentizó la simulación por contención en esa prueba. Las sustituciones en Rust de las rutinas de coma flotante y de colisión más costosas del motor, junto con comparaciones de coma flotante directas en VFP, reducen la mediana de trabajo por tick de juego de unos **42 ms a menos de 14 ms** del presupuesto de 50 ms, verificadas llamada a llamada contra el código original. La [guía de FPS](docs/fps-performance.md) incluye frecuencias, ajustes persistentes, mediciones y verificación. Esta función está en el código actual; los paquetes publicados anteriores no se recompilaron para incluirla.
+
+#### Calidad gráfica
+
+Ajustes y controles → **Gráficos** añade escalado de resolución interna hasta 4×, MSAA, filtrado de texturas trilineal/anisotrópico, filtros de pantalla de nitidez/FXAA/píxel/CRT y pantalla panorámica 16:9 o 21:9 experimental. La interfaz y los menús conservan su formato 5:3 original. Por ejemplo, `make run ARGS="--render-scale 2 --msaa 4 --texture-filtering anisotropic"`. Los recursos originales del juego no cambian. Consulta la [guía gráfica](docs/graphics-quality.md).
 
 #### Versiones portátiles
 

@@ -63,6 +63,12 @@ def argument_parser():
     from .timing import PRESENTATION_RATES
     run.add_argument('--presentation-rate', '--fps', type=int, choices=PRESENTATION_RATES,
                      help='Presentation FPS with geometry interpolation; 0 uncapped, 20 native. Simulation stays 20 Hz')
+    from .display import ASPECT_RATIOS, DISPLAY_FILTERS, MSAA_SAMPLES, RENDER_SCALES, TEXTURE_FILTERS
+    run.add_argument('--render-scale', type=int, choices=RENDER_SCALES, help='Internal resolution multiple of 800x480')
+    run.add_argument('--msaa', type=int, choices=MSAA_SAMPLES, help='Multisample anti-aliasing samples (0 disables)')
+    run.add_argument('--texture-filtering', choices=TEXTURE_FILTERS, help='Override engine texture filters with mipmaps')
+    run.add_argument('--display-filter', choices=DISPLAY_FILTERS, help='Final scaling and post-processing filter')
+    run.add_argument('--aspect-ratio', choices=tuple(ASPECT_RATIOS), help='Widen 3D views; HUD and menus stay 5:3')
     run.add_argument('--no-fast-graphics', action='store_true', help='Use Python GL state imports for performance comparisons')
     run.add_argument('--no-native-math', action='store_true', help='Run hot engine math as original ARM code for performance comparisons')
     run.add_argument('--sensitivity', type=float)
@@ -139,7 +145,9 @@ def main(argv=None):
                 'window_mode': args.window_mode, 'presentation_rate': args.presentation_rate,
                 'sensitivity': args.sensitivity, 'controller_sensitivity': args.controller_sensitivity,
                 'stick_dead_zone': args.dead_zone, 'invert_y': args.invert_y,
-                'game_language': args.language})
+                'game_language': args.language, 'render_scale': args.render_scale, 'msaa': args.msaa,
+                'texture_filtering': args.texture_filtering, 'display_filter': args.display_filter,
+                'aspect_ratio': args.aspect_ratio})
             from .game import Game
             configure(args.log_level, args.log_file)
             log.info('Starting game: %dx%d, controls=%s, data=%s', settings['window_width'], settings['window_height'], args.controls, args.game)

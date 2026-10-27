@@ -34,6 +34,12 @@ class PresentationWorker:
         surface.controller = graphics.controller
         surface.diagnostics = None
         surface.window_size, surface.drawable_size = graphics.window_size, graphics.drawable_size
+        # Same scaled surface, filter and margins; only the engine context maps imports.
+        surface.display, surface.display_engine = graphics.display, False
+        surface.scale, surface.margin = graphics.scale, graphics.margin
+        surface.samples, surface.display_filter = graphics.samples, graphics.display_filter
+        surface.resolve_framebuffer = surface.surface_color = 0
+        surface.post = None
         surface.viewport = graphics.viewport
         surface._mouse_touch = surface._fullscreen_enter = surface.mouse_captured = False
         surface.signature('SDL_GL_MakeCurrent', C.c_int, C.c_void_p, C.c_void_p)
@@ -97,6 +103,9 @@ class PresentationWorker:
                     began = time.monotonic()
                     surface.begin_frame()
                     geometry = self.stream.available and self.stream.render()
+                    if not geometry:
+                        # Published frames are already resolved and complete.
+                        surface.target_resolved()
                     if geometry or self.stream.blit(self.read_framebuffer.value):
                         if geometry and self.overlay:
                             surface.draw_overlay(*self.overlay)
@@ -135,13 +144,7 @@ class PresentationWorker:
                 'mean_render_and_swap_ms':round(self.render_seconds/max(self.frames,1)*1000,3)}
 
     def _delete_surface(self):
-        surface = self.surface
-        for name, value in (('glDeleteFramebuffers',surface.framebuffer),
-                            ('glDeleteRenderbuffers',surface.surface_depth),
-                            ('glDeleteTextures',surface.surface_texture)):
-            if value:
-                getattr(surface.gl,name)(1,C.byref(C.c_uint(value)))
-        surface.framebuffer = surface.surface_depth = surface.surface_texture = 0
+        self.surface._delete_surface()
 
     def close(self):
         self.stopped.set()

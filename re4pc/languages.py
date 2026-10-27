@@ -1369,6 +1369,59 @@ for _language, _labels in _LASER_LABELS.items():
  'Choose a color or enter #RRGGBB. Predator uses three dots. Black Matter animates a cosmic '
  'pattern with your color as its accent. Size: 0.5 to 3.0. Changes apply on next launch.'], _labels)))
 
+# Graphics settings labels share the existing presentation catalogs.
+_GRAPHICS_SOURCE = ['Graphics', 'Sharper, smoother rendering', 'Render scale', 'Anti-aliasing (MSAA)',
+                    'Texture filtering', 'Display filter', 'Aspect ratio', 'Off', 'Trilinear', 'Anisotropic 16×',
+                    'Bilinear', 'Sharpen', 'Sharp pixels', 'CRT scanlines', 'Original 5:3', 'Widescreen 16:9',
+                    'Ultrawide 21:9',
+                    'Render scale multiplies the internal resolution; MSAA smooths geometry edges. Texture '
+                    'filtering adds mipmaps to reduce shimmer. Widescreen widens 3D views while the HUD and menus '
+                    'keep their original 5:3 layout; the screen edges may show objects appearing late. Changes '
+                    'apply on next launch.']
+_GRAPHICS_LABELS = {
+    'es': ['Gráficos', 'Imagen más nítida y suave', 'Escala de renderizado', 'Antialiasing (MSAA)',
+           'Filtrado de texturas', 'Filtro de pantalla', 'Relación de aspecto', 'Desactivado', 'Trilineal',
+           'Anisotrópico 16×', 'Bilineal', 'Nitidez', 'Píxeles nítidos', 'Líneas CRT', 'Original 5:3',
+           'Panorámica 16:9', 'Ultrapanorámica 21:9',
+           'La escala de renderizado multiplica la resolución interna; MSAA suaviza los bordes de la geometría. '
+           'El filtrado de texturas añade mipmaps para reducir el parpadeo. La pantalla panorámica amplía la vista '
+           '3D y la interfaz y los menús conservan su formato 5:3 original; en los bordes pueden aparecer objetos '
+           'con retraso. Se aplica en el próximo inicio.'],
+    'fr': ['Graphismes', 'Rendu plus net et plus fluide', 'Échelle de rendu', 'Anticrénelage (MSAA)',
+           'Filtrage des textures', 'Filtre d’affichage', 'Format d’image', 'Désactivé', 'Trilinéaire',
+           'Anisotrope 16×', 'Bilinéaire', 'Netteté', 'Pixels nets', 'Lignes CRT', 'Original 5:3',
+           'Écran large 16:9', 'Ultra-large 21:9',
+           'L’échelle de rendu multiplie la résolution interne ; le MSAA adoucit les contours de la géométrie. '
+           'Le filtrage des textures ajoute des mipmaps pour réduire le scintillement. L’écran large élargit la vue '
+           '3D tandis que l’interface et les menus gardent leur format 5:3 d’origine ; des objets peuvent '
+           'apparaître tardivement sur les bords. Appliqué au prochain lancement.'],
+    'de': ['Grafik', 'Schärfere, glattere Darstellung', 'Renderskalierung', 'Kantenglättung (MSAA)',
+           'Texturfilterung', 'Anzeigefilter', 'Seitenverhältnis', 'Aus', 'Trilinear', 'Anisotrop 16×',
+           'Bilinear', 'Schärfen', 'Scharfe Pixel', 'CRT-Scanlines', 'Original 5:3', 'Breitbild 16:9',
+           'Ultrabreit 21:9',
+           'Die Renderskalierung vervielfacht die interne Auflösung; MSAA glättet Geometriekanten. Texturfilterung '
+           'ergänzt Mipmaps gegen Flimmern. Breitbild erweitert die 3D-Ansicht, während HUD und Menüs ihr '
+           'ursprüngliches 5:3-Layout behalten; an den Rändern können Objekte verspätet erscheinen. Gilt beim '
+           'nächsten Start.'],
+    'it': ['Grafica', 'Immagine più nitida e fluida', 'Scala di rendering', 'Antialiasing (MSAA)',
+           'Filtro delle texture', 'Filtro schermo', 'Proporzioni', 'Disattivato', 'Trilineare',
+           'Anisotropico 16×', 'Bilineare', 'Nitidezza', 'Pixel nitidi', 'Linee CRT', 'Originale 5:3',
+           'Panoramico 16:9', 'Ultrapanoramico 21:9',
+           'La scala di rendering moltiplica la risoluzione interna; l’MSAA ammorbidisce i bordi della geometria. '
+           'Il filtro delle texture aggiunge mipmap per ridurre lo sfarfallio. Il formato panoramico allarga la '
+           'visuale 3D mentre HUD e menu mantengono il formato 5:3 originale; ai bordi alcuni oggetti possono '
+           'comparire in ritardo. Si applica al prossimo avvio.'],
+    'ja': ['グラフィック', 'よりシャープでなめらかな描画', 'レンダースケール', 'アンチエイリアス（MSAA）',
+           'テクスチャフィルタリング', '表示フィルター', 'アスペクト比', 'オフ', 'トライリニア', '異方性 16×',
+           'バイリニア', 'シャープ', 'シャープピクセル', 'CRT走査線', 'オリジナル 5:3', 'ワイド 16:9',
+           'ウルトラワイド 21:9',
+           'レンダースケールは内部解像度を倍増し、MSAAはポリゴンの輪郭をなめらかにします。テクスチャフィルタリングは'
+           'ミップマップを追加してちらつきを抑えます。ワイド画面は3D表示を広げ、HUDとメニューは元の5:3のままです。'
+           '画面端では物体の表示が遅れることがあります。次回起動時に適用。'],
+}
+for _language, _labels in _GRAPHICS_LABELS.items():
+    CATALOGS[_language].update(dict(zip(_GRAPHICS_SOURCE, _labels, strict=True)))
+
 _PATTERNS = []
 for source in TEMPLATES:
     parts = re.split(r'(\{\w+\})', source)

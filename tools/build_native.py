@@ -22,7 +22,8 @@ def build(root=None, package=None):
         subprocess.run(['cc','-shared','-fPIC','-O2','-Wall','-Wextra','-Werror',
                         str(root/'native/audio.c'),'-o',str(stage/'libre4audio.so'),*flags],check=True)
         subprocess.run(['cc','-shared','-fPIC','-O2','-Wall','-Wextra','-Werror',
-                        str(root/'native/fast.c'),str(root/'native/render.c'),str(root/'native/gl.c'),'-o',str(stage/'libre4fast.so'),
+                        str(root/'native/fast.c'),str(root/'native/render.c'),str(root/'native/gl.c'),
+                        str(root/'native/display.c'),'-o',str(stage/'libre4fast.so'),
                         '-I'+str(package/'include'),'-L'+str(package/'lib'),
                         '-l:libunicorn.so.2','-lGL','-lm','-pthread','-Wl,-rpath,$ORIGIN'],check=True)
         # Rust math helpers have no dependencies, so the build never needs a network.

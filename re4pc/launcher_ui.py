@@ -741,6 +741,15 @@ class FieldError(ValueError):
 
 
 MOUSE_NAMES = {1: 'Left', 2: 'Middle', 3: 'Right', 4: 'Button4', 5: 'Button5'}
+# Display labels for graphics settings; saved values stay machine-readable.
+GRAPHICS_CHOICES = {
+    'render_scale': {1: '1× (800×480)', 2: '2× (1600×960)', 3: '3× (2400×1440)', 4: '4× (3200×1920)'},
+    'msaa': {0: 'Off', 2: '2×', 4: '4×', 8: '8×'},
+    'texture_filtering': {'original': 'Original', 'trilinear': 'Trilinear', 'anisotropic': 'Anisotropic 16×'},
+    'display_filter': {'bilinear': 'Bilinear', 'sharpen': 'Sharpen', 'fxaa': 'FXAA',
+                       'pixel': 'Sharp pixels', 'crt': 'CRT scanlines'},
+    'aspect_ratio': {'original': 'Original 5:3', '16:9': 'Widescreen 16:9', '21:9': 'Ultrawide 21:9'},
+}
 
 
 def collect_settings(values, edits, binding_edits, sdl):
@@ -756,6 +765,8 @@ def collect_settings(values, edits, binding_edits, sdl):
                 value = value.casefold().replace(' ', '_')
             elif key == 'presentation_rate':
                 value = '0' if value == 'Uncapped' else value.removesuffix(' FPS').removesuffix(' Hz')
+            elif key in GRAPHICS_CHOICES:
+                value = {label: choice for choice, label in GRAPHICS_CHOICES[key].items()}.get(value, value)
             if isinstance(original, bool):
                 value = bool(value)
             elif key in ('sensitivity', 'controller_sensitivity', 'stick_dead_zone', 'laser_size'):
@@ -855,7 +866,7 @@ from .case_dialog import CaseDialog, PaperCanvas, PaperPane as CasePaperPane
 
 
 class SettingsView:
-    SECTIONS = ('Display & sensitivity', 'Laser sight', 'Achievements', 'Keyboard', 'Mouse', 'Controller')
+    SECTIONS = ('Display & sensitivity', 'Graphics', 'Laser sight', 'Achievements', 'Keyboard', 'Mouse', 'Controller')
 
     def __init__(self, app, values, sdl):
         from tkinter import ttk
@@ -897,6 +908,10 @@ class SettingsView:
                 ('controller_sensitivity', 'Look stick sensitivity', None),
                 ('stick_dead_zone', 'Stick dead zone', None), ('invert_y', 'Invert look Y', None)):
             self.add_field(self.SECTIONS[0], key, label, values[key], choices)
+        for key, label in (('render_scale', 'Render scale'), ('msaa', 'Anti-aliasing (MSAA)'),
+                           ('texture_filtering', 'Texture filtering'), ('display_filter', 'Display filter'),
+                           ('aspect_ratio', 'Aspect ratio')):
+            self.add_field('Graphics', key, label, values[key], tuple(GRAPHICS_CHOICES[key].values()))
         for key, label, choices in (
                 ('laser_shape', 'Sight shape', ('Original', 'Circle', 'Predator', 'Black Matter')),
                 ('laser_color', 'Laser color', None), ('laser_size', 'Sight size', None)):
@@ -984,6 +999,8 @@ class SettingsView:
             value = SHAPE_LABELS[value]
         elif key == 'presentation_rate':
             value = str(value)+' FPS' if value else 'Uncapped'
+        elif key in GRAPHICS_CHOICES:
+            value = GRAPHICS_CHOICES[key][value]
         variable = tk.BooleanVar(value=value) if isinstance(value, bool) else tk.StringVar(value=str(value))
         if isinstance(value, bool):
             control = ttk.Checkbutton(pane.content, variable=variable, style='Paper.TCheckbutton')
@@ -1088,6 +1105,7 @@ class SettingsView:
             y += (78 if narrow else 43) + error_height
         fields_end = y
         help_text = {
+            'Graphics': 'Render scale multiplies the internal resolution; MSAA smooths geometry edges. Texture filtering adds mipmaps to reduce shimmer. Widescreen widens 3D views while the HUD and menus keep their original 5:3 layout; the screen edges may show objects appearing late. Changes apply on next launch.',
             'Laser sight': 'Choose a color or enter #RRGGBB. Predator uses three dots. Black Matter animates a cosmic pattern with your color as its accent. Size: 0.5 to 3.0. Changes apply on next launch.',
             'Achievements': 'Save the moment you unlock an achievement. Screenshots are saved by default. Clips are silent, at 5 frames per second, and include up to the selected replay length before the unlock. Clip capture uses extra memory. Recovered achievements do not create captures.',
             'Keyboard': 'Examples: W, Up, Return, Escape, Space, F1, Comma. Tab, F3 and F12 are reserved desktop controls.',
@@ -1104,6 +1122,7 @@ class SettingsView:
             canvas.rule(120, left+85, right)
         else:
             canvas.text(left, 106, 'Customize your aim' if name == 'Laser sight' else 'Capture preferences' if name == 'Achievements' else
+                        'Sharper, smoother rendering' if name == 'Graphics' else
                         'Comma-separated names; leave blank to unbind.', 13, family='DejaVu Sans Mono', width=w-64)
         field_x = left if narrow else left+round((w-64)*.37)
         field_w = right-field_x
@@ -1125,8 +1144,8 @@ class SettingsView:
                 canvas.window(control, field_x, cy, width, 30)
             if error_height:
                 canvas.window(error, field_x, cy+32, field_w, error_height)
+        y = fields_end  # the row loop above reuses `y` for each field
         if name == 'Laser sight':
-            y = fields_end
             canvas.window(self.laser_picker, left, y+10, min(180, (w-74)/2), 38)
             canvas.window(self.laser_reset, left+min(190, (w-64)/2), y+10, min(180, (w-74)/2), 38)
             canvas.window(self.laser_preview, left, y+65, min(280, w-64), 170)

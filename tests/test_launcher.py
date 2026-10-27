@@ -575,7 +575,7 @@ class CaseFileDialogTests(LauncherGuiFixture):
         view.nav['Display & sensitivity'].focus_force()
         view.nav['Display & sensitivity'].event_generate('<Down>')
         self.window.update()
-        self.assertEqual(view.section, 'Laser sight')
+        self.assertEqual(view.section, 'Graphics')
         view.select('Keyboard')
         self.window.update()
         pane = view.panes['Keyboard']

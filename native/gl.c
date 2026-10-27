@@ -1,6 +1,7 @@
 /* Direct Unicorn -> desktop GL state submissions, avoiding Python per call.
  * Resource uploads, draws, queries and custom sights keep the checked Python
  * path. No GL state is cached: host overlays may change it between imports.
+ * Viewport, scissor, projection and texture filters pass through display.c.
  */
 #include <GL/gl.h>
 #include <unicorn/unicorn.h>
@@ -16,6 +17,11 @@ struct gl_bridge {
     uint64_t calls, nanoseconds, maximum_ns; int timed;
     uint64_t operations[40]; char error[160];
 };
+void re4_display_viewport(int x, int y, int w, int h);
+void re4_display_scissor(int x, int y, int w, int h);
+void re4_display_matrix_mode(unsigned mode);
+void re4_display_load_matrix(const float *m);
+void re4_display_tex_parameter(unsigned target, unsigned name, float value);
 static float real(uint32_t v) { float f; memcpy(&f,&v,sizeof(f)); return f; }
 static uint64_t nanos(void) {
     struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t);
@@ -47,8 +53,8 @@ static void invoke_gl(uc_engine *uc, uint64_t address, uint32_t size, void *cont
     case 8: if (a[3] && !pointer(b,a[3],1)) return; glColorPointer(a[0],a[1],a[2],(void *)(uintptr_t)a[3]); break;
     case 9: if (a[3] && !pointer(b,a[3],1)) return; glTexCoordPointer(a[0],a[1],a[2],(void *)(uintptr_t)a[3]); break;
     case 10: if (a[2] && !pointer(b,a[2],1)) return; glNormalPointer(a[0],a[1],(void *)(uintptr_t)a[2]); break;
-    case 11: glMatrixMode(a[0]); break;
-    case 12: if (!pointer(b,a[0],64)) return; glLoadMatrixf((void *)(uintptr_t)a[0]); break;
+    case 11: re4_display_matrix_mode(a[0]); break;
+    case 12: if (!pointer(b,a[0],64)) return; re4_display_load_matrix((void *)(uintptr_t)a[0]); break;
     case 13: if (!pointer(b,a[0],64)) return; glMultMatrixf((void *)(uintptr_t)a[0]); break;
     case 14: glColor4f(real(a[0]),real(a[1]),real(a[2]),real(a[3])); break;
     case 15: glBlendFunc(a[0],a[1]); break;
@@ -70,12 +76,12 @@ static void invoke_gl(uc_engine *uc, uint64_t address, uint32_t size, void *cont
     case 31: glFrontFace(a[0]); break;
     case 32: glShadeModel(a[0]); break;
     case 33: glPolygonOffset(real(a[0]),real(a[1])); break;
-    case 34: glViewport(a[0],a[1],a[2],a[3]); break;
-    case 35: glScissor(a[0],a[1],a[2],a[3]); break;
+    case 34: re4_display_viewport(a[0],a[1],a[2],a[3]); break;
+    case 35: re4_display_scissor(a[0],a[1],a[2],a[3]); break;
     case 36: glStencilFunc(a[0],a[1],a[2]); break;
     case 37: glStencilOp(a[0],a[1],a[2]); break;
     case 38: glHint(a[0],a[1]); break;
-    case 39: glTexParameterf(a[0],a[1],real(a[2])); break;
+    case 39: re4_display_tex_parameter(a[0],a[1],real(a[2])); break;
     default: snprintf(b->error,sizeof(b->error),"unknown graphics import %u",op); uc_emu_stop(uc); return;
     }
     ++b->calls; ++b->operations[op];
