@@ -13,7 +13,7 @@ APPLICATION_MODULES = (
     'runtime_log.py', 'save_boundary.py', 'settings.py', 'texture_cache.py',
     'textures.py', 'timing.py', 'ui_images.py', 'laser.py', 'render_stream.py', 'gl_bridge.py', 'presentation.py')
 NATIVE_INPUTS = ('audio.c', 'fast.c', 'render.c', 'gl.c')
-APPLICATION_ASSETS = ('forest.png', 'icon.png', 'settings.png', 'backups.png',
+APPLICATION_ASSETS = ('forest.png', 'icon.png', 'icon-village.png', 'icon-seal.png', 'icon-bell.png', 'settings.png', 'backups.png',
                      'case-file.png', 'paper.png', 'case-paper-v2.png',
                      'case-seal.png', 'ribbon-spools.png', 'paperclip.png',
                      'achievement-village.png', 'achievement-gigante.png',

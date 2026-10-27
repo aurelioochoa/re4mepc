@@ -94,7 +94,8 @@ class LauncherGuiFixture(unittest.TestCase):
         self.window.geometry('1000x600')
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        environment = patch.dict('os.environ', {'XDG_CONFIG_HOME': str(Path(temporary.name) / 'config')})
+        environment = patch.dict('os.environ', {'XDG_CONFIG_HOME': str(Path(temporary.name) / 'config'),
+                                               'XDG_DATA_HOME': str(Path(temporary.name) / 'data')})
         environment.start()
         self.addCleanup(environment.stop)
         self.folder = Path(temporary.name) / 'game with spaces'
@@ -112,6 +113,74 @@ class LauncherGuiFixture(unittest.TestCase):
 
 
 class LauncherGuiTests(LauncherGuiFixture):
+    def test_launch_and_dialogs_use_installed_desktop_window_class(self):
+        from re4pc.launcher import launch
+        classes = []
+        def inspect(window, game):
+            classes.append(window.winfo_class())
+            def close():
+                window.quit()
+                window.destroy()
+            window.after_idle(close)
+        with patch('re4pc.launcher.Launcher', side_effect=inspect):
+            launch()
+        self.assertEqual(classes, ['Re4mepc'])
+        popup = self.app.dialog('Launcher icon', '400x200')
+        self.assertEqual(popup.winfo_class(), classes[0])
+        popup.destroy()
+
+    def test_icon_picker_applies_and_remembers_a_choice(self):
+        from re4pc.desktop import locations
+        view = self.app.show_icons()
+        self.assertEqual([button.label for button in view.choices],
+                         ['Classic 4', 'Blood moon', 'Crimson seal', 'Church bell'])
+        self.assertEqual([button.selected for button in view.choices], [True, False, False, False])
+        view.choices[1].invoke()
+        self.assertEqual(locations()[2].read_bytes(), (self.app.assets / 'icon-village.png').read_bytes())
+        self.assertIsNotNone(self.app.app_icon)
+        self.assertEqual([button.selected for button in view.choices], [False, True, False, False])
+        view.window.destroy()
+        view = self.app.show_icons()
+        self.assertTrue(view.choices[1].selected)
+        view.window.destroy()
+
+    def test_icon_picker_fits_minimum_and_keeps_selection_after_save_failure(self):
+        from re4pc.desktop import locations
+        view = self.app.show_icons()
+        for geometry in ('600x400', '680x400'):
+            view.window.geometry(geometry)
+            self.window.update()
+            for button in (*view.choices, view.browse_button, view.done_button):
+                self.assertGreaterEqual(button.winfo_x(), 0)
+                self.assertGreaterEqual(button.winfo_y(), 0)
+                self.assertLessEqual(button.winfo_x()+button.winfo_width(), view.paper.winfo_width())
+                self.assertLessEqual(button.winfo_y()+button.winfo_height(), view.paper.winfo_height())
+        view.choices[0].focus_force()
+        view.choices[0].event_generate('<Right>')
+        self.window.update()
+        self.assertIs(view.window.focus_get(), view.choices[1])
+        view.choices[1].event_generate('<Return>')
+        self.window.update()
+        previous = locations()[2].read_bytes()
+        with patch('re4pc.desktop.save_icon', side_effect=OSError('Permission denied')):
+            view.choices[2].invoke()
+        self.assertTrue(view.error)
+        self.assertIn('Permission denied', view.notice.get())
+        self.assertTrue(view.choices[1].selected)
+        self.assertFalse(view.choices[2].selected)
+        self.assertEqual(locations()[2].read_bytes(), previous)
+        custom = self.folder.parent / 'custom.png'
+        from PIL import Image
+        Image.new('RGBA', (64, 64), '#78190f').save(custom)
+        with patch('tkinter.filedialog.askopenfilename', return_value=str(custom)):
+            view.browse_button.invoke()
+        self.assertFalse(view.error)
+        self.assertFalse(any(button.selected for button in view.choices))
+        self.assertEqual(locations()[2].read_bytes(), custom.read_bytes())
+        view.window.event_generate('<Escape>')
+        self.window.update()
+        self.assertFalse(view.window.winfo_exists())
+
     def test_console_is_absent_until_requested_and_log_survives_reopening(self):
         self.assertIsNone(self.app.console)
         self.assertIsNone(self.app.log_window)

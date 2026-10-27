@@ -299,7 +299,8 @@ class Launcher:
         self.translated_widget(self.ttk.Button(frame, text='Close', command=popup.destroy)).pack(anchor='e', pady=(12, 0))
 
     def dialog(self, title, geometry):
-        popup = self.tk.Toplevel(self.window)
+        from .desktop import WINDOW_CLASS
+        popup = self.tk.Toplevel(self.window, class_=WINDOW_CLASS)
         popup.launcher = self
         popup.translation_title = title
         popup.title(self.tr(title))
@@ -307,6 +308,24 @@ class Launcher:
         popup.configure(background=self.colors['background'])
         popup.transient(self.window)
         return popup
+
+    def apply_icon(self):
+        from PIL import Image, ImageTk
+        from .desktop import locations, inspect_icon
+        path = locations()[2]
+        try:
+            data = path.read_bytes()
+            inspect_icon(data)
+        except (OSError, ValueError):
+            path = self.assets / 'icon.png'
+        with Image.open(path) as source:
+            image = source.convert('RGBA')
+        self.app_icon = ImageTk.PhotoImage(image.resize((64, 64), Image.Resampling.LANCZOS), master=self.window)
+        self.window.iconphoto(True, self.app_icon)
+
+    def show_icons(self):
+        from .launcher_ui import IconPickerView
+        return IconPickerView(self)
 
     def scrolling_pane(self, parent):
         """Keep settings reachable at small window sizes without global bindings."""
@@ -534,9 +553,11 @@ def configure_bundled_fonts():
 
 def launch(game=None, smoke_test=False):
     import tkinter as tk
+    from .desktop import WINDOW_CLASS
     configure_bundled_fonts()
     try:
-        window = tk.Tk()
+        # Match the installed desktop entry so GNOME uses its selected icon.
+        window = tk.Tk(className=WINDOW_CLASS)
     except tk.TclError as error:
         raise RuntimeError('The launcher needs a graphical display: ' + str(error)) from error
     Launcher(window, game)

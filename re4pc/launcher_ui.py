@@ -1,5 +1,6 @@
 """Case-file presentation for the native launcher, with keyboard operable controls."""
 import tkinter as tk
+from pathlib import Path
 
 from PIL import Image, ImageOps, ImageTk
 from .languages import GAME_LANGUAGES, LAUNCHER_LANGUAGES, widget_translate
@@ -210,6 +211,118 @@ class ArtworkButton(tk.Canvas):
         return super().create_text(*args, **options)
 
 
+class IconChoice(ArtworkButton):
+    """Focusable icon artwork with separate selection and keyboard focus states."""
+    def draw(self):
+        self.delete('all')
+        if self.surface:
+            self.create_image(0, 0, image=self.surface, anchor='nw')
+        width, height = self.winfo_width(), self.winfo_height()
+        if self.hovered or self.pressed or self.selected:
+            self.create_rectangle(1, 1, width-1, height-1, fill=RED if self.selected else '#977743',
+                                  stipple='gray12', outline='')
+        if self.selected or self.hovered:
+            self.create_rectangle(1, 1, width-2, height-2,
+                                  outline=RED if self.selected else '#887757',
+                                  width=2 if self.selected else 1)
+        offset = int(self.pressed)
+        if self.icon:
+            self.create_image(width/2, 65+offset, image=self.icon)
+        self.create_text(width/2, 128+offset, text=self.label, fill=INK,
+                         font=('DejaVu Serif', -16), width=max(1, width-16))
+        if self.selected:
+            self.create_text(width/2, 151, text='✓', fill=RED, font=('DejaVu Sans', -16))
+        if self.focus_get() is self:
+            self.create_rectangle(5, 5, width-6, height-6, outline=RED, dash=(3, 3))
+
+
+class IconPickerView:
+    """Compact case-file picker; selection is persisted as soon as it succeeds."""
+    CHOICES = (('icon.png', 'Classic 4'), ('icon-village.png', 'Blood moon'),
+               ('icon-seal.png', 'Crimson seal'), ('icon-bell.png', 'Church bell'))
+
+    def __init__(self, app):
+        from .case_dialog import PaperCanvas
+        from .desktop import locations, inspect_icon
+        self.app = app
+        self.window = app.dialog('Launcher icon', '680x400')
+        self.window.view = self
+        self.window.minsize(600, 400)
+        self.window.bind('<Escape>', lambda event: self.window.destroy())
+        self.paper = PaperCanvas(self.window, app.assets, render=self.draw)
+        self.paper.pack(fill='both', expand=True, padx=8, pady=8)
+        self.notice = app.tk.StringVar(value='Choose an icon or select your own PNG.')
+        self.notice.trace_add('write', lambda *args: self.paper.schedule())
+        self.error = False
+        try:
+            current = locations()[2].read_bytes()
+            inspect_icon(current)
+        except (OSError, ValueError):
+            current = (app.assets / 'icon.png').read_bytes()
+        self.choices = []
+        for index, (filename, label) in enumerate(self.CHOICES):
+            path = app.assets / filename
+            image = ui_images.contained(ui_images.source(path, 'RGBA'), (96, 96))
+            preview = ImageTk.PhotoImage(image, master=self.window)
+            button = IconChoice(self.paper, label, lambda path=path: self.select(path), icon=preview)
+            button.selected = current == path.read_bytes()
+            button.bind('<Left>', lambda event, i=index: self.navigate(i-1))
+            button.bind('<Right>', lambda event, i=index: self.navigate(i+1))
+            self.choices.append(button)
+        self.browse_button = ArtworkButton(self.paper, 'Choose PNG…', self.browse, kind='paper-outline')
+        self.done_button = ArtworkButton(self.paper, 'Done', self.window.destroy, kind='primary')
+        self.window.update_idletasks()
+        width, height = self.window.winfo_width(), self.window.winfo_height()
+        x = app.window.winfo_rootx() + (app.window.winfo_width()-width)//2
+        y = app.window.winfo_rooty() + (app.window.winfo_height()-height)//2
+        self.window.geometry(f'+{max(0, min(x, self.window.winfo_screenwidth()-width))}'
+                             f'+{max(0, min(y, self.window.winfo_screenheight()-height-40))}')
+        next((button for button in self.choices if button.selected), self.choices[0]).focus_set()
+
+    def navigate(self, index):
+        self.choices[index % len(self.choices)].focus_set()
+        return 'break'
+
+    def select(self, path):
+        from .desktop import save_icon
+        try:
+            data = Path(path).read_bytes()
+            save_icon(data)
+            self.app.apply_icon()
+        except (OSError, ValueError, Image.DecompressionBombError) as error:
+            self.error = True
+            self.notice.set(self.app.tr('Could not save icon: ') + str(error))
+            return
+        self.error = False
+        for button, (filename, _) in zip(self.choices, self.CHOICES):
+            button.selected = data == (self.app.assets / filename).read_bytes()
+            button.draw()
+        self.notice.set('Icon saved.')
+
+    def browse(self):
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(parent=self.window, title=self.app.tr('Choose a PNG icon'),
+                                          filetypes=[('PNG', '*.png')])
+        if path:
+            self.select(path)
+
+    def draw(self):
+        from .case_dialog import MUTED, RED
+        width, height = self.paper.surface()
+        self.paper.text(24, 22, 'Choose your launcher icon', size=26)
+        self.paper.text(24, 61, 'Changes apply immediately and are remembered next time.',
+                        size=14, color=MUTED, family='DejaVu Sans', width=width-48)
+        gap = 10
+        card_width = (width-48-gap*3)/4
+        for index, button in enumerate(self.choices):
+            self.paper.window(button, round(24+index*(card_width+gap)), 96, round(card_width), 174)
+        self.paper.text(24, 281, self.notice.get(), size=13, color=RED if self.error else MUTED,
+                        family='DejaVu Sans', width=width-48)
+        self.paper.rule(height-66, x=24, end=width-24)
+        self.paper.window(self.browse_button, 24, height-52, 148, 36)
+        self.paper.window(self.done_button, width-128, height-52, 104, 36)
+
+
 class CaseFileView:
     """Recompose the case file to fill wide, short and portrait windows."""
     def __init__(self, launcher):
@@ -249,9 +362,8 @@ class CaseFileView:
             except OSError:
                 pass
         try:
-            launcher.app_icon = ImageTk.PhotoImage(ui_images.resized(ui_images.source(launcher.assets / 'icon.png'), (64, 64)))
-            launcher.window.iconphoto(True, launcher.app_icon)
-        except OSError:
+            launcher.apply_icon()
+        except (OSError, ValueError):
             pass
         for text, bounds, section in (
                 ('Overview', (251, 0, 127, 52), 'overview'),
@@ -285,6 +397,7 @@ class CaseFileView:
         launcher.import_button = self.action('Import APK', launcher.import_apk, (1472, 737, 160, 48), kind='outline')
         launcher.diagnostics_button = self.action('Diagnostics', launcher.diagnostics, (170, 884, 100, 39))
         self.logs_button = self.action('View logs', launcher.show_logs, (294, 884, 92, 39), busy=False)
+        self.icon_button = self.action('Launcher icon', launcher.show_icons, (400, 884, 120, 39), busy=False)
         launcher.stop_button = self.action('Stop', launcher.stop, (1542, 821, 90, 38), kind='stop', busy=False)
         launcher.stop_button.configure(state='disabled')
         # Dialog/process code shares this style state; visible status is drawn on canvas.
@@ -512,6 +625,8 @@ class CaseFileView:
                                               round(118 * ui), max(30, round(32 * ui))), ui)
         position(self.logs_button, (margin + round(218 * ui), footer_y,
                                     round(100 * ui), max(30, round(32 * ui))), ui)
+        position(self.icon_button, (margin + round(328 * ui), footer_y,
+                                    round(125 * ui), max(30, round(32 * ui))), ui)
         if width >= 1100:
             label(width - margin, footer_y + round(16 * ui), 'Alt+Enter fullscreen  ·  F12 quit',
                   14, color=MUTED, anchor='e')

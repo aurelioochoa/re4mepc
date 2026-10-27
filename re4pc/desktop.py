@@ -1,11 +1,13 @@
 """Install a per-user Linux executable and desktop entry, without game bundles."""
 import argparse
+import hashlib
 import io
 import os
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -14,6 +16,7 @@ from PIL import Image
 from .paths import game_dir, logs_dir, xdg_home
 
 APP_ID = 're4mepc'
+WINDOW_CLASS = 'Re4mepc'
 MAX_ICON_BYTES = 8 * 1024 * 1024
 ICON_NAMES = {'icon', 'ic_launcher', 'ic_launcher_round', 'app_icon', 'launcher_icon'}
 
@@ -84,6 +87,54 @@ def locations():
             data / APP_ID / 'icons' / (APP_ID + '.png'))
 
 
+def save_icon(data):
+    """Persist the selected artwork without changing the installed launcher."""
+    inspect_icon(data)
+    _, entry, icon = locations()
+    icon.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix='.icon-', dir=icon.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+        os.replace(name, icon)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+    # A distinct path for each image prevents desktop icon caches from
+    # retaining the previous image under a fixed filename.
+    versioned = icon.with_name('re4mepc-' + hashlib.sha256(data).hexdigest()[:20] + '.png')
+    if not versioned.exists():
+        versioned.write_bytes(data)
+    entries = [entry]
+    try:
+        entries.append(desktop_folder() / entry.name)
+    except (ValueError, OSError, subprocess.CalledProcessError):
+        pass
+    for path in entries:
+        try:
+            lines = path.read_text(encoding='utf-8').splitlines(keepends=True)
+            old = 'Icon=' + entry_value(icon)
+            prefix = 'Icon=' + entry_value(icon.parent / 're4mepc-')
+            if not any(line.rstrip('\r\n') == old or line.startswith(prefix) for line in lines):
+                continue
+            updated = ''.join('Icon=' + entry_value(versioned) + '\n'
+                              if line.rstrip('\r\n') == old or line.startswith(prefix) else line
+                              for line in lines)
+            mode = path.stat().st_mode & 0o777
+            fd, temporary = tempfile.mkstemp(prefix='.re4mepc-', dir=path.parent)
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                    stream.write(updated)
+                os.chmod(temporary, mode)
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+    return icon
+
+
 def install(root, *, icon=None, apk=None, game=None, desktop=None):
     root = Path(root).resolve()
     launcher, entry, installed_icon = locations()
@@ -104,6 +155,7 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
     else:
         raise ValueError('Choose an icon with --apk /path/to/game.apk or --icon /path/to/icon.png')
     inspect_icon(data)
+    versioned_icon = installed_icon.with_name('re4mepc-' + hashlib.sha256(data).hexdigest()[:20] + '.png')
     game = Path(game).resolve() if game is not None else game_dir()
     log_file = logs_dir() / 'desktop.log'
     # All inputs and optional destinations are checked before installing files.
@@ -129,14 +181,15 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
         'Name=Resident Evil 4 Mobile',
         'Comment=Play Resident Evil 4 Mobile on Linux with configurable desktop controls',
         'Exec=' + exec_value(launcher), 'TryExec=' + entry_value(launcher),
-        'Icon=' + entry_value(installed_icon), 'Terminal=false',
+        'Icon=' + entry_value(versioned_icon), 'Terminal=false',
         'Categories=Game;', 'Keywords=Resident Evil;RE4;Mobile;',
-        'StartupNotify=false', '',
+        'StartupNotify=false', 'StartupWMClass=' + WINDOW_CLASS, '',
     ])
     for path in (launcher, entry, installed_icon):
         path.parent.mkdir(parents=True, exist_ok=True)
     log_file.parent.mkdir(parents=True, exist_ok=True)
     installed_icon.write_bytes(data)
+    versioned_icon.write_bytes(data)
     launcher.write_text(wrapper, encoding='utf-8')
     launcher.chmod(0o755)
     entry.write_text(contents, encoding='utf-8')
@@ -150,6 +203,10 @@ def install(root, *, icon=None, apk=None, game=None, desktop=None):
 
 def uninstall(desktop=None):
     paths = list(locations())
+    icon = paths[2]
+    paths.extend(path for path in icon.parent.glob('re4mepc-*.png')
+                 if len(path.stem) == len('re4mepc-') + 20
+                 and all(char in '0123456789abcdef' for char in path.stem[len('re4mepc-'):]))
     if desktop is not None:
         paths.append(Path(desktop) / (APP_ID + '.desktop'))
     for path in paths:

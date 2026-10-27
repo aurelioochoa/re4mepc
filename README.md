@@ -123,7 +123,7 @@ For a single session, use `re4mepc run --language es` or `--language saved`. Sup
 
 #### Desktop integration
 
-`make desktop` installs or refreshes the applications-menu entry. Add `DESKTOP_ARGS="--desktop"` for a desktop shortcut; `--apk '/path/to/game.apk'` or `--icon '/path/to/icon.png'` chooses a local icon. Existing installed icons are preserved by default. `make uninstall` removes the CLI and desktop integration while preserving game data and saves. See [desktop installation details](docs/advanced-usage.md#linux-app-and-desktop-shortcut).
+`make desktop` installs or refreshes the applications-menu entry. Use **Launcher icon** in the launcher to choose artwork or your own PNG; the selection also updates installed shortcuts. Add `DESKTOP_ARGS="--desktop"` for a desktop shortcut; `--apk '/path/to/game.apk'` or `--icon '/path/to/icon.png'` also chooses a local icon. Existing installed icons are preserved by default. `make uninstall` removes the CLI and desktop integration while preserving game data and saves. See [desktop installation details](docs/advanced-usage.md#linux-app-and-desktop-shortcut).
 
 ### Controls
 

@@ -31,6 +31,10 @@ Use case: stylized-concept. Asset type: background banner for a native Resident 
 
 Use case: logo-brand. Asset type: square 1024x1024 raster desktop application icon for a Resident Evil 4 Mobile launcher. Original RE4-inspired survival horror emblem: one large elegantly distressed ivory numeral "4", sharp angular silhouette, centered on a dark charcoal square with a restrained muted blood-red border inset and faint silhouettes of leafless branches behind it. Flat front-facing icon, iconic and legible at 32px, numeral occupies 75 percent of square, sparse composition, no perspective or surrounding mockup. Text verbatim: "4" only. No extra letters, no watermark, no glossy 3D, no skull, no additional symbols. Keep design inside square; opaque background.
 
+## Additional launcher icons
+
+Three original square icons were generated for the picker: `icon-village.png` (ivory 4 over a foggy village and blood-red moon), `icon-seal.png` (ivory 4 on a red wax seal and black leather), and `icon-bell.png` (ivory 4 with a village church bell). Each prompt requested survival-horror artwork readable at desktop icon sizes, without extra text, mockups or watermarks. The generated PNGs are included unchanged.
+
 ## settings.png
 
 Use case: stylized-concept. Asset type: transparent UI icon for Resident Evil 4 inspired desktop game launcher. Single front-facing antique steel cogwheel, worn brushed metal in gray ivory with subtle muted oxblood distress, simple strong silhouette, centered filling 80 percent of square 1024x1024. Survival horror inventory icon style, tactile but clean and legible at 32px. Isolated genuine transparent background. No scenery, no text, no glow, no frame, no shadow outside object, no extra objects.

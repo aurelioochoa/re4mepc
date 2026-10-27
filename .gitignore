@@ -29,6 +29,9 @@
 # Generated launcher artwork; game resources remain ignored.
 !/re4pc/ui_assets/forest.png
 !/re4pc/ui_assets/icon.png
+!/re4pc/ui_assets/icon-village.png
+!/re4pc/ui_assets/icon-seal.png
+!/re4pc/ui_assets/icon-bell.png
 !/re4pc/ui_assets/settings.png
 !/re4pc/ui_assets/backups.png
 !/re4pc/ui_assets/case-file.png

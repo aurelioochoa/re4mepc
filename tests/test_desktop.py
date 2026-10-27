@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from re4pc.desktop import apk_icon, exec_value, inspect_icon, install, locations, uninstall
+from re4pc.desktop import apk_icon, exec_value, inspect_icon, install, locations, save_icon, uninstall
 
 
 def png(size):
@@ -56,6 +56,7 @@ class DesktopTests(unittest.TestCase):
         shortcut = desktop / entry.name
         self.assertEqual(entry.read_bytes(), shortcut.read_bytes())
         self.assertIn('Terminal=false', entry.read_text())
+        self.assertIn('StartupWMClass=Re4mepc\n', entry.read_text())
         self.assertTrue(os.access(shortcut, os.X_OK))
         result = subprocess.run([str(launcher), '--help'], cwd='/', text=True,
                                 capture_output=True, check=True)
@@ -83,6 +84,26 @@ class DesktopTests(unittest.TestCase):
         uninstall(desktop)
         self.assertFalse(any(path.exists() for path in (launcher, entry, icon, shortcut)))
         self.assertEqual(save.read_text(), 'synthetic save')
+
+    def test_picker_refreshes_shortcut_icon_and_reinstall_keeps_it(self):
+        desktop = self.home / 'Desktop'
+        desktop.mkdir()
+        _, entry, icon = install(self.root, icon=self.icon, desktop=desktop)
+        original = entry.read_text()
+        selected = png(96)
+        with patch('re4pc.desktop.desktop_folder', return_value=desktop):
+            save_icon(selected)
+        self.assertEqual(icon.read_bytes(), selected)
+        self.assertNotEqual(entry.read_text(), original)
+        icon_line = next(line for line in entry.read_text().splitlines() if line.startswith('Icon='))
+        self.assertEqual(Path(icon_line[5:]).read_bytes(), selected)
+        self.assertEqual((desktop / entry.name).read_text(), entry.read_text())
+        self.assertTrue(os.access(desktop / entry.name, os.X_OK))
+        install(self.root)
+        self.assertEqual(icon.read_bytes(), selected)
+        with self.assertRaises(OSError):
+            save_icon(b'invalid')
+        self.assertEqual(icon.read_bytes(), selected)
 
     def test_apk_selects_largest_launcher_png_and_never_extracts_paths(self):
         apk = self.home / 'synthetic.apk'

@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from re4pc.packaging import APPLICATION_ASSETS, APPLICATION_FILES, APPLICATION_MODULES, NATIVE_INPUTS, write_manifest, verify_manifest
+from re4pc.desktop import WINDOW_CLASS
 
 # Driver loaders and glibc always come from the host. Bundling old libstdc++ also
 # prevents modern host Mesa drivers from loading, so use the desktop host copy.
@@ -149,7 +150,7 @@ def stage_release(source, output):
     # Generated application artwork, never extracted game assets.
     shutil.copy2(application / 're4pc/ui_assets/icon.png', stage / 're4mepc.png')
     (stage / '.DirIcon').symlink_to('re4mepc.png')
-    (stage / 're4mepc.desktop').write_text('[Desktop Entry]\nType=Application\nName=Resident Evil 4 Mobile\nExec=AppRun\nIcon=re4mepc\nCategories=Game;\nTerminal=false\n')
+    (stage / 're4mepc.desktop').write_text('[Desktop Entry]\nType=Application\nName=Resident Evil 4 Mobile\nExec=AppRun\nIcon=re4mepc\nCategories=Game;\nTerminal=false\nStartupWMClass=' + WINDOW_CLASS + '\n')
     (stage / 'AppRun').write_text('''#!/bin/sh
 set -eu
 RE4PC_APPDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

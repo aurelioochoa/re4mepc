@@ -130,7 +130,7 @@ Use `re4mepc launcher --game '/external/re4/game'` for a custom installation. Se
 make desktop
 ```
 
-An existing installed icon is preserved. To use the APK's original icon instead:
+Choose **Launcher icon** at the bottom of the graphical launcher to preview built-in artwork or select your own PNG. The selection takes effect immediately for the launcher and installed shortcuts and is retained for later launches. Desktop environments may take a moment to refresh their icon cache. An existing selected icon is preserved on installation. To use the APK's original icon instead:
 
 ```bash
 make desktop DESKTOP_ARGS="--apk '/path/to/Resident Evil 4.apk'"

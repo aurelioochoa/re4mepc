@@ -37,6 +37,9 @@ DOCUMENTATION_IMAGES = {
         'cd2e3e68510f524fdbe4e5cc8568a8d2390cfdab6280cb5ff661fed4122523ef',
     're4pc/ui_assets/icon.png':
         'b87ab5f37498c63eef1a95cb6c925b3e62a62131959ebc149373b75b1f8c0f75',
+    're4pc/ui_assets/icon-village.png': '111867db92c2ef25a767ec382c024dcb4f09f2d4952eedc93f84005036d2bafa',
+    're4pc/ui_assets/icon-bell.png': 'b44b5c523158f68200e9267e996c791e9e25080121e061093d6038417df9bb10',
+    're4pc/ui_assets/icon-seal.png': '4c06af0122f69bbd15b1d0ee8e25836333ab01b5432be5cfd41caccd805a3c08',
     're4pc/ui_assets/settings.png':
         '1b4f751e146d6df20eb309bf60fff3e093a98b9d83bb95f0de23611504048bf7',
     're4pc/ui_assets/backups.png':
