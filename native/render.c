@@ -567,6 +567,12 @@ int re4_render_present(void *handle, float alpha) {
     for (int i=r->units-1; i>=0; --i) { glActiveTexture(GL_TEXTURE0+i); glMatrixMode(GL_TEXTURE); glPopMatrix(); }
     glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
     glPopClientAttrib(); glPopAttrib(); glActiveTexture(active); glClientActiveTexture(client); glMatrixMode(mode);
+    /* Mesa 25 can restore client-array queries without invalidating the cached
+     * replay bindings. Dirty the arrays so the next engine draw uses its own
+     * pointers even after these snapshots have been released. */
+    GLboolean vertex_enabled=glIsEnabled(GL_VERTEX_ARRAY);
+    client_enable(GL_VERTEX_ARRAY,!vertex_enabled);
+    client_enable(GL_VERTEX_ARRAY,vertex_enabled);
     ++r->replays;
     if (compatible && alpha>0 && alpha<1) ++r->interpolated;
     if (r->consumed) glDeleteSync(r->consumed);

@@ -157,6 +157,21 @@ class RenderStreamTests(unittest.TestCase):
             self.assertEqual(self.stream.render(.5), 1)
             self.assertEqual(self.graphics.capture_image().tobytes(), expected.tobytes())
 
+    def test_engine_draws_after_replay_and_snapshot_release_use_restored_arrays(self):
+        self.gl.glIsEnabled.argtypes, self.gl.glIsEnabled.restype = (C.c_uint,), C.c_ubyte
+        for enabled in (True, False):
+            with self.subTest(vertex_array_enabled=enabled):
+                expected = self.capture(.5)
+                self.assertIsNotNone(expected.getchannel('R').getbbox())
+                if not enabled:
+                    self.gl.glDisableClientState(0x8074)
+                self.stream.render(1)
+                self.assertEqual(bool(self.gl.glIsEnabled(0x8074)), enabled)
+                self.stream.reset()  # Free the replay's copied client arrays.
+                self.gl.glEnableClientState(0x8074)
+                # The engine keeps its original pointer across presentation.
+                self.assertEqual(self.capture(.5).tobytes(), expected.tobytes())
+
     def instance_scene(self, draws, *, skinned=False, camera=0):
         """Instances reuse one mesh or overwrite one skinning scratch buffer."""
         original = list(self.vertices)
