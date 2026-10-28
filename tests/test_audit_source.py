@@ -34,13 +34,19 @@ class SourceAuditTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as output: audit(self.root)
         self.assertIn('SOURCE_AUDIT_PASS',output.getvalue())
 
-    def test_original_logo_extractions_cannot_reenter_current_source(self):
-        from tools.audit_source import check_entry, HISTORICAL_ONLY_IMAGES
-        for name in HISTORICAL_ONLY_IMAGES:
+    def test_user_supplied_title_artwork_is_reviewed_for_source_and_releases(self):
+        from tools.audit_source import check_entry, check_blob
+        from re4pc.packaging import APPLICATION_ASSETS
+        root = Path(__file__).resolve().parent.parent
+        for filename in ('resident-evil-wordmark.png', 'numeral-4.png'):
+            name = 're4pc/ui_assets/' + filename
             with self.subTest(name=name):
-                with self.assertRaisesRegex(AuditError, 'Original logo extraction'):
-                    check_entry(name, '100644')
-                check_entry(name, '100644', historical=True)
+                check_entry(name, '100644')
+                data = (root / name).read_bytes()
+                check_blob(data, name, name)
+                self.assertIn(filename, APPLICATION_ASSETS)
+                with self.assertRaisesRegex(AuditError, 'Unreviewed documentation image'):
+                    check_blob(data + b'altered', name, name)
 
     def test_text_banner_passes_but_binary_banner_is_rejected(self):
         self.write('docs/readme-banner.svg',
@@ -74,6 +80,19 @@ class SourceAuditTests(unittest.TestCase):
         self.write('docs/readme-banner.png',data+b'altered')
         self.git('add','docs/readme-banner.png')
         with self.assertRaisesRegex(AuditError,'Unreviewed documentation image'): audit(self.root)
+
+    def test_previous_reviewed_icon_versions_remain_tied_to_their_path(self):
+        from tools.audit_source import check_blob
+        previous = b'\x89PNG\r\n\x1a\nprevious reviewed icon'
+        digest = hashlib.sha256(previous).hexdigest()
+        name = 're4pc/ui_assets/icon.png'
+        with patch.dict('tools.audit_source.PREVIOUS_IMAGE_VERSIONS', {name: {digest}}, clear=True):
+            check_blob(previous, 'previous icon', name)
+            check_blob(previous, 'historical blob')
+            with self.assertRaisesRegex(AuditError, 'wrong path'):
+                check_blob(previous, 'renamed icon', 'README.md')
+            with self.assertRaisesRegex(AuditError, 'Unreviewed documentation image'):
+                check_blob(previous + b'altered', 'altered icon', name)
 
     def test_reviewed_banner_cannot_be_renamed_as_source(self):
         self.write('README.md',self.reviewed_banner());self.git('add','README.md')

@@ -1,6 +1,6 @@
 # Launcher artwork
 
-Environmental and utility artwork was generated using the built-in image generation tool for this project. The title wordmark and numeral are native text; earlier logo-reference extractions are excluded from current source and releases. No artwork is extracted from an APK. Runtime files live in `re4pc/ui_assets/` and are explicitly included in the release allowlist. Utility icons preserve their generated alpha channels; runtime Pillow processing only crops and resizes images for display.
+Environmental and utility artwork was generated using the built-in image generation tool for this project. The title wordmark and numeral were isolated from the logo reference supplied by the user on 12 October 2026, as requested. No artwork is extracted from an APK. Runtime files live in `re4pc/ui_assets/` and are explicitly included in the release allowlist. Utility icons preserve their generated alpha channels; runtime Pillow processing only crops and resizes images for display.
 
 The case-file redesign follows the user-selected `03-village-case-file.png` concept. The concept remains a build artifact; the runtime uses a cleaned background plate with live Tk text, focusable canvas buttons and a native path entry. Native window decorations remain under the desktop window manager's control. The portable runtime bundles DejaVu Serif alongside its existing sans-serif and monospace fonts.
 
@@ -10,14 +10,21 @@ Generated with the built-in image generation tool, using the selected concept as
 
 > Use case: precise-object-edit. Edit the supplied launcher reference into a CLEAN BACKGROUND PLATE for a real interactive native desktop launcher. Preserve the exact full-image 16:9 composition and positions: very dark olive/charcoal textured background, aged cream parchment occupying x 1.4%-47.7%, y 8.7%-90.5%; red occult stamp on parchment at upper right with NO letters in stamp, faint map and faded cursive marks as texture; pinned slightly tilted photograph occupying the right half x 48.5%-99%, y 6.7%-68.2%, paperclip at its top. Preserve the EXACT village photograph atmosphere/composition, rural stone church, smoky wooden village, mountain sky. REMOVE ALL UI AND ALL READABLE TEXT everywhere: top navigation/brand/window controls, all Resident Evil 4 Mobile lettering and numeral, tagline, play button INCLUDING its entire red rectangle, readiness icon/text, settings gear and typewriter icons/text/chevrons, separator rules, photo caption, Installation heading, input and buttons, bottom status/links/hints/footer rules. Fill removed areas seamlessly with original surrounding parchment or dark texture as appropriate. Left parchment should be empty for overlaying real title and controls, retaining only worn edges/faint map/red stamp. Bottom right retain subtle map texture but remove readable 'Pueblo' lettering. No new artwork composition, no extra panels, no text, no icons, no controls, no dividers. This is a background plate only, not a UI screenshot. Output same 16:9 aspect ratio as supplied.
 
-## Native title branding — 26 October 2026
+## Title branding — restored 27 October 2026
 
-The launcher renders its title and numeral with native text. The two earlier
-logo-reference extractions, `resident-evil-wordmark.png` and `numeral-4.png`,
-are excluded from the source index and release allowlist. The publication
-checker rejects either file if it is added again. Previously published Git
-history still contains those images; this change does not rewrite that history.
-Documentation screenshots remain rendered application captures.
+The launcher uses `resident-evil-wordmark.png` and `numeral-4.png`, both prepared
+from the user's supplied logo reference, not from the APK or game resource files.
+The earlier artwork notes describe removing the reference's white background and
+shadow, retaining the letter shapes and numeral wear, and recoloring them to the
+launcher's dark and oxblood inks. They are user-supplied reference artwork, not
+image-generated assets.
+
+Both transparent PNGs are loaded and resized proportionally for the title. The
+Play button also uses a crop of the numeral's printed ink texture. Native text
+places `MOBILE` beneath the wordmark and a smaller `PC PORT` line below it. If a
+branding image is missing, native title text remains available as a fallback.
+The source audit retains the existing reviewed SHA-256 checks for both images,
+and the release allowlist includes them.
 
 ## launcher-preview.png
 
@@ -126,3 +133,25 @@ Generated with the built-in image-generation tool using the user's three final c
 **paperclip.png** — Use case: stylized-concept. Asset type: standalone native case-file UI decoration. The attached design is a STYLE AND OBJECT REFERENCE ONLY. Generate ONLY the antique brass paperclip at the upper left of the right parchment page in the reference. A single slender elongated double-loop metal paperclip, warm tarnished bronze brass with dark patina, oriented almost vertical with a slight clockwise lean, gently bent realistic wire, subtle highlights from upper left. Faithful photorealistic small game inventory style. Whole clip visible centered, generous transparent margins, square image composition but clip itself narrow tall. Transparent alpha background. No paper, no parchment, no words, no additional objects, no cast background shadow, no surrounding scene.
 
 **case-paper-v2.png** — Use case: stylized-concept. Asset type: blank parchment background asset for real native case-file UI, NOT a UI mockup. Both supplied images are STYLE REFERENCES ONLY. Generate ONE flat aged cream parchment sheet that matches the paper in these designs: pale warm ivory and sepia paper fibers, naturally weathered distressed brown edge, subtle uneven stains, mostly clean pale center, fine ghosted antique village map sketches fading along the far right margin and faint unreadable pen flourishes in the upper right margin. Broad landscape rectangular composition, fill entire image with paper. The central 75 percent and entire left half must be low contrast and clear enough to overlay dark labels and form fields. Very faint map linework, irregular cracks near outer edge, restrained texture like the references, realistic scanned paper. NO seal, NO red markings, NO paperclip, NO cog, NO typewriter, NO icons, NO titles, NO legible lettering, NO form boxes, NO interface, NO frames, NO perspective, NO drop shadow, NO surrounding background. Flat front-facing paper texture only.
+
+## Transparent icon edges — 27 October 2026
+
+The four desktop/window icon choices were edited with the built-in imagegen tool
+from their existing PNGs. The central numeral and each icon's identity are
+retained. The generated alpha is preserved, including irregular burnt edges,
+missing corners and restrained blood-red drips. The picker and window icon
+already support RGBA, and desktop installation copies the original PNG bytes.
+
+Shared edit prompt:
+
+> Use case: precise-object-edit. Asset type: production desktop/window application icon, one square PNG canvas with genuine transparent background. The supplied image is the EDIT TARGET. Preserve its central stylized ivory numeral 4 exactly, its recognizable design, distressed engraved texture and existing charcoal, ivory, oxblood palette. Redesign ONLY the outer shape/background edges so this no longer reads as a hard square tile. Create an organic irregular silhouette with visibly missing burnt corners, ash-black singed torn-paper edges, tiny rust-red edge stains and a few restrained tapered blood-red drips hanging from edges. Keep artwork inward from canvas with at least 6% transparent margin on every side, even around the drips. Edges should soften subtly into genuine alpha transparency; the interior remains crisp. At small 32px size the large 4 must remain dominant and legible. No straight enclosing rectangular frame, no rounded-square app container, no white border, no backdrop/checkerboard painted into image, no glow, no additional text or symbols. Deliver a single finished transparent icon, not a preview sheet.
+
+Each edit additionally used the corresponding instruction:
+
+- `icon.png`: For this CLASSIC icon: retain the trees and dark distressed paper behind the numeral as an uneven roughly oval fragment of scorched parchment. REMOVE the straight red rectangular perimeter and all square black corners. Use chipped charred edges with modest dark red drips.
+- `icon-village.png`: For this BLOOD MOON icon: retain the village/church/moon composition behind the numeral, contained within an irregular burnt photograph fragment. Dissolve all four square corners into alpha with jagged charred paper notches and several fine oxblood drips. Keep the church recognizable.
+- `icon-seal.png`: For this CRIMSON SEAL icon: remove the entire surrounding rectangular black leather tile. Keep the existing circular cracked crimson wax seal with its central ivory 4 as the silhouette, add a few naturally shaped molten-wax/blood-red tapered drips and chipped singed fragments around its perimeter. The corners and outside of the seal must be transparent. Preserve the rich sculpted wax detail.
+- `icon-bell.png`: For this CHURCH BELL icon: keep the bell tower, warm moon and numeral within an irregular scorched parchment/photo silhouette, gently taper the background toward its lower edge. All four original square corners must be gone, replaced with torn burnt-paper contour and a few subtle blood-red drips. Preserve the bell silhouette.
+
+New image digests are reviewed in `tools/audit_source.py`; the previous reviewed
+versions remain recognized at their original paths for existing Git history.

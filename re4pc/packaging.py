@@ -15,7 +15,7 @@ APPLICATION_MODULES = (
     'display.py', 'postprocess.py')
 NATIVE_INPUTS = ('audio.c', 'fast.c', 'render.c', 'gl.c', 'display.c', 'Cargo.toml', 'Cargo.lock', 'math.rs')
 APPLICATION_ASSETS = ('forest.png', 'icon.png', 'icon-village.png', 'icon-seal.png', 'icon-bell.png', 'settings.png', 'backups.png',
-                     'case-file.png', 'paper.png', 'case-paper-v2.png',
+                     'case-file.png', 'numeral-4.png', 'resident-evil-wordmark.png', 'paper.png', 'case-paper-v2.png',
                      'case-seal.png', 'ribbon-spools.png', 'paperclip.png',
                      'achievement-village.png', 'achievement-gigante.png',
                      'achievement-ashley.png', 'achievement-verdugo.png',

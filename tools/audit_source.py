@@ -36,10 +36,10 @@ DOCUMENTATION_IMAGES = {
     're4pc/ui_assets/forest.png':
         'cd2e3e68510f524fdbe4e5cc8568a8d2390cfdab6280cb5ff661fed4122523ef',
     're4pc/ui_assets/icon.png':
-        'b87ab5f37498c63eef1a95cb6c925b3e62a62131959ebc149373b75b1f8c0f75',
-    're4pc/ui_assets/icon-village.png': '111867db92c2ef25a767ec382c024dcb4f09f2d4952eedc93f84005036d2bafa',
-    're4pc/ui_assets/icon-bell.png': 'b44b5c523158f68200e9267e996c791e9e25080121e061093d6038417df9bb10',
-    're4pc/ui_assets/icon-seal.png': '4c06af0122f69bbd15b1d0ee8e25836333ab01b5432be5cfd41caccd805a3c08',
+        'd6185a8b69f1f214c5123f44c13cc353aeb1c3a84a7342f3777652f709f6e5d0',
+    're4pc/ui_assets/icon-village.png': '44e34d0b73b940f0d22bc62e26d2d242e28ae932f28a6dcb353def295b856afd',
+    're4pc/ui_assets/icon-bell.png': '06328df4fbb1e035710dadcac22c5bf41c22a9857c6c9b02b3de75a78c57f1a1',
+    're4pc/ui_assets/icon-seal.png': '7110416586ff2f14ff57855fac1871dfbe82def31c0a10e24b20a3c24f270e7a',
     're4pc/ui_assets/settings.png':
         '1b4f751e146d6df20eb309bf60fff3e093a98b9d83bb95f0de23611504048bf7',
     're4pc/ui_assets/backups.png':
@@ -101,13 +101,15 @@ DOCUMENTATION_IMAGES = {
     'docs/achievements-minimum-preview.png':
         '5f71a7660329891aa979bcb4d3a376083a5fe1659697e78f76568801586b8a00',
 }
-# Recognize these already-published blobs during history inspection, but never
-# permit the extracted logo files in the current index or source checkout.
-HISTORICAL_ONLY_IMAGES = {
-    're4pc/ui_assets/resident-evil-wordmark.png',
-    're4pc/ui_assets/numeral-4.png',
+# Keep previously reviewed icon versions readable in Git history and the index
+# while their replacements are reviewed in the working tree. Approval remains
+# tied to the exact digest and original path.
+PREVIOUS_IMAGE_VERSIONS = {
+    're4pc/ui_assets/icon.png': {'b87ab5f37498c63eef1a95cb6c925b3e62a62131959ebc149373b75b1f8c0f75'},
+    're4pc/ui_assets/icon-village.png': {'111867db92c2ef25a767ec382c024dcb4f09f2d4952eedc93f84005036d2bafa'},
+    're4pc/ui_assets/icon-seal.png': {'4c06af0122f69bbd15b1d0ee8e25836333ab01b5432be5cfd41caccd805a3c08'},
+    're4pc/ui_assets/icon-bell.png': {'b44b5c523158f68200e9267e996c791e9e25080121e061093d6038417df9bb10'},
 }
-
 SOURCE_FILES = {
     're4pc': ('__init__', '__main__', 'arm', 'assets', 'bionic', 'desktop', 'eabi', 'fast',
               'filesystem', 'game', 'graphics', 'input', 'jni', 'laser', 'media',
@@ -142,9 +144,7 @@ def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.PIPE)
 
 
-def check_entry(path, mode, kind='blob', *, historical=False):
-    if path in HISTORICAL_ONLY_IMAGES and not historical:
-        raise AuditError(f'Original logo extraction forbidden in current source: {path}')
+def check_entry(path, mode, kind='blob'):
     if path not in PUBLISH_FILES:
         raise AuditError(f'Forbidden publication path: {path}')
     if mode not in ('100644', '100755') or kind != 'blob':
@@ -155,10 +155,12 @@ def check_blob(data, identifier, path=None):
     if len(data) > MAX_DOCUMENTATION_IMAGE_BYTES:
         raise AuditError(f'Oversized source blob: {identifier}')
     digest = hashlib.sha256(data).hexdigest()
-    if path in DOCUMENTATION_IMAGES and digest != DOCUMENTATION_IMAGES[path]:
+    approved_versions = PREVIOUS_IMAGE_VERSIONS.get(path, set())
+    if path in DOCUMENTATION_IMAGES and digest != DOCUMENTATION_IMAGES[path] and digest not in approved_versions:
         raise AuditError(f'Unreviewed documentation image: {path}')
-    if digest in DOCUMENTATION_IMAGES.values():
-        if path is not None and DOCUMENTATION_IMAGES.get(path) != digest:
+    previous_digests = {value for versions in PREVIOUS_IMAGE_VERSIONS.values() for value in versions}
+    if digest in DOCUMENTATION_IMAGES.values() or digest in previous_digests:
+        if path is not None and DOCUMENTATION_IMAGES.get(path) != digest and digest not in approved_versions:
             raise AuditError(f'Documentation image at wrong path: {path}')
         return
     if len(data) > MAX_SOURCE_BYTES:
@@ -180,7 +182,6 @@ def check_blob(data, identifier, path=None):
 
 def audit(root, worktree=False):
     checked_entries = set()
-    historical_logo_paths = set()
 
     def check_content(path, blob):
         if (path, blob) not in checked_entries:
@@ -204,9 +205,7 @@ def audit(root, worktree=False):
         for entry in filter(None, git(root, 'ls-tree', '-r', '-z', commit).split(b'\0')):
             metadata, path = entry.split(b'\t', 1)
             mode, kind, blob = metadata.decode().split()
-            check_entry(path.decode('utf-8'), mode, kind, historical=True)
-            if path.decode('utf-8') in HISTORICAL_ONLY_IMAGES:
-                historical_logo_paths.add(path.decode('utf-8'))
+            check_entry(path.decode('utf-8'), mode, kind)
             check_content(path.decode('utf-8'), blob)
     objects = git(root, 'cat-file', '--batch-all-objects',
                   '--batch-check=%(objectname) %(objecttype) %(objectsize)').decode().splitlines()
@@ -231,8 +230,6 @@ def audit(root, worktree=False):
             check_entry(path, '100755' if target.stat().st_mode & 0o111 else '100644')
             check_blob(target.read_bytes(), 'worktree:' + path, path)
             working += 1
-    if historical_logo_paths:
-        print('HISTORY_NOTICE: previously published logo extractions remain in history; current source excludes them')
     print(f'SOURCE_AUDIT_PASS: {indexed} index files, {len(commits)} commits, {blobs} blobs, {working} working files')
 
 

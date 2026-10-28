@@ -331,6 +331,8 @@ class CaseFileView:
         self.canvas.pack(fill='both', expand=True)
         self.source = None
         self.icon_sources = {}
+        self.numeral_source = None
+        self.wordmark_source = None
         self.image = None
         self.buttons = []
         self.nav = {}
@@ -339,7 +341,7 @@ class CaseFileView:
         icons = (('settings', 'settings.png'), ('backups', 'backups.png'),
                  ('achievements', 'achievement-platinum.png'))
         for future in ui_images.warm(sources=[(launcher.assets / name, mode) for name, mode in (
-                ('case-file.png', 'RGB'),
+                ('case-file.png', 'RGB'), ('numeral-4.png', 'RGBA'), ('resident-evil-wordmark.png', 'RGBA'),
                 ('icon.png', None), *((filename, 'RGBA') for _, filename in icons))]):
             future.result()
         try:
@@ -356,6 +358,14 @@ class CaseFileView:
             except OSError:
                 pass
         launcher.banner_source = self.source
+        try:
+            self.numeral_source = ui_images.trimmed(ui_images.source(launcher.assets / 'numeral-4.png', 'RGBA'), 64)
+        except OSError:
+            pass
+        try:
+            self.wordmark_source = ui_images.source(launcher.assets / 'resident-evil-wordmark.png', 'RGBA')
+        except OSError:
+            pass
         for name, filename in icons:
             try:
                 self.icon_sources[name] = ui_images.source(launcher.assets / filename, 'RGBA')
@@ -374,6 +384,11 @@ class CaseFileView:
             self.nav[section] = self.action(text, lambda section=section: self.open_section(section), bounds, kind='nav')
         self.nav['overview'].selected = True
         launcher.play_button = self.action('Play', launcher.play, (81, 465, 647, 88), kind='play')
+        if self.numeral_source:
+            w, h = self.numeral_source.size
+            # Continue the numeral's worn ink texture across the primary action.
+            launcher.play_button.ink_source = self.numeral_source.crop((round(w * .55), round(h * .2),
+                                                                      round(w * .75), round(h * .6)))
         launcher.achievements_button = self.action('Achievements', lambda: self.open_section('achievements'),
                                                   (84, 557, 646, 78), kind='paper',
                                                   detail='View unlocks, progress and captures.')
@@ -555,9 +570,22 @@ class CaseFileView:
             title_x = content_x + (content_width * .48 - title_width) / 2
             title_y = py + pad + (title_height - title_width / 2.25) / 2
         art_scale = title_width / 620
-        self.text(title_x, title_y, '4', max(32, round(240 * art_scale)), color=RED)
-        self.text(title_x + 168 * art_scale, title_y + 115 * art_scale,
-                  'RESIDENT EVIL', max(12, round(32 * art_scale)), color=INK)
+        if self.numeral_source:
+            numeral_height = max(1, round(260 * art_scale))
+            numeral_width = max(1, round(numeral_height * self.numeral_source.width / self.numeral_source.height))
+            self.numeral_image = ImageTk.PhotoImage(ui_images.resized(self.numeral_source, (numeral_width, numeral_height)))
+            self.canvas.create_image(title_x, title_y, image=self.numeral_image, anchor='nw')
+        else:
+            self.text(title_x, title_y, '4', max(32, round(240 * art_scale)), color=RED)
+        if self.wordmark_source:
+            word_width = max(1, round(440 * art_scale))
+            word_height = max(1, round(word_width * self.wordmark_source.height / self.wordmark_source.width))
+            self.wordmark_image = ImageTk.PhotoImage(ui_images.resized(self.wordmark_source, (word_width, word_height)))
+            self.canvas.create_image(title_x + 168 * art_scale, title_y + 115 * art_scale,
+                                     image=self.wordmark_image, anchor='nw')
+        else:
+            self.text(title_x + 168 * art_scale, title_y + 115 * art_scale,
+                      'RESIDENT EVIL', max(12, round(32 * art_scale)), color=INK)
         self.text(title_x + 168 * art_scale, title_y + 208 * art_scale, 'M O B I L E',
                   max(10, round(28 * art_scale)), color=INK, weight='bold')
         if title_height >= 110:
