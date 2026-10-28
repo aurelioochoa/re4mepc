@@ -44,6 +44,7 @@ Higher-rate runs also expose:
 | presentation.snapshots.history_resets / rejected_draws | History invalidations and unsupported/oversized submissions; loading and resource updates normally reset history |
 | presentation.snapshots.snapshot_bytes | Copied array storage; excludes GL textures/framebuffers and snapshot metadata |
 | presentation.snapshots.matched_draws / unmatched_draws | Cumulative native draws with/without unambiguous compatible history, resolved once per simulation tick; unmatched/new objects snap individually |
+| presentation.snapshots.matched_instance_draws / unmatched_instance_draws | Subset belonging to observed native model instances; separates object history from background/HUD interpolation |
 | presentation.snapshots.changed_sequences | Consecutive eligible snapshots whose command counts differ, commonly due to visibility changes during camera turns |
 | graphics_bridge.enabled / calls | Whether native GL state imports are active and how many they executed |
 

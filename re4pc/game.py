@@ -154,7 +154,7 @@ class Game:
             self.initialized = True
             if self.presentation_rate != ENGINE_HZ:
                 from .render_stream import RenderStream
-                self.graphics.render_stream = RenderStream()
+                self.graphics.render_stream = RenderStream(self.arm)
             log.info('Engine ready; %d FPS native cadence; WASD move, RMB aim, LMB fire, R reload, Tab cursor, arrows/Enter menus, F12 quit',ENGINE_HZ)
 
     def touch(self, action, x, y):
@@ -359,7 +359,7 @@ class Game:
         self.presentation_rate = settings['presentation_rate']
         if self.presentation_rate != ENGINE_HZ and not self.graphics.render_stream:
             from .render_stream import RenderStream
-            self.graphics.render_stream = RenderStream()
+            self.graphics.render_stream = RenderStream(self.arm)
         elif self.graphics.render_stream:
             self.graphics.render_stream.reset()
             if self.presentation_rate == ENGINE_HZ:

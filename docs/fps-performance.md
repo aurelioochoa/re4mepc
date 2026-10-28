@@ -277,6 +277,32 @@ display timings; native 20 FPS mode does not interpolate.
 
 See the [REA culling investigation](rea-workflow.md#camera-turn-investigation--2026-10-27).
 
+Shared models need instance identity as well as array identity. Enemies, boxes
+and other objects can share both their asset and a temporary skinning buffer.
+Treating those draws as ambiguous left the objects at 20 Hz while the background
+interpolated, producing visible jitter during camera movement. The renderer now
+observes `GM_Element_Model::Draw` and `Direct_Draw` and carries a host lifetime
+token plus the object's draw-part number into each snapshot. These calls use
+the synchronous `mceGraphics3D_drawFigure` path. Model initialization, termination
+and destruction retire tokens so reused addresses cannot inherit old motion.
+The hooks only observe execution; extra presentations still never enter ARM.
+
+To compare the identical submissions against a saved array-only renderer, using
+the saved graphics preferences:
+
+```bash
+SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
+  .venv/bin/python tools/verify_camera_turns.py --ticks 60 \
+  --baseline-library /external/before/libre4fast.so --compare-instances \
+  --saved-graphics --output /tmp/re4-instance-turns
+```
+
+This comparison requires additional matched objects across at least half the
+sweep, visible pixel differences on shared objects, exact native endpoints and
+unchanged guest memory and service counters.
+The component tests separately exercise shared rigid meshes, reused skinning
+buffers, visibility/reordering, object lifetimes and ARM entry/return scopes.
+
 One 120-tick paired sweep on the reference host preserved distinct intermediate
 motion through **56 of 56** draw-count changes; the previous renderer preserved
 none of those 56. All 120 endpoint images matched exactly and all guest-memory

@@ -15,6 +15,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from PIL import ImageChops
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from re4pc.game import Game
@@ -43,7 +44,7 @@ def guest_digest(game):
     return hashlib.sha256((C.c_ubyte * game.arm.SIZE).from_address(game.arm.base)).hexdigest()
 
 
-def verify(game, replay, output, ticks, baseline=None):
+def verify(game, replay, output, ticks, baseline=None, compare_instances=False):
     stream = game.graphics.render_stream
     if baseline:
         resolver = render_stream.native_library
@@ -57,6 +58,7 @@ def verify(game, replay, output, ticks, baseline=None):
         previous = None
     replay.advance(3)
     samples = []
+    most_changed_pixels = 0
     began = time.perf_counter()
     for tick in range(ticks):
         # Sweep both ways at 330 degrees/second, with changes in pitch and aim.
@@ -64,6 +66,7 @@ def verify(game, replay, output, ticks, baseline=None):
         if tick == 2 * ticks // 3: game.event(('mouse_button', False, 3))
         game.pc.move(110 if tick % 40 < 20 else -110, 3 if tick % 20 < 10 else -3)
         before = stream.metrics()
+        baseline_before = previous.metrics() if previous else None
         game.frame()
         native = game.graphics.capture_image()
         memory, calls, frames = guest_digest(game), game.arm.calls.copy(), game.frames
@@ -71,6 +74,7 @@ def verify(game, replay, output, ticks, baseline=None):
         assert game.graphics.capture_image().tobytes() == native.tobytes(), ('Endpoint mismatch', tick)
         current_ms = baseline_ms = 0
         results = {}
+        images = {}
         order = [('current', stream), ('baseline', previous)]
         if tick % 2: order.reverse()
         for label, renderer in order:
@@ -80,6 +84,8 @@ def verify(game, replay, output, ticks, baseline=None):
                 cost = (time.perf_counter() - start) * 1000
                 if label == 'current': current_ms = cost
                 else: baseline_ms = cost
+                if compare_instances:
+                    images[label] = game.graphics.capture_image()
         stream.render(.5)
         intermediate = game.graphics.capture_image()
         assert guest_digest(game) == memory, ('Presentation changed guest bytes', tick)
@@ -90,9 +96,24 @@ def verify(game, replay, output, ticks, baseline=None):
                   'draw_count_changed': after['changed_sequences'] > before['changed_sequences'],
                   'matched_draws': after['matched_draws'] - before['matched_draws'],
                   'unmatched_draws': after['unmatched_draws'] - before['unmatched_draws'],
+                  'matched_instance_draws': after['matched_instance_draws'] - before['matched_instance_draws'],
+                  'unmatched_instance_draws': after['unmatched_instance_draws'] - before['unmatched_instance_draws'],
                   'current_result': results['current'], 'current_replay_ms': current_ms,
                   'distinct_intermediate': intermediate.tobytes() != native.tobytes(),
                   'baseline_result': results.get('baseline'), 'baseline_replay_ms': baseline_ms}
+        if previous:
+            sample['baseline_matched_draws'] = previous.metrics()['matched_draws'] - baseline_before['matched_draws']
+        if compare_instances:
+            difference = ImageChops.difference(images['current'], images['baseline'])
+            red, green, blue = difference.split()
+            maximum = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+            changed_pixels = sum(maximum.histogram()[5:])
+            sample['changed_instance_pixels'] = changed_pixels
+            if changed_pixels > most_changed_pixels:
+                most_changed_pixels = changed_pixels
+                for label, picture in images.items():
+                    picture.save(output/(label+'-instances.png'))
+                native.save(output/'instances-native.png')
         if sample['draw_count_changed'] and sample['distinct_intermediate'] and not (output/'turn-native.png').exists():
             native.save(output/'turn-native.png')
             intermediate.save(output/'turn-intermediate.png')
@@ -108,12 +129,22 @@ def verify(game, replay, output, ticks, baseline=None):
               'baseline_replay_ms': quantiles([s['baseline_replay_ms'] for s in samples]) if previous else None,
               'all_guest_bytes_unchanged': True, 'all_endpoints_exact': True,
               'comparison_seconds': time.perf_counter() - began}
+    if compare_instances:
+        improved = [s for s in samples if s['matched_draws'] > s['baseline_matched_draws']]
+        result['instance_improved_ticks'] = len(improved)
+        result['additional_matched_draws'] = sum(s['matched_draws']-s['baseline_matched_draws'] for s in samples)
+        result['visibly_changed_instance_ticks'] = sum(s['changed_instance_pixels'] >= 16 for s in samples)
     # Write the measured samples even if a performance assertion fails.
     (output/'comparison.json').write_text(json.dumps(result, indent=2)+'\n')
     assert len(changed) >= 5, ('Fixture did not exercise visibility changes', len(changed))
     assert len(smooth) >= .8 * len(changed), ('Visibility changes lost interpolation', len(smooth), len(changed))
     if previous:
-        assert all(s['baseline_result'] == 1 for s in changed), 'Baseline unexpectedly interpolated changed sequences'
+        if compare_instances:
+            assert len(improved) >= ticks // 2, ('Shared instances did not gain history', len(improved), ticks)
+            assert all(s['matched_instance_draws'] > 0 for s in samples), 'No engine instance identity observed'
+            assert result['visibly_changed_instance_ticks'] >= ticks // 10, ('No visible shared-instance correction', result['visibly_changed_instance_ticks'])
+        else:
+            assert all(s['baseline_result'] == 1 for s in changed), 'Baseline unexpectedly interpolated changed sequences'
         game.graphics.render_stream = stream
         previous.close()
     return result
@@ -152,8 +183,12 @@ def main():
     parser.add_argument('--output', type=Path)
     parser.add_argument('--ticks', type=int, default=120)
     parser.add_argument('--baseline-library', type=Path)
+    parser.add_argument('--compare-instances', action='store_true', help='Compare shared-instance history against the array-only renderer')
+    parser.add_argument('--saved-graphics', action='store_true', help='Exercise the locally saved display quality settings')
     args = parser.parse_args()
     if args.ticks < 60: parser.error('Use at least 60 camera-turn ticks')
+    if args.compare_instances and not args.baseline_library:
+        parser.error('--compare-instances requires --baseline-library')
     checkout = Path(__file__).resolve().parents[1]
     if args.output and args.output.resolve().is_relative_to(checkout):
         parser.error('Store gameplay artifacts outside the source checkout')
@@ -165,11 +200,15 @@ def main():
     root = isolated_game(args.game, output)
     game = replay = None
     try:
-        game = Game(root, hidden=True, skip_videos=True, settings=validate({'presentation_rate': 60}))
+        from re4pc.settings import Settings
+        settings = Settings.load() if args.saved_graphics else validate({})
+        settings['presentation_rate'] = 60
+        document['settings'] = settings
+        game = Game(root, hidden=True, skip_videos=True, settings=settings)
         replay = Replay(game)
         replay.village()
         replay.close()
-        document['result'] = verify(game, replay, output, args.ticks, args.baseline_library)
+        document['result'] = verify(game, replay, output, args.ticks, args.baseline_library, args.compare_instances)
         document['threaded'] = threaded(game, replay, args.ticks)
         document['passed'] = True
     finally:

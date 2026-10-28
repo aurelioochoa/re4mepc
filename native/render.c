@@ -59,6 +59,8 @@ struct state {
 struct command {
     int clear;
     int previous, pass;
+    uint64_t source;
+    unsigned part;
     GLbitfield mask, pass_mask;
     GLfloat clear_color[4], clear_depth;
     GLint clear_stencil;
@@ -77,6 +79,8 @@ struct renderer {
     int recording, units, lights, sync_supported;
     uint64_t captures, replays, interpolated, resets, rejected;
     uint64_t matched_draws, unmatched_draws, changed_sequences;
+    uint64_t source, matched_instances, unmatched_instances;
+    unsigned part;
     pthread_mutex_t mutex;
     struct pixels pixels[3]; int published;
     GLsync consumed;
@@ -117,7 +121,13 @@ void re4_render_reset(void *handle) {
 }
 void re4_render_begin(void *handle) {
     struct renderer *r=handle;
+    r->source=0; r->part=0;
     release_frame(&r->next); r->next.valid=1; r->recording=1;
+}
+/* Model lifetime tokens distinguish instances sharing mesh/scratch arrays. */
+void re4_render_source(void *handle, uint64_t source, unsigned part) {
+    struct renderer *r=handle;
+    r->source=source; r->part=part;
 }
 void re4_render_dirty(void *handle) {
     re4_render_reset(handle);
@@ -286,6 +296,7 @@ void re4_render_draw(void *handle, unsigned mode, int first, int count, unsigned
     struct command *c=append(r);
     if (!c) return;
     c->mode=mode; c->first=first; c->count=count; c->index_type=index_type;
+    c->source=r->source; c->part=r->part;
     GLint buffer; glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&buffer);
     if (buffer || first<0 || count>MAX_VERTICES) goto invalid;
     unsigned vertices=(unsigned)first+count;
@@ -425,6 +436,7 @@ static int same_array(const struct array *a, const struct array *b, int content)
 static int matching(struct renderer *r, const struct command *a, const struct command *b) {
     if (a->clear!=b->clear || a->mask!=b->mask) return 0;
     if (a->clear) return 1;
+    if (a->source!=b->source || (a->source && a->part!=b->part)) return 0;
     if (a->mode!=b->mode || a->count!=b->count || a->first!=b->first || a->vertices!=b->vertices ||
         a->index_type!=b->index_type || a->index_bytes!=b->index_bytes ||
         (a->index_bytes && memcmp(a->indices,b->indices,a->index_bytes)) ||
@@ -457,6 +469,8 @@ static int matching(struct renderer *r, const struct command *a, const struct co
  * Clear boundaries delimit passes so history cannot cross a render pass. */
 static unsigned history_bucket(const struct command *c) {
     uintptr_t key=c->vertex.identity;
+    key^=(uintptr_t)c->source*3266489917u;
+    if (c->source) key^=(uintptr_t)c->part*668265263u;
     key^=key>>17; key^=(uintptr_t)c->count*2654435761u;
     key^=(uintptr_t)c->pass*2246822519u;
     return (unsigned)key & (MAX_COMMANDS*2-1);
@@ -496,8 +510,9 @@ static void match_history(struct renderer *r) {
         }
     }
     for (size_t i=0; i<r->current.count; ++i) if (!r->current.commands[i].clear) {
-        if (r->current.commands[i].previous>=0) ++r->matched_draws;
-        else ++r->unmatched_draws;
+        const struct command *c=&r->current.commands[i];
+        if (c->previous>=0) { ++r->matched_draws; if (c->source) ++r->matched_instances; }
+        else { ++r->unmatched_draws; if (c->source) ++r->unmatched_instances; }
     }
 }
 static const void *array_data(struct array *a, const struct array *old, int vertices, float alpha) {
@@ -571,6 +586,8 @@ uint64_t re4_render_measure(void *handle, unsigned key) {
     case 6:result=r->current.valid && r->current.count; break;
     case 7:result=r->matched_draws; break; case 8:result=r->unmatched_draws; break;
     case 9:result=r->changed_sequences; break;
+    case 10:result=r->matched_instances; break;
+    case 11:result=r->unmatched_instances; break;
     }
     pthread_mutex_unlock(&r->mutex);
     return result;
