@@ -29,7 +29,7 @@ def write_json(path, value):
 
 
 def argument_parser():
-    parser = argparse.ArgumentParser(description='Resident Evil 4 Mobile ARM engine compatibility host for Linux PC')
+    parser = argparse.ArgumentParser(description='Resident Evil 4 Mobile ARM engine compatibility host for Linux, Windows and macOS')
     sub = parser.add_subparsers(dest='command', required=True)
     imp = sub.add_parser('import', help='Restore game data from an Android APK')
     imp.add_argument('apk', type=Path)
