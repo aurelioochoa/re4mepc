@@ -30,12 +30,12 @@ HOST_LIBS = {'libc.so.6', 'libm.so.6', 'libdl.so.2', 'libpthread.so.0', 'librt.s
              'libdrm.so.2', 'libdrm_amdgpu.so.1', 'libdrm_intel.so.1',
              'libdrm_nouveau.so.2', 'libdrm_radeon.so.1', 'libgbm.so.1',
              'libstdc++.so.6', 'libgcc_s.so.1'}
-APPIMAGE_TOOL = 'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage'
-APPIMAGE_TOOL_SHA256 = '95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6'
-APPIMAGE_RUNTIME = 'https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64'
-APPIMAGE_RUNTIME_SHA256 = '156f4bdbde9c52d01814600013e0a273f0118dc2de98975f3c8c63427ec79074'
+APPIMAGE_TOOL = 'https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage'
+APPIMAGE_TOOL_SHA256 = 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0'
+APPIMAGE_RUNTIME = 'https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64'
+APPIMAGE_RUNTIME_SHA256 = '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d'
 # Expected digests are independently published release-asset digests from GitHub.
-# The continuous URLs may advance: fail closed rather than silently changing tools.
+# Tagged releases keep these stable; any change fails closed.
 
 
 def run(command, **kwargs):
