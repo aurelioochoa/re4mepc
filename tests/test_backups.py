@@ -136,7 +136,7 @@ class BackupTests(unittest.TestCase):
         failed = False
         def sync(directory):
             nonlocal failed
-            if Path(directory) == self.root and not failed:
+            if Path(directory).resolve() == self.root.resolve() and not failed:
                 failed = True
                 raise OSError('injected fsync failure')
             return _sync(directory)
@@ -160,7 +160,7 @@ class BackupTests(unittest.TestCase):
                 raise OSError('injected rollback failure')
             return _exchange(source, destination)
         def sync(directory):
-            if Path(directory) == self.root:
+            if Path(directory).resolve() == self.root.resolve():
                 raise OSError('injected fsync failure')
             return _sync(directory)
         with patch('re4pc.backups._sync', side_effect=sync), patch('re4pc.backups._exchange', side_effect=exchange):

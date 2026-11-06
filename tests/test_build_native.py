@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,6 +17,7 @@ def output(command):
 
 
 class NativeBuildTests(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'win32', 'Windows cannot replace a file another handle holds open')
     def test_failed_compile_keeps_previous_helpers_and_success_preserves_open_inodes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);out=root/'build';out.mkdir()

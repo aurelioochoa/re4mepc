@@ -80,7 +80,7 @@ class PathTests(unittest.TestCase):
 class NativeHomeTests(unittest.TestCase):
     def test_windows_and_macos_use_their_conventional_data_directories(self):
         from re4pc.paths import xdg_home
-        home = Path('/synthetic-home')
+        home = Path(tempfile.gettempdir()).resolve() / 'synthetic-home'  # absolute on every host
         with patch('re4pc.paths.Path.home', return_value=home), patch.dict(os.environ, {'XDG_DATA_HOME': '', 'XDG_CONFIG_HOME': ''}):
             with patch('re4pc.paths.sys.platform', 'darwin'):
                 self.assertEqual(xdg_home('XDG_DATA_HOME', '.local/share'), home / 'Library/Application Support')
