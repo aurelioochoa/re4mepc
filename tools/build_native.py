@@ -29,10 +29,12 @@ def _sdl(stage, platform):
     include, library = os.environ.get('RE4PC_SDL2_INCLUDE'), os.environ.get('RE4PC_SDL2_LIBRARY')
     if include and library:
         source = Path(library)
+        # SDL headers include both <SDL.h> and <SDL2/SDL_x.h> forms.
+        includes = ['-I'+include, '-I'+str(Path(include).parent)]
         if platform == 'win32':
             bundled = stage/'SDL2.dll'
             shutil.copy2(source, bundled)
-            return ['-I'+include, '-DSDL_MAIN_HANDLED', str(bundled)], bundled.name
+            return [*includes, '-DSDL_MAIN_HANDLED', str(bundled)], bundled.name
         bundled = stage/'libSDL2-2.0.0.dylib'
         shutil.copy2(source, bundled)
         os.chmod(bundled, 0o755)
@@ -40,7 +42,7 @@ def _sdl(stage, platform):
         subprocess.run(['install_name_tool', '-id', '@loader_path/libSDL2-2.0.0.dylib', str(bundled)], check=True)
         # install_name_tool invalidates the signature arm64 requires.
         subprocess.run(['codesign', '--force', '--sign', '-', str(bundled)], check=True)
-        return ['-I'+include, str(bundled)], bundled.name
+        return [*includes, str(bundled)], bundled.name
     flags = shlex.split(subprocess.check_output(['pkg-config', '--cflags', '--libs', 'sdl2'], text=True))
     return flags + (['-DSDL_MAIN_HANDLED'] if platform == 'win32' else []), None
 
@@ -81,7 +83,8 @@ def build(root=None, package=None, platform=None):
         if bundled:
             names.append(bundled)
         for item in names:
-            with (stage/item).open('rb') as stream:
+            # Windows only flushes handles opened for writing.
+            with (stage/item).open('r+b') as stream:
                 os.fsync(stream.fileno())
             os.replace(stage/item, out/item)
     print('Built native audio, ARM import and math helpers')

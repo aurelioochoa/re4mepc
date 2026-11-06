@@ -109,7 +109,10 @@ jobs:
           hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/sdl-volume" "$RUNNER_TEMP/sdl.dmg"
           cp -R "$RUNNER_TEMP/sdl-volume/SDL2.framework" "$RUNNER_TEMP/"
           hdiutil detach "$RUNNER_TEMP/sdl-volume"
-          echo "RE4PC_SDL2_INCLUDE=$RUNNER_TEMP/SDL2.framework/Headers" >> "$GITHUB_ENV"
+          # The framework's headers include <SDL2/...>; expose them as SDL2/.
+          mkdir -p "$RUNNER_TEMP/sdl-include"
+          ln -s "$RUNNER_TEMP/SDL2.framework/Headers" "$RUNNER_TEMP/sdl-include/SDL2"
+          echo "RE4PC_SDL2_INCLUDE=$RUNNER_TEMP/sdl-include/SDL2" >> "$GITHUB_ENV"
           echo "RE4PC_SDL2_LIBRARY=$RUNNER_TEMP/SDL2.framework/Versions/A/SDL2" >> "$GITHUB_ENV"
       - name: Build native helpers
         run: python -u tools/build_native.py
