@@ -83,7 +83,7 @@ class AsyncMediaTests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.media = Media.__new__(Media)
         m = self.media
-        m.root = Path(self.directory.name)
+        m.root = Path(self.directory.name).resolve()
         m.cache = m.root / 'cache'
         m.cache.mkdir()
         m.decoder = ThreadPoolExecutor(max_workers=2)

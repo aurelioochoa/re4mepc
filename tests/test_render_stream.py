@@ -9,8 +9,10 @@ from unittest.mock import patch
 from re4pc.arm import ArmRuntime
 from re4pc.graphics import Graphics
 from re4pc.render_stream import RenderStream
+from tests.gl_support import requires_offscreen_gl
 
 
+@requires_offscreen_gl
 class RenderStreamTests(unittest.TestCase):
     def setUp(self):
         self.environment = patch.dict(os.environ, {'SDL_VIDEODRIVER': 'offscreen', 'SDL_AUDIODRIVER': 'dummy'})

@@ -7,6 +7,7 @@ from unittest.mock import Mock
 from re4pc.laser import sight_image
 from re4pc.settings import Settings, validate
 from re4pc.launcher_ui import collect_settings, FieldError
+from tests.gl_support import requires_offscreen_gl
 
 
 class LaserSettingsTests(unittest.TestCase):
@@ -85,6 +86,7 @@ class SightImageTests(unittest.TestCase):
         self.assertGreater(image.getpixel((32, 32))[2], image.getpixel((32, 32))[0])
 
 
+@requires_offscreen_gl
 class LaserGLTests(unittest.TestCase):
     def setUp(self):
         import ctypes as C

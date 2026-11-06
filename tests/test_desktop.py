@@ -1,4 +1,5 @@
 """Exercise desktop installation in isolated homes without running the game."""
+import sys
 import io
 import os
 import shutil
@@ -20,6 +21,7 @@ def png(size):
     return stream.getvalue()
 
 
+@unittest.skipUnless(sys.platform.startswith('linux'), 'Freedesktop menu integration is Linux-only')
 class DesktopTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

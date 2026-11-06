@@ -58,5 +58,5 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(path.read_text(),'{bad')
 
     def test_relative_xdg_home_ignored(self):
-        with patch.dict('os.environ',{'XDG_CONFIG_HOME':'relative/config'}):
+        with patch.dict('os.environ',{'XDG_CONFIG_HOME':'relative/config'}), patch('re4pc.paths.sys.platform','linux'):
             self.assertEqual(settings_path(),Path.home()/'.config/re4mepc/settings.json')

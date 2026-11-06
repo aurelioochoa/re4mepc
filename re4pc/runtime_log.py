@@ -74,9 +74,10 @@ class RuntimeLog:
         while not self.stopped.wait(self.interval):
             now = time.monotonic()
             state, frames, draws, inputs, captured = self.snapshot
-            simulation = (frames-previous_frames)/(now-previous_time)
+            elapsed = max(now-previous_time, 1e-6)  # Windows' clock ticks every ~15 ms
+            simulation = (frames-previous_frames)/elapsed
             presentations = self.native_presentations+(self.presenter.frames if self.presenter else 0)
-            fps = (presentations-previous_presentations)/(now-previous_time)
+            fps = (presentations-previous_presentations)/elapsed
             active = self.diagnostics.active_operation if self.diagnostics else None
             waiting = (' | operation=%s (%.2fs)' % (active['name'], active['seconds'])
                        if active else ' | waiting for engine/startup' if frames == previous_frames else '')

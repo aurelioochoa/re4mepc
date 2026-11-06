@@ -1,3 +1,4 @@
+import sys
 import contextlib
 import io
 import os
@@ -10,8 +11,11 @@ from re4pc.__main__ import main
 
 
 class PathTests(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'win32', 'XDG paths in this test are POSIX absolute paths')
+    @patch('re4pc.paths.sys.platform', 'linux')
     def test_xdg_defaults_and_overrides_are_independent_of_cwd(self):
-        with patch.dict(os.environ, {'HOME':'/tmp/synthetic-home', 'XDG_DATA_HOME':'', 'XDG_STATE_HOME':''}):
+        with patch.dict(os.environ, {'HOME':'/tmp/synthetic-home', 'XDG_DATA_HOME':'', 'XDG_STATE_HOME':''}), \
+                patch('re4pc.paths.Path.home', return_value=Path('/tmp/synthetic-home')):
             self.assertEqual(game_dir(),Path('/tmp/synthetic-home/.local/share/re4mepc/game'))
             self.assertEqual(logs_dir(),Path('/tmp/synthetic-home/.local/state/re4mepc/logs'))
         with patch.dict(os.environ, {'XDG_DATA_HOME':'/tmp/synthetic-data', 'XDG_STATE_HOME':'/tmp/synthetic-state'}):
@@ -73,11 +77,35 @@ class PathTests(unittest.TestCase):
             self.assertEqual(first.parent,logs_dir()/'visible-test')
 
 
+class NativeHomeTests(unittest.TestCase):
+    def test_windows_and_macos_use_their_conventional_data_directories(self):
+        from re4pc.paths import xdg_home
+        home = Path('/synthetic-home')
+        with patch('re4pc.paths.Path.home', return_value=home), patch.dict(os.environ, {'XDG_DATA_HOME': '', 'XDG_CONFIG_HOME': ''}):
+            with patch('re4pc.paths.sys.platform', 'darwin'):
+                self.assertEqual(xdg_home('XDG_DATA_HOME', '.local/share'), home / 'Library/Application Support')
+                self.assertEqual(xdg_home('XDG_CACHE_HOME', '.cache'), home / 'Library/Caches')
+            with patch('re4pc.paths.sys.platform', 'win32'), \
+                    patch.dict(os.environ, {'APPDATA': str(home / 'Roaming'), 'LOCALAPPDATA': str(home / 'Local')}):
+                self.assertEqual(xdg_home('XDG_CONFIG_HOME', '.config'), home / 'Roaming')
+                self.assertEqual(xdg_home('XDG_STATE_HOME', '.local/state'), home / 'Local')
+            # Explicit absolute XDG variables still win everywhere.
+            with patch('re4pc.paths.sys.platform', 'win32'), patch.dict(os.environ, {'XDG_DATA_HOME': str(home / 'xdg')}):
+                self.assertEqual(xdg_home('XDG_DATA_HOME', '.local/share'), home / 'xdg')
+
+    def test_helper_names_follow_the_host_convention(self):
+        from re4pc.paths import platform_library
+        for platform, expected in (('linux', 'libre4fast.so'), ('win32', 're4fast.dll'), ('darwin', 'libre4fast.dylib')):
+            with patch('re4pc.paths.sys.platform', platform):
+                self.assertEqual(platform_library('libre4fast.so'), expected)
+
+
 class RuntimePathTests(unittest.TestCase):
     def test_helpers_are_application_relative_and_names_bounded(self):
         from re4pc.paths import native_library, ffmpeg_binary
         self.assertEqual(native_library('libre4audio.so').parent.name, 'build')
-        self.assertEqual(native_library('libre4fast.so').name, 'libre4fast.so')
+        from re4pc.paths import platform_library
+        self.assertEqual(native_library('libre4fast.so').name, platform_library('libre4fast.so'))
         with self.assertRaises(ValueError):
             native_library('../outside')
         self.assertEqual(ffmpeg_binary(), 'ffmpeg')

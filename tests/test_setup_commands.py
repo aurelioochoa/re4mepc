@@ -12,6 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 
 
+@unittest.skipUnless(sys.platform.startswith('linux'), 'setup.sh and make install target Linux')
 class SetupCommandTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='re4 commands ')

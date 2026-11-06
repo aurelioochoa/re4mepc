@@ -105,7 +105,7 @@ def _new_archive(destination):
         with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED,
                              allowZip64=True) as archive:
             yield archive
-        with temporary.open('rb') as stream:
+        with temporary.open('r+b') as stream:  # Windows flushes writable handles only
             os.fsync(stream.fileno())
         os.link(temporary, destination)  # Never overwrite an existing export.
         _sync(destination.parent)

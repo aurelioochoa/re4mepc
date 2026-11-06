@@ -1,3 +1,4 @@
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,6 +7,7 @@ from re4pc.packaging import audit_stage, write_manifest, verify_manifest
 
 
 class PackagingTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'AppImage staging is Linux-only')
     def test_application_staging_includes_generated_artwork_and_only_allowlisted_assets(self):
         from tools.package import ROOT, copy_application
         from re4pc.packaging import APPLICATION_ASSETS
@@ -78,6 +80,7 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual((stage / 'usr/share/doc/python3.10/copyright').read_text(), 'dependency license')
             self.assertFalse((stage / 'usr/share/doc/manual.pdf').exists())
 
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'AppImage library collection is Linux-only')
     def test_library_collection_keeps_graphics_support_on_host(self):
         from tools.package import collect_libraries
         with tempfile.TemporaryDirectory() as temporary:

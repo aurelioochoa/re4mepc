@@ -9,8 +9,10 @@ from unittest.mock import patch
 from PIL import Image
 from re4pc.arm import ArmRuntime
 from re4pc.graphics import Graphics
+from tests.gl_support import requires_offscreen_gl
 
 
+@requires_offscreen_gl
 class VideoOverlayTests(unittest.TestCase):
     def test_real_sdl_capture_centers_hides_and_routes_clicks_without_touch(self):
         import struct
@@ -153,6 +155,7 @@ class CoordinateTests(unittest.TestCase):
         self.assertIsNone(graphics.map_point(100,100,clamp=True))
 
 
+@requires_offscreen_gl
 class LogicalSurfaceTests(unittest.TestCase):
     def test_movie_screenshot_and_letterbox_present_preserve_gl_state(self):
         arm=ArmRuntime()

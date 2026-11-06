@@ -46,6 +46,8 @@ class RuntimeLogTests(unittest.TestCase):
                             root.warning('test warning')
                         self.assertEqual('\033[' in stream.getvalue(), expected)
                         self.assertNotIn('\033[', path.read_text())
+                for handler in root.handlers:
+                    handler.close()  # Windows cannot delete an open log file
         finally:
             for handler in root.handlers:
                 handler.close()

@@ -12,6 +12,7 @@ from re4pc.display import Display, surface_width
 from re4pc.graphics import Graphics
 from re4pc.postprocess import FRAGMENTS, PostProcess
 from re4pc.settings import validate
+from tests.gl_support import requires_offscreen_gl
 
 ORTHO = (2/800, 0, 0, 0, 0, 2/480, 0, 0, 0, 0, -1, 0, -1, -1, 0, 1)
 PERSPECTIVE = (1.45, 0, 0, 0, 0, 2.414, 0, 0, 0, 0, -1.001, -1, 0, 0, -2.001, 0)
@@ -66,6 +67,7 @@ class DisplayMappingTests(unittest.TestCase):
         self.assertEqual(Display().projection(PERSPECTIVE)[1][0], C.c_float(1.45).value)
 
 
+@requires_offscreen_gl
 class SurfaceTests(unittest.TestCase):
     def setUp(self):
         self.env = patch.dict(os.environ, {'SDL_VIDEODRIVER': 'offscreen', 'SDL_AUDIODRIVER': 'dummy'})

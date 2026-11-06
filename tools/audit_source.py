@@ -127,7 +127,7 @@ SOURCE_FILES = {
               'test_actions', 'test_controllers', 'test_settings', 'test_languages', 'test_backups',
               'test_save_boundary', 'test_launcher', 'test_packaging', 'test_diagnostics',
               'test_texture_cache', 'test_cli', 'test_setup_commands', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_capture_exports', 'test_rea_workflow',
-              'test_native_math', 'test_native_unzip', 'test_softfloat', 'test_ui_images', 'test_gl_bridge', 'test_render_stream', 'test_display', 'test_native_abi'),
+              'test_native_math', 'test_native_unzip', 'test_softfloat', 'test_ui_images', 'test_gl_bridge', 'test_render_stream', 'test_display', 'test_native_abi', 'gl_support'),
 }
 PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c', 'native/gl.c', 'native/render.c', 'native/display.c',
                                                          'native/Cargo.toml', 'native/Cargo.lock', 'native/math.rs',

@@ -190,6 +190,11 @@ def package_macos(args, work):
     resources.mkdir()
     python = copy_python(python_home(args.python), resources / 'python')
     install_requirements(python)
+    keystone = os.environ.get('RE4PC_KEYSTONE_LIBRARY')
+    if keystone:  # see the arm64 note in .github/workflows/portable.yml
+        for package in resources.glob('python/lib/python3*/site-packages/keystone'):
+            shutil.copy2(keystone, package / 'libkeystone.dylib')
+            (package / 'libkeystone.dylib').chmod(0o755)
     app = resources / 'app'
     build = copy_application(app)
     shutil.copy2(args.ffmpeg, build / 'ffmpeg')

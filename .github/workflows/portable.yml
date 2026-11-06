@@ -103,6 +103,17 @@ jobs:
           cargo --version
           cmake --version | head -1
           python -m pip install -r requirements.txt "imageio-ffmpeg==$IMAGEIO_FFMPEG_VERSION"
+          # keystone-engine ships no arm64 macOS wheel and its source build
+          # omits the C library; use Homebrew's and place it in the package.
+          if ! python -c 'import keystone' 2>/dev/null; then
+            brew install keystone
+            library=$(python -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$(brew --prefix keystone)/lib/libkeystone.dylib")
+            otool -L "$library"
+            package=$(python -c 'import importlib.util,os; print(os.path.dirname(importlib.util.find_spec("keystone").origin))')
+            cp "$library" "$package/libkeystone.dylib"
+            echo "RE4PC_KEYSTONE_LIBRARY=$library" >> "$GITHUB_ENV"
+            python -c 'import keystone; print("keystone", keystone.__version__)'
+          fi
           uv python install "$PYTHON_VERSION"
           echo "STANDALONE_PYTHON=$(uv python find --python-preference only-managed "$PYTHON_VERSION")" >> "$GITHUB_ENV"
           curl -fsSL -o "$RUNNER_TEMP/sdl.dmg" "https://github.com/libsdl-org/SDL/releases/download/release-$SDL2_VERSION/SDL2-$SDL2_VERSION.dmg"

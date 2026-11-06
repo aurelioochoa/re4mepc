@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -24,14 +25,15 @@ class NativeBuildTests(unittest.TestCase):
             def compile(command, **kwargs):
                 target=output(command);target.write_bytes(b'new helper')
                 if target.name=='libre4fast.so':raise subprocess.CalledProcessError(1,command)
-            with patch('tools.build_native.subprocess.check_output',return_value=''),patch('tools.build_native.subprocess.run',side_effect=compile):
+            sdl={key:value for key,value in os.environ.items() if not key.startswith('RE4PC_SDL2_')}
+            with patch.dict(os.environ,sdl,clear=True),patch('tools.build_native.subprocess.check_output',return_value=''),patch('tools.build_native.subprocess.run',side_effect=compile):
                 with self.assertRaises(subprocess.CalledProcessError):build(root,package,'linux')
             self.assertTrue(all((out/name).read_bytes()==b'original library' for name in names))
             self.assertFalse(list(out.glob('.native-*')))
             streams=[(out/name).open('rb') for name in names]
             try:
                 def successful(command, **kwargs):output(command).write_bytes(b'new helper')
-                with patch('tools.build_native.subprocess.check_output',return_value=''),patch('tools.build_native.subprocess.run',side_effect=successful):build(root,package,'linux')
+                with patch.dict(os.environ,sdl,clear=True),patch('tools.build_native.subprocess.check_output',return_value=''),patch('tools.build_native.subprocess.run',side_effect=successful):build(root,package,'linux')
                 self.assertTrue(all(stream.read()==b'original library' for stream in streams))
                 self.assertTrue(all((out/name).read_bytes()==b'new helper' for name in names))
             finally:

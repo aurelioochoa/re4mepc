@@ -10,8 +10,10 @@ from re4pc.bionic import float_out
 from re4pc.diagnostics import Diagnostics
 from re4pc.gl_bridge import GLBridge
 from re4pc.graphics import Graphics
+from tests.gl_support import requires_offscreen_gl
 
 
+@requires_offscreen_gl
 class GLBridgeTests(unittest.TestCase):
     def setUp(self):
         self.env = patch.dict(os.environ, {'SDL_VIDEODRIVER':'offscreen','SDL_AUDIODRIVER':'dummy'})

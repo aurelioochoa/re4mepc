@@ -23,6 +23,7 @@ def widget_texts(widget):
 
 
 class LauncherTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Fontconfig registration is Linux-only')
     def test_package_fonts_are_registered_from_runtime_prefix_with_spaces(self):
         from re4pc.launcher import configure_bundled_fonts
         with tempfile.TemporaryDirectory(prefix='runtime with spaces ') as directory:
@@ -63,6 +64,7 @@ class LauncherTests(unittest.TestCase):
         self.assertIn('begin', text + rest)
         self.assertIn('end', text + rest)
 
+    @unittest.skipIf(sys.platform == 'win32', 'Windows children stop through their stdin pipe')
     def test_stop_and_output_are_bounded(self):
         child = ChildProcess([sys.executable, '-c', 'import time; print("x"*3000000,flush=True); time.sleep(30)'])
         time.sleep(.1)
@@ -842,7 +844,8 @@ class CaseFileDialogTests(LauncherGuiFixture):
         store.update(Progress(story=(True,) + (False,) * 21))
         store.attach_media(['village'], {'clip': 'unlock-fixture.mp4'})
         view = self.app.achievements()
-        with patch('subprocess.Popen') as opened, patch.object(self.app, 'start') as start:
+        with patch('subprocess.Popen') as opened, patch.object(self.app, 'start') as start, \
+                patch('re4pc.launcher_ui.sys.platform', 'linux'):
             view.open_capture('unlock-fixture.mp4')
         self.assertEqual(opened.call_args.args[0], ['xdg-open', str(media_path(self.folder, 'unlock-fixture.mp4'))])
         start.assert_not_called()

@@ -209,7 +209,8 @@ class SaveStore:
             for name, record in records.items():
                 _safe_name(name)
                 target = path / 'files' / name
-                if any(parent.is_symlink() for parent in (target, *target.parents)) or not target.is_file():
+                inside = [p for p in (target, *target.parents) if p == path or path in p.parents]
+                if any(p.is_symlink() for p in inside) or not target.is_file():
                     raise ValueError('Unsafe or missing snapshot file')
                 total += target.stat().st_size
                 if total > MAX_BYTES:
@@ -262,7 +263,7 @@ class SaveStore:
                 archive.writestr('manifest.json', _canonical(manifest))
                 for name, path in files.items():
                     archive.write(path, 'files/' + name)
-            with open(temporary, 'rb') as stream:
+            with open(temporary, 'r+b') as stream:  # Windows flushes writable handles only
                 os.fsync(stream.fileno())
             # Refuse to overwrite another backup or an unrelated file.
             os.link(temporary, destination)
