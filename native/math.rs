@@ -74,23 +74,26 @@ fn fcmple(a: u32, b: u32) -> bool { f32::from_bits(a) <= f32::from_bits(b) }
 fn fcmpge(a: u32, b: u32) -> bool { f32::from_bits(a) >= f32::from_bits(b) }
 fn fcmpgt(a: u32, b: u32) -> bool { f32::from_bits(a) > f32::from_bits(b) }
 
-// ---- Guest memory: the ARM mapping shares host addresses ----------------
+// ---- Guest memory: host address = guest address + delta ------------------
+// `delta` is zero where the host could map guest RAM at its guest address
+// (Linux, Windows) and a fixed offset on macOS (see re4pc/platform_memory.py).
 
-struct Memory { start: u64, end: u64 }
+struct Memory { start: u64, end: u64, delta: u64 }
 
 impl Memory {
     fn valid(&self, address: u32, bytes: u64) -> bool {
         address as u64 >= self.start && address as u64 + bytes <= self.end
     }
+    fn host(&self, address: u32) -> usize { (address as u64).wrapping_add(self.delta) as usize }
     fn u8(&self, address: u32) -> Option<u8> {
         // SAFETY: the range lies inside the live guest mapping.
-        self.valid(address, 1).then(|| unsafe { *(address as usize as *const u8) })
+        self.valid(address, 1).then(|| unsafe { *(self.host(address) as *const u8) })
     }
     fn u16(&self, address: u32) -> Option<u16> {
-        self.valid(address, 2).then(|| unsafe { (address as usize as *const u16).read_unaligned() })
+        self.valid(address, 2).then(|| unsafe { (self.host(address) as *const u16).read_unaligned() })
     }
     fn u32(&self, address: u32) -> Option<u32> {
-        self.valid(address, 4).then(|| unsafe { (address as usize as *const u32).read_unaligned() })
+        self.valid(address, 4).then(|| unsafe { (self.host(address) as *const u32).read_unaligned() })
     }
     fn vector(&self, address: u32) -> Option<[u32; 3]> {
         Some([self.u32(address)?, self.u32(address + 4)?, self.u32(address + 8)?])
@@ -461,8 +464,9 @@ extern "C" fn enter(_uc: *mut c_void, address: u64, _size: u32, user: *mut c_voi
         }
         match effects {
             Some(effects) => {
-                for &(address, value) in &effects.words { (address as usize as *mut u32).write_unaligned(value); }
-                for &(address, value) in &effects.bytes { *(address as usize as *mut u8) = value; }
+                let memory = &bridge.memory;
+                for &(address, value) in &effects.words { (memory.host(address) as *mut u32).write_unaligned(value); }
+                for &(address, value) in &effects.bytes { *(memory.host(address) as *mut u8) = value; }
                 if let Some(value) = effects.result { bridge.set_register(UC_ARM_REG_R0, value); }
                 bridge.counters[function].handled += 1;
             }
@@ -510,11 +514,11 @@ pub extern "C" fn re4_math_functions() -> usize { FUNCTIONS }
 #[no_mangle]
 pub unsafe extern "C" fn re4_math_open(uc: *mut c_void, hook_add: HookAdd, hook_del: HookDel, read: RegAccess,
                                        write: RegAccess, start: u64, bytes: u64, shadow: c_int,
-                                       sites: *const u32, sqrt_entry: u32) -> *mut Bridge {
+                                       sites: *const u32, sqrt_entry: u32, host: u64) -> *mut Bridge {
     let s = std::slice::from_raw_parts(sites, 4 * FUNCTIONS);
     let site = |i: usize| Site { hook: s[4 * i], shadow_call: s[4 * i + 1], shadow_return: s[4 * i + 2], original: s[4 * i + 3] };
     let bridge = Box::into_raw(Box::new(Bridge {
-        uc, delete: hook_del, read, write, memory: Memory { start, end: start + bytes }, sqrt_entry, shadow: shadow != 0,
+        uc, delete: hook_del, read, write, memory: Memory { start, end: start + bytes, delta: host.wrapping_sub(start) }, sqrt_entry, shadow: shadow != 0,
         hooks: Vec::new(), sites: std::array::from_fn(site), pending: Vec::new(),
         counters: [Counters::default(); FUNCTIONS], mismatch_arguments: [[0; 4]; FUNCTIONS],
     }));
@@ -558,8 +562,8 @@ pub unsafe extern "C" fn re4_math_mismatch(bridge: *const Bridge, function: usiz
 /// # Safety
 /// The range must be the live guest mapping, holding the checked routine.
 #[no_mangle]
-pub unsafe extern "C" fn re4_math_sqrt(start: u64, bytes: u64, sqrt_entry: u32, x: u32, out: *mut u32) -> c_int {
-    match sqrt(&Memory { start, end: start + bytes }, sqrt_entry, x) {
+pub unsafe extern "C" fn re4_math_sqrt(start: u64, bytes: u64, sqrt_entry: u32, x: u32, out: *mut u32, host: u64) -> c_int {
+    match sqrt(&Memory { start, end: start + bytes, delta: host.wrapping_sub(start) }, sqrt_entry, x) {
         Some(value) => { *out = value; 1 }
         None => 0,
     }

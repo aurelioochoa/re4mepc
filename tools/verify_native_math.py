@@ -38,7 +38,7 @@ def check_sqrt(game_root, seed=7, per_exponent=400):
         install_soft_float(arm)
         entry = sqrt_entry(arm)
         lib = C.CDLL(str(native_library('libre4math.so')))
-        lib.re4_math_sqrt.argtypes = (C.c_uint64, C.c_uint64, C.c_uint32, C.c_uint32, C.POINTER(C.c_uint32))
+        lib.re4_math_sqrt.argtypes = (C.c_uint64, C.c_uint64, C.c_uint32, C.c_uint32, C.POINTER(C.c_uint32), C.c_uint64)
         generator = random.Random(seed)
         values = [0, 0x80000000, 0x7f800000, 0xff800000, 0x7fc00000, 0x00000001, 0x007fffff]
         for exponent in range(256):
@@ -49,7 +49,7 @@ def check_sqrt(game_root, seed=7, per_exponent=400):
         mismatches, result = [], C.c_uint32()
         for value in values:
             expected = arm.call(entry | 1, value)
-            if not lib.re4_math_sqrt(arm.base, arm.SIZE, entry, value, C.byref(result)) or result.value != expected:
+            if not lib.re4_math_sqrt(arm.base, arm.SIZE, entry, value, C.byref(result), arm.host) or result.value != expected:
                 mismatches.append((f'0x{value:08x}', f'0x{expected:08x}', f'0x{result.value:08x}'))
         return mismatches, len(values)
     finally:

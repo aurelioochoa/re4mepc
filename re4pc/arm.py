@@ -9,6 +9,7 @@ import sys
 from elftools.elf.elffile import ELFFile
 from unicorn import Uc, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_CODE, UC_HOOK_MEM_INVALID, UcError
 from unicorn.arm_const import *
+from .platform_memory import GuestMemory, c_runtime
 
 REGS = (UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3)
 
@@ -21,15 +22,14 @@ class ArmRuntime:
         self._profile_returns = {}
         self._profile_stack = []
         self._profile_names = set()
-        self.libc = C.CDLL(None)
-        mmap = self.libc.mmap
-        mmap.argtypes = (C.c_void_p, C.c_size_t, C.c_int, C.c_int, C.c_int, C.c_long)
-        mmap.restype = C.c_void_p
-        self.base = mmap(None, self.SIZE, 3, 0x22 | 0x40, -1, 0)  # Linux MAP_32BIT
-        if self.base is None or self.base == C.c_void_p(-1).value or self.base + self.SIZE > 0x100000000:
-            raise RuntimeError('Cannot allocate ARM32 shared memory (Linux x86_64 required)')
+        self.libc = c_runtime()
+        # `base` is the guest address of the mapping; `host` is where the
+        # process sees it. They are equal except on macOS (see platform_memory).
+        self.memory = GuestMemory(self.SIZE)
+        self.base, self.host = self.memory.base, self.memory.host
+        self.delta = self.memory.delta
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
-        self.uc.mem_map_ptr(self.base, self.SIZE, 7, self.base)
+        self.uc.mem_map_ptr(self.base, self.SIZE, 7, self.host)
         self.uc.reg_write(UC_ARM_REG_C1_C0_2, 0xF << 20)
         self.uc.reg_write(UC_ARM_REG_FPEXC, 0x40000000)
         self.uc.reg_write(UC_ARM_REG_SP, self.base + self.SIZE - 0x1000)
@@ -71,12 +71,19 @@ class ArmRuntime:
             raise RuntimeError(f'Invalid guest pointer 0x{pointer:x} + {size}')
         return pointer
 
+    def pointer(self, pointer, size=1):
+        """Host address of a checked guest range, for ctypes and native calls."""
+        return self.check(pointer, size) + self.delta
+
+    def guest(self, host):
+        """Guest address of a host pointer into the mapping (GL array state)."""
+        return host - self.delta
+
     def read(self, pointer, size):
-        return C.string_at(self.check(pointer, size), size)
+        return C.string_at(self.pointer(pointer, size), size)
 
     def write(self, pointer, data):
-        self.check(pointer, len(data))
-        C.memmove(pointer, data, len(data))
+        C.memmove(self.pointer(pointer, len(data)), data, len(data))
 
     def u32(self, pointer):
         return struct.unpack('<I', self.read(pointer, 4))[0]
@@ -89,8 +96,8 @@ class ArmRuntime:
             return ''
         self.check(pointer)
         limit = min(self.base + self.SIZE - pointer, 65536)
-        length = self.libc.strnlen(pointer,limit)
-        value = C.string_at(pointer,length)
+        length = self.libc.strnlen(pointer + self.delta, limit)
+        value = C.string_at(pointer + self.delta, length)
         if length == limit:
             raise RuntimeError('Unterminated guest string')
         return value.decode('utf-8', 'replace')
@@ -116,7 +123,7 @@ class ArmRuntime:
         self.allocations[pointer] = size
         if diagnostics:
             diagnostics.allocation(requested, size, probes, time.perf_counter()-started)
-        C.memset(pointer, 0, size)
+        C.memset(pointer + self.delta, 0, size)
         return pointer
 
     def free(self, pointer):
@@ -359,5 +366,4 @@ class ArmRuntime:
             self.native_math = None
         if self.fast: self.fast.close()
         self.uc = None
-        self.libc.munmap.argtypes = (C.c_void_p, C.c_size_t)
-        self.libc.munmap(self.base, self.SIZE)
+        self.memory.close()

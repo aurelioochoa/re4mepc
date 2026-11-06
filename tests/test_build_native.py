@@ -19,22 +19,20 @@ class NativeBuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);out=root/'build';out.mkdir()
             package=root/'package';(package/'lib').mkdir(parents=True)
-            (package/'lib/libunicorn.so.2').write_bytes(b'new Unicorn')
-            names=('libre4audio.so','libre4fast.so','libre4math.so','libunicorn.so.2')
+            names=('libre4audio.so','libre4fast.so','libre4math.so')
             for name in names:(out/name).write_bytes(b'original library')
             def compile(command, **kwargs):
                 target=output(command);target.write_bytes(b'new helper')
                 if target.name=='libre4fast.so':raise subprocess.CalledProcessError(1,command)
             with patch('tools.build_native.subprocess.check_output',return_value=''),patch('tools.build_native.subprocess.run',side_effect=compile):
-                with self.assertRaises(subprocess.CalledProcessError):build(root,package)
+                with self.assertRaises(subprocess.CalledProcessError):build(root,package,'linux')
             self.assertTrue(all((out/name).read_bytes()==b'original library' for name in names))
             self.assertFalse(list(out.glob('.native-*')))
             streams=[(out/name).open('rb') for name in names]
             try:
                 def successful(command, **kwargs):output(command).write_bytes(b'new helper')
-                with patch('tools.build_native.subprocess.check_output',return_value=''),patch('tools.build_native.subprocess.run',side_effect=successful):build(root,package)
+                with patch('tools.build_native.subprocess.check_output',return_value=''),patch('tools.build_native.subprocess.run',side_effect=successful):build(root,package,'linux')
                 self.assertTrue(all(stream.read()==b'original library' for stream in streams))
-                self.assertEqual((out/'libunicorn.so.2').read_bytes(),b'new Unicorn')
-                self.assertTrue(all((out/name).read_bytes()==b'new helper' for name in names[:3]))
+                self.assertTrue(all((out/name).read_bytes()==b'new helper' for name in names))
             finally:
                 for stream in streams:stream.close()

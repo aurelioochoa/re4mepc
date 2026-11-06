@@ -7,7 +7,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .paths import ffmpeg_binary
+from .paths import ffmpeg_binary, quiet_process
 from .runtime_log import log
 
 CLIP_FPS = 5
@@ -74,7 +74,7 @@ class UnlockCapture:
                                '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '26',
                                '-pix_fmt', 'yuv420p', '-movflags', '+faststart', str(temporary)]
                     subprocess.run(command, input=b''.join(frames), stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.PIPE, timeout=15, check=True)
+                                   stderr=subprocess.PIPE, timeout=15, check=True, **quiet_process())
                     os.replace(temporary, destination)
                     captures['clip'] = destination.name
                 except (OSError, subprocess.SubprocessError) as error:

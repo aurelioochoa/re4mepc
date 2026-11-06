@@ -1,13 +1,14 @@
 /* Native implementations of hot libc imports for the shared ARM address space. */
-#include <unicorn/unicorn.h>
-#include <unicorn/arm.h>
+#include "uc_api.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
 #include <stdio.h>
 
-struct bridge { uc_engine *uc; uc_hook hook; uintptr_t base, end, start; uint64_t calls; char error[160]; };
+/* Guest addresses are 32-bit; HOST() adds the host-minus-guest offset, which is
+ * zero wherever the mapping could be placed at its guest address. */
+struct bridge { uc_engine *uc; uc_hook hook; uintptr_t base, end, start, delta; uint64_t calls; char error[160]; };
+#define HOST(b,p) ((char *)((uintptr_t)(p)+(b)->delta))
 static int valid(struct bridge *b, uint32_t p, size_t n) {
     if (!n) return 1;
     if (p >= b->base && (uint64_t)p + n <= b->end) return 1;
@@ -18,7 +19,7 @@ static size_t length(struct bridge *b, uint32_t p) {
     if (!valid(b,p,1)) return 0;
     size_t maximum=b->end-p;
     if (maximum > 65536) maximum=65536;
-    size_t n=strnlen((char *)(uintptr_t)p,maximum);
+    size_t n=strnlen(HOST(b,p),maximum);
     if (n==maximum) { snprintf(b->error,sizeof(b->error),"unterminated native import string");uc_emu_stop(b->uc); }
     return n;
 }
@@ -32,7 +33,7 @@ static void invoke(uc_engine *uc, uint64_t address, uint32_t size, void *context
     unsigned operation=(unsigned)((address-b->start)/4);
     uint32_t result=0;
     size_t n=0,m=0;
-    char *dst=(char *)(uintptr_t)a[0], *src=(char *)(uintptr_t)a[1];
+    char *dst=HOST(b,a[0]), *src=HOST(b,a[1]);
     b->calls++;
     switch (operation) {
     case 0: case 1:
@@ -64,9 +65,10 @@ static void invoke(uc_engine *uc, uint64_t address, uint32_t size, void *context
         result=a[0];break;
     case 9:
         if (!valid(b,a[0],4)) return;
-        m=(b->end-a[0])/sizeof(wchar_t);
+        /* Android wchar_t is 32-bit on every host, unlike Windows' 16-bit one. */
+        m=(b->end-a[0])/4;
         if (m>65536) m=65536;
-        n=wcsnlen((wchar_t *)dst,m);
+        for (n=0;n<m;n++) { uint32_t c; memcpy(&c,dst+4*n,4); if (!c) break; }
         if (n==m) { snprintf(b->error,sizeof(b->error),"unterminated native import wide string");uc_emu_stop(uc);return; }
         result=(uint32_t)n;break;
     default:
@@ -74,9 +76,18 @@ static void invoke(uc_engine *uc, uint64_t address, uint32_t size, void *context
     }
     if (!b->error[0]) uc_reg_write(uc,UC_ARM_REG_R0,&result);
 }
-void *re4_fast_open(void *uc, uintptr_t base, size_t bytes, uintptr_t start) {
+struct re4_uc_api re4_uc;
+/* Called by Python with libunicorn's own exports before any bridge opens. */
+void re4_uc_bind(void *hook_add, void *hook_del, void *reg_read_batch, void *reg_write, void *emu_stop) {
+    re4_uc.hook_add=(uc_err (*)(uc_engine *, uc_hook *, int, void *, void *, uint64_t, uint64_t, ...))hook_add;
+    re4_uc.hook_del=(uc_err (*)(uc_engine *, uc_hook))hook_del;
+    re4_uc.reg_read_batch=(uc_err (*)(uc_engine *, const int *, void **, int))reg_read_batch;
+    re4_uc.reg_write=(uc_err (*)(uc_engine *, int, const void *))reg_write;
+    re4_uc.emu_stop=(uc_err (*)(uc_engine *))emu_stop;
+}
+void *re4_fast_open(void *uc, uintptr_t base, size_t bytes, uintptr_t start, uintptr_t host) {
     struct bridge *b=calloc(1,sizeof(*b));if(!b)return NULL;
-    b->uc=uc;b->base=base;b->end=base+bytes;b->start=start;
+    b->uc=uc;b->base=base;b->end=base+bytes;b->start=start;b->delta=host-base;
     if (uc_hook_add(b->uc,&b->hook,UC_HOOK_CODE,(void *)invoke,b,start,start+39)) { free(b);return NULL; }
     return b;
 }

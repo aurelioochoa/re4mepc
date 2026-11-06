@@ -105,8 +105,9 @@ class LaserGLTests(unittest.TestCase):
         self.arm.write(self.vertices, struct.pack('<12f', -.5, .5, 0, .5, -.5, 0,
                                                  .5, .5, 0, -.5, -.5, 0))
         self.arm.write(self.indices, struct.pack('<6H', 0, 1, 2, 0, 3, 1))
-        self.values = [4, 6, 0x1403, self.indices]
-        self.gl.glVertexPointer(3, 0x1406, 0, self.vertices)
+        # GL calls receive host addresses, as Graphics.forward passes them.
+        self.values = [4, 6, 0x1403, self.arm.pointer(self.indices)]
+        self.gl.glVertexPointer(3, 0x1406, 0, self.arm.pointer(self.vertices))
         self.gl.glEnableClientState(0x8074)
         self.gl.glDisableClientState(0x8076)
         self.gl.glDisableClientState(0x8078)
@@ -161,7 +162,7 @@ class LaserGLTests(unittest.TestCase):
                 self.assertLessEqual(widths[-1], native_widths[index])
                 pointer = C.c_void_p()
                 self.gl.glGetPointerv(0x808e, C.byref(pointer))
-                self.assertEqual(pointer.value, self.vertices)
+                self.assertEqual(pointer.value, self.arm.pointer(self.vertices))
             self.assertGreater(widths[0], widths[1], (shape, widths))
             self.assertGreater(widths[1], widths[2], (shape, widths))
             _, scaled = self.render(shape, 120, 2)

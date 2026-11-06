@@ -2,8 +2,7 @@
  * GLES1 client arrays are copied before the engine reuses their backing memory.
  * Replays preserve driver state and interpolate only matching draw identities.
  */
-#define GL_GLEXT_PROTOTYPES
-#include <GL/gl.h>
+#include "glplatform.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

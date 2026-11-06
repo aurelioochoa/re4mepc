@@ -26,7 +26,6 @@ import ctypes as C
 import hashlib
 from keystone import Ks, KS_ARCH_ARM, KS_MODE_THUMB
 from unicorn.unicorn_py3.unicorn import uclib
-from .paths import native_library
 
 # symbol: its first four bytes in the supported engine (Thumb-1, no PC use)
 FUNCTIONS = {
@@ -76,12 +75,13 @@ class NativeMath:
         self.arm = arm
         self.shadow = shadow
         self.handle = None
-        self.lib = C.CDLL(str(native_library('libre4math.so')))
+        from . import native_libs
+        self.lib = native_libs.math()
         if self.lib.re4_math_functions() != len(FUNCTIONS):
             raise RuntimeError('libre4math.so does not match re4pc.native_math; run make build')
         self.lib.re4_math_open.restype = C.c_void_p
         self.lib.re4_math_open.argtypes = (C.c_void_p,) * 5 + (C.c_uint64, C.c_uint64, C.c_int, C.POINTER(C.c_uint32),
-                                                              C.c_uint32)
+                                                              C.c_uint32, C.c_uint64)
         self.lib.re4_math_counters.restype = Counters
         self.lib.re4_math_counters.argtypes = (C.c_void_p, C.c_size_t)
         self.lib.re4_math_mismatch.argtypes = (C.c_void_p, C.c_size_t, C.POINTER(C.c_uint32))
@@ -115,7 +115,7 @@ class NativeMath:
             site += SITE_BYTES
         self.handle = self.lib.re4_math_open(
             arm.uc._uch, _address(uclib.uc_hook_add), _address(uclib.uc_hook_del), _address(uclib.uc_reg_read),
-            _address(uclib.uc_reg_write), arm.base, arm.SIZE, int(self.shadow), (C.c_uint32 * len(sites))(*sites), sqrt)
+            _address(uclib.uc_reg_write), arm.base, arm.SIZE, int(self.shadow), (C.c_uint32 * len(sites))(*sites), sqrt, arm.host)
         if not self.handle:
             raise RuntimeError('Cannot create native math hooks')
         arm.native_math = self  # ArmRuntime.close releases the hooks

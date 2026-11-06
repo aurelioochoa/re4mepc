@@ -6,7 +6,6 @@ failure. A converter-version change invalidates every prior representation.
 """
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
 import os
@@ -15,6 +14,7 @@ import struct
 import tempfile
 
 from .textures import palette_texture
+from .portable import lock as lock_file, process_alive, unlock as unlock_file
 
 CONVERTER_VERSION = 'oes-palette-rgba-v1'
 MAGIC = b'RE4TEX1\0'
@@ -92,11 +92,11 @@ class TextureCache:
     @contextmanager
     def _publication_lock(self):
         with (self.directory/'.cache.lock').open('a+b') as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            lock_file(lock)
             try:
                 yield
             finally:
-                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+                unlock_file(lock)
 
     def _index(self):
         if self._indexed:
@@ -140,12 +140,8 @@ class TextureCache:
                 pid = int(path.name.split('-')[1])
             except (ValueError, IndexError):
                 continue
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
+            if not process_alive(pid):
                 path.unlink(missing_ok=True)
-            except PermissionError:
-                pass
 
     def _prune(self):
         while self._disk and self._disk_bytes > self.max_disk_bytes:

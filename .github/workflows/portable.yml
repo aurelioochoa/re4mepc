@@ -1,0 +1,191 @@
+name: Portable builds
+# Windows x64, macOS (Apple Silicon and Intel) and Linux x86_64 packages from
+# one commit. Branch pushes build and test; a v* tag or a manual run with
+# "publish" creates a GitHub prerelease with every archive and SHA256SUMS.
+on:
+  push:
+    branches: [main, cross-platform]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag to create (for example v0.2.0-experimental.20261106)
+        required: false
+      publish:
+        description: Publish a GitHub prerelease
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: portable-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHON_VERSION: '3.12'
+  SDL2_VERSION: 2.32.10
+  IMAGEIO_FFMPEG_VERSION: 0.8.1
+  # keystone-engine has no macOS arm64 wheel; its CMake build predates CMake 4.
+  CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+    steps:
+      - id: version
+        run: |
+          if [ "${{ github.ref_type }}" = tag ]; then name="${{ github.ref_name }}"
+          elif [ -n "${{ inputs.version }}" ]; then name="${{ inputs.version }}"
+          else name="v0.2.0-dev.$(date -u +%Y%m%d).${GITHUB_SHA::7}"; fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: version
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Toolchain, SDL2 and relocatable Python
+        run: |
+          gcc --version | head -1
+          cargo --version
+          python -m pip install -r requirements.txt "imageio-ffmpeg==$IMAGEIO_FFMPEG_VERSION"
+          uv python install "$PYTHON_VERSION"
+          echo "STANDALONE_PYTHON=$(uv python find --python-preference only-managed "$PYTHON_VERSION")" >> "$GITHUB_ENV"
+          curl -fsSL -o "$RUNNER_TEMP/sdl.zip" "https://github.com/libsdl-org/SDL/releases/download/release-$SDL2_VERSION/SDL2-devel-$SDL2_VERSION-mingw.zip"
+          unzip -q "$RUNNER_TEMP/sdl.zip" -d "$RUNNER_TEMP"
+          root="$RUNNER_TEMP/SDL2-$SDL2_VERSION/x86_64-w64-mingw32"
+          echo "RE4PC_SDL2_INCLUDE=$(cygpath -w "$root/include/SDL2")" >> "$GITHUB_ENV"
+          echo "RE4PC_SDL2_LIBRARY=$(cygpath -w "$root/bin/SDL2.dll")" >> "$GITHUB_ENV"
+      - name: Build native helpers
+        run: python -u tools/build_native.py
+      - name: Component tests
+        env:
+          RE4PC_HEADLESS_CI: '1'
+        run: python -u tools/test_components.py
+      - name: Package
+        run: |
+          ffmpeg=$(python -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')
+          python -u tools/package_portable.py --python "$STANDALONE_PYTHON" --ffmpeg "$ffmpeg" \
+            --version "${{ needs.version.outputs.name }}" --arch x64 --output dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Toolchain, SDL2 and relocatable Python
+        run: |
+          cargo --version
+          cmake --version | head -1
+          python -m pip install -r requirements.txt "imageio-ffmpeg==$IMAGEIO_FFMPEG_VERSION"
+          uv python install "$PYTHON_VERSION"
+          echo "STANDALONE_PYTHON=$(uv python find --python-preference only-managed "$PYTHON_VERSION")" >> "$GITHUB_ENV"
+          curl -fsSL -o "$RUNNER_TEMP/sdl.dmg" "https://github.com/libsdl-org/SDL/releases/download/release-$SDL2_VERSION/SDL2-$SDL2_VERSION.dmg"
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/sdl-volume" "$RUNNER_TEMP/sdl.dmg"
+          cp -R "$RUNNER_TEMP/sdl-volume/SDL2.framework" "$RUNNER_TEMP/"
+          hdiutil detach "$RUNNER_TEMP/sdl-volume"
+          echo "RE4PC_SDL2_INCLUDE=$RUNNER_TEMP/SDL2.framework/Headers" >> "$GITHUB_ENV"
+          echo "RE4PC_SDL2_LIBRARY=$RUNNER_TEMP/SDL2.framework/Versions/A/SDL2" >> "$GITHUB_ENV"
+      - name: Build native helpers
+        run: python -u tools/build_native.py
+      - name: Component tests
+        env:
+          RE4PC_HEADLESS_CI: '1'
+        run: python -u tools/test_components.py
+      - name: Package
+        run: |
+          ffmpeg=$(python -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')
+          python -u tools/package_portable.py --python "$STANDALONE_PYTHON" --ffmpeg "$ffmpeg" \
+            --version "${{ needs.version.outputs.name }}" --arch "${{ matrix.arch }}" --output dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libsdl2-dev libgl1-mesa-dev ffmpeg python3-tk python3-venv cargo
+          ./setup.sh
+      - name: Ubuntu 22.04-baseline AppImage and archive (Docker)
+        run: |
+          make package
+          version="${{ needs.version.outputs.name }}"
+          mv dist/re4mepc-linux-x86_64.AppImage "dist/re4mepc-$version-linux-x86_64.AppImage"
+          mv dist/re4mepc-linux-x86_64.tar.gz "dist/re4mepc-$version-linux-x86_64.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: |
+            dist/*.AppImage
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [version, windows, macos, linux]
+    if: github.ref_type == 'tag' || inputs.publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.name }}
+        run: |
+          cd assets
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "Experimental builds for **Windows x64**, **macOS (Apple Silicon and Intel)** and **Linux x86_64**, all from commit ${GITHUB_SHA::7}."
+            echo
+            echo "No game data is included: import your own compatible APK from the launcher. Full campaign playability is unverified."
+            echo
+            echo "| Platform | Download |"
+            echo "| --- | --- |"
+            echo "| Windows 10/11 x64 | \`re4mepc-$VERSION-windows-x64.zip\` → extract, run \`re4mepc.exe\` |"
+            echo "| macOS 11+ Apple Silicon | \`re4mepc-$VERSION-macos-arm64.zip\` → open the app (right-click → Open the first time) |"
+            echo "| macOS 11+ Intel | \`re4mepc-$VERSION-macos-x64.zip\` |"
+            echo "| Linux x86_64 | \`.AppImage\` or \`.tar.gz\` |"
+            echo
+            echo "Verify downloads with \`SHA256SUMS\`. The Windows and macOS builds are unsigned (macOS: ad-hoc signed, not notarized)."
+          } > "$notes"
+          gh release create "$VERSION" --target "$GITHUB_SHA" --prerelease \
+            --title "Experimental Windows, macOS and Linux builds ($VERSION)" --notes-file "$notes" ./*

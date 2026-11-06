@@ -6,13 +6,13 @@ sound, timers, files and guest memory never advance during presentation.
 import ctypes as C
 import time
 from contextlib import nullcontext
-from .paths import native_library
+from . import native_libs
 from .timing import ENGINE_HZ
 
 
 class RenderStream:
     def __init__(self, arm=None):
-        self.lib = C.CDLL(str(native_library('libre4fast.so')))
+        self.lib = native_libs.fast()
         signatures = {
             'open': (C.c_void_p, ()), 'close': (None, (C.c_void_p,)),
             'begin': (None, (C.c_void_p,)), 'end': (None, (C.c_void_p, C.c_int)),

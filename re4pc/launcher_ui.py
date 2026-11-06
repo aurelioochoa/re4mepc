@@ -1,4 +1,6 @@
 """Case-file presentation for the native launcher, with keyboard operable controls."""
+import os
+import sys
 import tkinter as tk
 from pathlib import Path
 
@@ -1745,8 +1747,12 @@ class AchievementsView:
             if not path.is_file():
                 raise ValueError('Capture file is missing')
             if path.suffix == '.mp4':
-                subprocess.Popen(['xdg-open', str(path)], stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if sys.platform == 'win32':
+                    os.startfile(str(path))
+                else:
+                    opener = 'open' if sys.platform == 'darwin' else 'xdg-open'
+                    subprocess.Popen([opener, str(path)], stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 with Image.open(path) as source:
                     picture = source.convert('RGB')

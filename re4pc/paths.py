@@ -1,8 +1,23 @@
 """User-owned data and test artifacts, independent of the checkout directory."""
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
+
+
+def _native_home(variable):
+    """Windows/macOS equivalent of an XDG base directory, or None on Linux."""
+    if sys.platform == 'win32':
+        name = 'APPDATA' if variable == 'XDG_CONFIG_HOME' else 'LOCALAPPDATA'
+        value = os.environ.get(name)
+        root = Path(value) if value and Path(value).is_absolute() else Path.home() / 'AppData' / (
+            'Roaming' if name == 'APPDATA' else 'Local')
+        return root / 'cache' if variable == 'XDG_CACHE_HOME' else root
+    if sys.platform == 'darwin':
+        library = Path.home() / 'Library'
+        return library / ('Caches' if variable == 'XDG_CACHE_HOME' else 'Application Support')
+    return None
 
 
 def xdg_home(variable, fallback):
@@ -10,7 +25,7 @@ def xdg_home(variable, fallback):
     # XDG paths must be absolute; never put default data in the checkout.
     if value and Path(value).is_absolute():
         return Path(value)
-    return Path.home() / fallback
+    return _native_home(variable) or Path.home() / fallback
 
 
 def game_dir():
@@ -54,11 +69,33 @@ def isolated_game(source, output):
     return fixture
 
 
+def native_dir():
+    return Path(__file__).resolve().parent.parent / 'build'
+
+
+def platform_library(name):
+    """Map a Linux helper name (libre4fast.so) to this host's file name."""
+    stem = name[3:-3] if name.startswith('lib') and name.endswith('.so') else name
+    if sys.platform == 'win32':
+        return stem + '.dll'
+    if sys.platform == 'darwin':
+        return 'lib' + stem + '.dylib'
+    return 'lib' + stem + '.so'
+
+
 def native_library(name):
     """Resolve helpers beside application code in source and staged releases."""
     if name not in ('libre4audio.so', 'libre4fast.so', 'libre4math.so'):
         raise ValueError('Unknown native helper')
-    return Path(__file__).resolve().parent.parent / 'build' / name
+    return native_dir() / platform_library(name)
+
+
+def quiet_process():
+    """Popen options that keep helper processes from opening console windows."""
+    if sys.platform == 'win32':
+        import subprocess
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
 
 
 def ffmpeg_binary():
@@ -66,4 +103,8 @@ def ffmpeg_binary():
     application = Path(__file__).resolve().parent.parent
     bundled = application.parent.parent / 'bin/ffmpeg'
     packaged = application.parent.name == 'lib' and application.parent.parent.name == 'usr'
-    return str(bundled) if packaged and bundled.is_file() else 'ffmpeg'
+    if packaged and bundled.is_file():
+        return str(bundled)
+    # Windows/macOS bundles keep ffmpeg beside the native helpers.
+    beside = native_dir() / ('ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg')
+    return str(beside) if beside.is_file() else 'ffmpeg'

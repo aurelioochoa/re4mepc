@@ -1,6 +1,6 @@
 """Batch accounting for GL state imports executed directly in the native host."""
 import ctypes as C
-from .paths import native_library
+from . import native_libs
 
 
 class GLBridge:
@@ -15,8 +15,8 @@ class GLBridge:
 
     def __init__(self, arm):
         self.arm = arm
-        self.lib = C.CDLL(str(native_library('libre4fast.so')))
-        self.lib.re4_gl_open.argtypes = (C.c_void_p, C.c_size_t, C.c_size_t, C.c_size_t, C.c_int)
+        self.lib = native_libs.fast()
+        self.lib.re4_gl_open.argtypes = (C.c_void_p, C.c_size_t, C.c_size_t, C.c_size_t, C.c_int, C.c_size_t)
         self.lib.re4_gl_open.restype = C.c_void_p
         self.lib.re4_gl_error.argtypes = (C.c_void_p,)
         self.lib.re4_gl_error.restype = C.c_char_p
@@ -24,7 +24,7 @@ class GLBridge:
         self.lib.re4_gl_measure.restype = C.c_uint64
         self.lib.re4_gl_close.argtypes = (C.c_void_p,)
         start = arm.base+13*1024*1024
-        self.handle = self.lib.re4_gl_open(arm.uc._uch, arm.base, arm.SIZE, start, bool(arm.diagnostics))
+        self.handle = self.lib.re4_gl_open(arm.uc._uch, arm.base, arm.SIZE, start, bool(arm.diagnostics), arm.host)
         if not self.handle:
             raise RuntimeError('Cannot initialize native graphics import bridge')
         self._calls = self._nanoseconds = 0

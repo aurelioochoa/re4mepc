@@ -163,7 +163,7 @@ math-test: build ## Verify the Rust engine-math replacements against the origina
 ##@ Cleaning
 .PHONY: clean distclean
 clean: ## Remove compiled helpers and Python caches; preserve game and saves
-	rm -f build/libre4audio.so build/libre4fast.so build/libre4math.so build/libunicorn.so.2
+	rm -f build/libre4audio.so build/libre4fast.so build/libre4math.so build/libunicorn.so.2 build/re4*.dll build/libre4*.dylib build/SDL2.dll build/libSDL2-2.0.0.dylib
 	find re4pc tests tools -type d -name __pycache__ -prune -exec rm -rf {} +
 distclean: clean ## Also remove the local Python environment
 	rm -rf .venv

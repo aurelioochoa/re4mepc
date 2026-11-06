@@ -23,7 +23,7 @@ from tools.benchmark import Replay, source_identity, native_transition, quantile
 
 
 def digest(game):
-    return hashlib.sha256((C.c_ubyte*game.arm.SIZE).from_address(game.arm.base)).hexdigest()
+    return hashlib.sha256((C.c_ubyte*game.arm.SIZE).from_address(game.arm.host)).hexdigest()
 
 
 def import_slots(arm, names):

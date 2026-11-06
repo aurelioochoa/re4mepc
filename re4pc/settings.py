@@ -22,9 +22,8 @@ DEFAULTS = {'version': 1, 'bindings': DEFAULT_BINDINGS, 'sensitivity': 1.0,
 
 
 def settings_path():
-    value = os.environ.get('XDG_CONFIG_HOME')
-    config = Path(value) if value and Path(value).is_absolute() else Path.home() / '.config'
-    return config / 're4mepc' / 'settings.json'
+    from .paths import xdg_home
+    return xdg_home('XDG_CONFIG_HOME', '.config') / 're4mepc' / 'settings.json'
 
 
 def validate(values):
@@ -119,11 +118,8 @@ class Settings:
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, target)
-            directory = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(directory)
-            finally:
-                os.close(directory)
+            from .portable import sync_directory
+            sync_directory(target.parent)
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)

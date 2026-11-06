@@ -145,7 +145,8 @@ class LaserSight:
             count, kind, pointer = values[1:]
             formats = {0x1401: ('B', 1), 0x1403: ('H', 2), 0x1405: ('I', 4)}
             fmt, size = formats[kind]
-            indices = struct.unpack('<'+fmt*count, self.arm.read(pointer, count*size))
+            # Draw arguments arrive as host addresses (Graphics.forward).
+            indices = struct.unpack('<'+fmt*count, self.arm.read(self.arm.guest(pointer), count*size))
             vertices = max(indices)+1
         else:
             vertices = values[1]+values[2]
@@ -161,8 +162,9 @@ class LaserSight:
         if components != 3 or kind != 0x1406:
             raise RuntimeError('Unsupported native sight vertex layout')
         stride = stride or 12
-        self.arm.check(pointer.value, (vertices-1)*stride+12)
-        points = [struct.unpack('<3f', self.arm.read(pointer.value+index*stride, 12))
+        array = self.arm.guest(pointer.value or 0)
+        self.arm.check(array, (vertices-1)*stride+12)
+        points = [struct.unpack('<3f', self.arm.read(array+index*stride, 12))
                   for index in range(vertices)]
         left, right = min(v[0] for v in points), max(v[0] for v in points)
         bottom, top = min(v[1] for v in points), max(v[1] for v in points)

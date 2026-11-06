@@ -4,9 +4,7 @@
  * import bridge and the Python GL path call these, so they cannot diverge.
  * Only the emulation thread calls them; presentation replays captured state.
  */
-#define GL_GLEXT_PROTOTYPES
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include "glplatform.h"
 #include <math.h>
 #include <string.h>
 

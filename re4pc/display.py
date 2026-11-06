@@ -5,7 +5,7 @@ framebuffer; widescreen widens perspective projections into side margins
 while orthographic HUD and menu layers keep the original centered 5:3 area.
 """
 import ctypes as C
-from .paths import native_library
+from . import native_libs
 
 RENDER_SCALES = (1, 2, 3, 4)
 MSAA_SAMPLES = (0, 2, 4, 8)
@@ -43,7 +43,7 @@ class Display:
         self.logical = logical
         self.surface_width = surface_width(self.aspect_ratio, logical)
         self.margin = (self.surface_width - logical[0]) // 2
-        self.lib = C.CDLL(str(native_library('libre4fast.so')))
+        self.lib = native_libs.fast()
         int4 = (C.c_int,)*4
         for name, args in (('re4_display_configure', (C.c_int,)*5 + (C.c_float,)),
                            ('re4_display_viewport', int4), ('re4_display_scissor', int4),

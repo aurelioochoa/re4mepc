@@ -46,11 +46,11 @@ class Bionic:
         self.reg('free', lambda p, *_: a.free(p) or 0)
         self.reg('realloc', self.realloc)
         for name in ('memcpy', 'memmove'):
-            self.reg(name, lambda dst, src, n, _: (C.memmove(a.check(dst, n), a.check(src, n), n) if n else dst))
-        self.reg('memset', lambda dst, v, n, _: (C.memset(a.check(dst, n), v, n) if n else dst))
+            self.reg(name, lambda dst, src, n, _: (C.memmove(a.pointer(dst, n), a.pointer(src, n), n) and dst if n else dst))
+        self.reg('memset', lambda dst, v, n, _: (C.memset(a.pointer(dst, n), v, n) and dst if n else dst))
         a.libc.memcmp.argtypes = (C.c_void_p,C.c_void_p,C.c_size_t)
         a.libc.memcmp.restype = C.c_int
-        self.reg('memcmp',lambda p,q,n,_: a.libc.memcmp(a.check(p,n),a.check(q,n),n) if n else 0)
+        self.reg('memcmp',lambda p,q,n,_: a.libc.memcmp(a.pointer(p,n),a.pointer(q,n),n) if n else 0)
         self.reg('strlen', lambda p, *_: len(a.string(p).encode()))
         self.reg('wcslen', self.wcslen)
         self.reg('strcmp', lambda p, q, *_: (a.string(p) > a.string(q)) - (a.string(p) < a.string(q)))
@@ -117,7 +117,7 @@ class Bionic:
         if size <= available:
             return pointer
         result = self.arm.alloc(size)
-        C.memmove(result, pointer, available)
+        C.memmove(self.arm.pointer(result, available), self.arm.pointer(pointer, available), available)
         self.arm.free(pointer)
         return result
 

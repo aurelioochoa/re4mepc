@@ -99,7 +99,21 @@ def argument_parser():
     return parser
 
 
+def _stop_on_closed_stdin():
+    """Windows launcher children stop like Ctrl+C when their stdin closes."""
+    import _thread
+    import threading
+    def watch():
+        try:
+            sys.stdin.read()
+        finally:
+            _thread.interrupt_main()
+    threading.Thread(target=watch, daemon=True, name='stop-pipe').start()
+
+
 def main(argv=None):
+    if os.environ.pop('RE4PC_STOP_PIPE', None) == '1' and sys.stdin is not None:
+        _stop_on_closed_stdin()
     parser = argument_parser()
     argv = sys.argv[1:] if argv is None else argv
     args = parser.parse_args(argv or ['launcher'])

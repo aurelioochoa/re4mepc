@@ -3,8 +3,6 @@
 The native save entry point brackets all writes with before_write/after_write.
 Snapshots contain the entire saves directory, never imported resources or caches.
 """
-import ctypes
-import fcntl
 import hashlib
 import json
 import os
@@ -17,6 +15,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 from .paths import xdg_home
+from .portable import exchange, lock as lock_file, sync_directory, unlock as unlock_file
 
 MAX_BYTES = 256 * 1024 * 1024
 MAX_FILES = 4096
@@ -35,22 +34,12 @@ def _canonical(value):
 
 
 def _sync(directory):
-    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+    sync_directory(directory)
 
 
 def _exchange(source, destination):
-    """Swap complete directory names atomically (Linux RENAME_EXCHANGE)."""
-    libc = ctypes.CDLL(None, use_errno=True)
-    rename = libc.renameat2
-    rename.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
-    rename.restype = ctypes.c_int
-    if rename(-100, os.fsencode(source), -100, os.fsencode(destination), 2):
-        error = ctypes.get_errno()
-        raise OSError(error, os.strerror(error), str(destination))
+    """Swap complete directory names (atomic on Linux and macOS)."""
+    exchange(source, destination)
 
 
 def _safe_name(value):
@@ -80,7 +69,7 @@ class SaveStore:
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         lock = (self.directory / 'game.lock').open('a+b')
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_file(lock, blocking=False)
         except BlockingIOError as error:
             lock.close()
             raise GameRunningError('Game or another save operation is running for this installation') from error
@@ -91,7 +80,7 @@ class SaveStore:
 
     def close(self):
         if self._lock is not None:
-            fcntl.flock(self._lock, fcntl.LOCK_UN)
+            unlock_file(self._lock)
             self._lock.close()
             self._lock = None
         self.running = self._writing = False

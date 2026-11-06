@@ -60,8 +60,9 @@ class Graphics:
         self._fullscreen_enter = False
         self.window_size = (width, height)
         self.drawable_size = (width, height)
-        self.sdl = C.CDLL('libSDL2-2.0.so.0')
-        self.gl = C.CDLL('libGL.so.1')
+        from . import native_libs
+        self.sdl = native_libs.sdl()
+        self.gl = native_libs.gl()
         self.window = None
         self.context = None
         self.draws = 0
@@ -337,7 +338,7 @@ class Graphics:
                 elif kind == 'i':
                     values[i] = signed(values[i])
                 elif kind == 'p' and values[i]:
-                    self.arm.check(values[i])
+                    values[i] = self.arm.pointer(values[i])  # guest -> host address
             stream = self.render_stream
             if stream and resource:
                 stream.dirty()
@@ -346,7 +347,7 @@ class Graphics:
             if name == 'glCompressedTexImage2D' and 0x8b90 <= values[2] <= 0x8b99:
                 target,level,fmt,width,height,border,length,pointer = values
                 with self._phase('texture_conversion'):
-                    data = self.arm.read(pointer,length)
+                    data = self.arm.read(pointer-self.arm.delta,length)
                     images = self.texture_cache.convert(fmt,width,height,level,data) if self.texture_cache else palette_texture(fmt,width,height,level,data)
                 upload = self.gl.glTexImage2D
                 for mip,w,h,pixels in images:

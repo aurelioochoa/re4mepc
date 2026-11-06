@@ -1,7 +1,8 @@
 """Decode original game audio via FFmpeg and play it using SDL's audio device."""
 import ctypes as C
 from .runtime_log import log
-from .paths import native_library, ffmpeg_binary
+from .paths import ffmpeg_binary, quiet_process
+from . import native_libs
 import hashlib
 import subprocess
 import queue
@@ -16,8 +17,7 @@ VIDEO_FPS = 30
 class Media:
     def __init__(self, root, sdl, graphics=None):
         self.root, self.sdl = Path(root).resolve(), sdl
-        native = native_library('libre4audio.so')
-        self.audio = C.CDLL(str(native))
+        self.audio = native_libs.audio()
         self.audio.re4_audio_open.restype = C.c_int
         self.audio.re4_audio_load.argtypes = (C.c_int, C.c_void_p, C.c_size_t, C.c_int)
         self.audio.re4_audio_play.argtypes = (C.c_int, C.c_float)
@@ -124,7 +124,7 @@ class Media:
         result = subprocess.run([ffmpeg_binary(),'-v','error','-threads','1','-i',str(path) if video else 'pipe:0',
             '-vn','-f','f32le','-ac','2','-ar','44100','pipe:1'],
             input=None if video else source, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, timeout=30)
+            stderr=subprocess.PIPE, timeout=30, **quiet_process())
         if result.returncode or (not video and not result.stdout):
             raise RuntimeError('Audio decode: '+result.stderr.decode(errors='replace'))
         # Two resources can contain identical encoded bytes. Atomic replace
@@ -184,7 +184,7 @@ class Media:
             self.video_stop = threading.Event()
             self.video = subprocess.Popen([ffmpeg_binary(),'-v','error','-threads','1','-filter_threads','1','-i',str(path),
                 '-an','-vf',f'fps={VIDEO_FPS},'+filters,'-pix_fmt','rgb24','-f','rawvideo','pipe:1'],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **quiet_process())
             self.video_reader = threading.Thread(target=self.read_video,
                 args=(self.video, self.video_queue, self.video_stop, g.width*g.height*3),
                 daemon=True)

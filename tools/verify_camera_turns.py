@@ -41,7 +41,7 @@ class CapturePair:
 
 
 def guest_digest(game):
-    return hashlib.sha256((C.c_ubyte * game.arm.SIZE).from_address(game.arm.base)).hexdigest()
+    return hashlib.sha256((C.c_ubyte * game.arm.SIZE).from_address(game.arm.host)).hexdigest()
 
 
 def verify(game, replay, output, ticks, baseline=None, compare_instances=False):

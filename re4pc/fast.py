@@ -1,14 +1,13 @@
 """Accelerate frequently called memory/string imports without Python transitions."""
 import ctypes as C
-from .paths import native_library
+from . import native_libs
 
 class Fast:
     NAMES=('memcpy','memmove','memset','memcmp','strlen','strcmp','strncmp','strcpy','strncpy','wcslen')
     def __init__(self,arm):
         self.arm=arm
-        library=native_library('libre4fast.so')
-        self.lib=C.CDLL(str(library))
-        self.lib.re4_fast_open.argtypes=(C.c_void_p,C.c_size_t,C.c_size_t,C.c_size_t)
+        self.lib=native_libs.fast()
+        self.lib.re4_fast_open.argtypes=(C.c_void_p,C.c_size_t,C.c_size_t,C.c_size_t,C.c_size_t)
         self.lib.re4_fast_open.restype=C.c_void_p
         self.lib.re4_fast_error.argtypes=(C.c_void_p,)
         self.lib.re4_fast_error.restype=C.c_char_p
@@ -16,7 +15,7 @@ class Fast:
         self.lib.re4_fast_calls.restype=C.c_uint64
         self.lib.re4_fast_close.argtypes=(C.c_void_p,)
         start=arm.base+12*1024*1024
-        self.handle=self.lib.re4_fast_open(arm.uc._uch,arm.base,arm.SIZE,start)
+        self.handle=self.lib.re4_fast_open(arm.uc._uch,arm.base,arm.SIZE,start,arm.host)
         if not self.handle: raise RuntimeError('Cannot create native Unicorn import bridge')
         for i,name in enumerate(self.NAMES):
             address=start+4*i

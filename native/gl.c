@@ -3,9 +3,8 @@
  * path. No GL state is cached: host overlays may change it between imports.
  * Viewport, scissor, projection and texture filters pass through display.c.
  */
-#include <GL/gl.h>
-#include <unicorn/unicorn.h>
-#include <unicorn/arm.h>
+#include "glplatform.h"
+#include "uc_api.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +12,7 @@
 #include <time.h>
 
 struct gl_bridge {
-    uc_engine *uc; uc_hook hook; uintptr_t base, end, start;
+    uc_engine *uc; uc_hook hook; uintptr_t base, end, start, delta;
     uint64_t calls, nanoseconds, maximum_ns; int timed;
     uint64_t operations[40]; char error[160];
 };
@@ -22,10 +21,18 @@ void re4_display_scissor(int x, int y, int w, int h);
 void re4_display_matrix_mode(unsigned mode);
 void re4_display_load_matrix(const float *m);
 void re4_display_tex_parameter(unsigned target, unsigned name, float value);
+/* Host address of a guest pointer (see fast.c). */
+#define HOST(b,p) ((p)?(void *)((uintptr_t)(p)+(b)->delta):NULL)
 static float real(uint32_t v) { float f; memcpy(&f,&v,sizeof(f)); return f; }
 static uint64_t nanos(void) {
+#ifdef _WIN32
+    LARGE_INTEGER now, frequency;
+    QueryPerformanceCounter(&now); QueryPerformanceFrequency(&frequency);
+    return (uint64_t)((double)now.QuadPart*1e9/(double)frequency.QuadPart);
+#else
     struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t);
     return (uint64_t)t.tv_sec*1000000000u+t.tv_nsec;
+#endif
 }
 static int pointer(struct gl_bridge *b, uint32_t p, size_t n) {
     if (p && p>=b->base && (uint64_t)p+n<=b->end) return 1;
@@ -49,25 +56,25 @@ static void invoke_gl(uc_engine *uc, uint64_t address, uint32_t size, void *cont
     case 4: glClientActiveTexture(a[0]); break;
     case 5: glEnableClientState(a[0]); break;
     case 6: glDisableClientState(a[0]); break;
-    case 7: if (a[3] && !pointer(b,a[3],1)) return; glVertexPointer(a[0],a[1],a[2],(void *)(uintptr_t)a[3]); break;
-    case 8: if (a[3] && !pointer(b,a[3],1)) return; glColorPointer(a[0],a[1],a[2],(void *)(uintptr_t)a[3]); break;
-    case 9: if (a[3] && !pointer(b,a[3],1)) return; glTexCoordPointer(a[0],a[1],a[2],(void *)(uintptr_t)a[3]); break;
-    case 10: if (a[2] && !pointer(b,a[2],1)) return; glNormalPointer(a[0],a[1],(void *)(uintptr_t)a[2]); break;
+    case 7: if (a[3] && !pointer(b,a[3],1)) return; glVertexPointer(a[0],a[1],a[2],HOST(b,a[3])); break;
+    case 8: if (a[3] && !pointer(b,a[3],1)) return; glColorPointer(a[0],a[1],a[2],HOST(b,a[3])); break;
+    case 9: if (a[3] && !pointer(b,a[3],1)) return; glTexCoordPointer(a[0],a[1],a[2],HOST(b,a[3])); break;
+    case 10: if (a[2] && !pointer(b,a[2],1)) return; glNormalPointer(a[0],a[1],HOST(b,a[2])); break;
     case 11: re4_display_matrix_mode(a[0]); break;
-    case 12: if (!pointer(b,a[0],64)) return; re4_display_load_matrix((void *)(uintptr_t)a[0]); break;
-    case 13: if (!pointer(b,a[0],64)) return; glMultMatrixf((void *)(uintptr_t)a[0]); break;
+    case 12: if (!pointer(b,a[0],64)) return; re4_display_load_matrix(HOST(b,a[0])); break;
+    case 13: if (!pointer(b,a[0],64)) return; glMultMatrixf(HOST(b,a[0])); break;
     case 14: glColor4f(real(a[0]),real(a[1]),real(a[2]),real(a[3])); break;
     case 15: glBlendFunc(a[0],a[1]); break;
     case 16: glTexEnvf(a[0],a[1],real(a[2])); break;
-    case 17: if (!pointer(b,a[2],16)) return; glTexEnvfv(a[0],a[1],(void *)(uintptr_t)a[2]); break;
+    case 17: if (!pointer(b,a[2],16)) return; glTexEnvfv(a[0],a[1],HOST(b,a[2])); break;
     case 18: glMaterialf(a[0],a[1],real(a[2])); break;
-    case 19: if (!pointer(b,a[2],16)) return; glMaterialfv(a[0],a[1],(void *)(uintptr_t)a[2]); break;
+    case 19: if (!pointer(b,a[2],16)) return; glMaterialfv(a[0],a[1],HOST(b,a[2])); break;
     case 20: glLightf(a[0],a[1],real(a[2])); break;
-    case 21: if (!pointer(b,a[2],16)) return; glLightfv(a[0],a[1],(void *)(uintptr_t)a[2]); break;
+    case 21: if (!pointer(b,a[2],16)) return; glLightfv(a[0],a[1],HOST(b,a[2])); break;
     case 22: glLightModelf(a[0],real(a[1])); break;
-    case 23: if (!pointer(b,a[1],16)) return; glLightModelfv(a[0],(void *)(uintptr_t)a[1]); break;
+    case 23: if (!pointer(b,a[1],16)) return; glLightModelfv(a[0],HOST(b,a[1])); break;
     case 24: glFogf(a[0],real(a[1])); break;
-    case 25: if (!pointer(b,a[1],16)) return; glFogfv(a[0],(void *)(uintptr_t)a[1]); break;
+    case 25: if (!pointer(b,a[1],16)) return; glFogfv(a[0],HOST(b,a[1])); break;
     case 26: glDepthFunc(a[0]); break;
     case 27: glDepthMask(a[0]); break;
     case 28: glColorMask(a[0],a[1],a[2],a[3]); break;
@@ -91,10 +98,10 @@ static void invoke_gl(uc_engine *uc, uint64_t address, uint32_t size, void *cont
     }
     uint32_t result=0; uc_reg_write(uc,UC_ARM_REG_R0,&result);
 }
-void *re4_gl_open(void *uc, uintptr_t base, size_t bytes, uintptr_t start, int timed) {
+void *re4_gl_open(void *uc, uintptr_t base, size_t bytes, uintptr_t start, int timed, uintptr_t host) {
     struct gl_bridge *b=calloc(1,sizeof(*b));
     if (!b) return NULL;
-    b->uc=uc; b->base=base; b->end=base+bytes; b->start=start; b->timed=timed;
+    b->uc=uc; b->base=base; b->end=base+bytes; b->start=start; b->timed=timed; b->delta=host-base;
     if (uc_hook_add(b->uc,&b->hook,UC_HOOK_CODE,(void *)invoke_gl,b,start,start+39*4)) { free(b); return NULL; }
     return b;
 }

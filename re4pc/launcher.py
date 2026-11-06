@@ -17,9 +17,15 @@ def child_command(command, *arguments):
 class ChildProcess:
     """Bounded output reader. The Tk event loop never waits on a pipe or process."""
     def __init__(self, command):
+        options = {}
+        if sys.platform == 'win32':
+            # Windows cannot deliver SIGINT to a console-less child; closing
+            # this pipe asks it to stop the same way (see re4pc.__main__).
+            options = {'stdin': subprocess.PIPE, 'creationflags': subprocess.CREATE_NO_WINDOW,
+                       'env': {**os.environ, 'RE4PC_STOP_PIPE': '1'}}
         self.process = subprocess.Popen(command, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, text=True,
-                                        errors='replace', bufsize=1)
+                                        errors='replace', bufsize=1, **options)
         self.output = queue.Queue(maxsize=256)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
@@ -57,7 +63,13 @@ class ChildProcess:
 
     def stop(self):
         if self.process.poll() is None:
-            self.process.send_signal(signal.SIGINT)
+            if sys.platform == 'win32':
+                try:
+                    self.process.stdin.close()
+                except OSError:
+                    pass
+            else:
+                self.process.send_signal(signal.SIGINT)
 
     def kill(self):
         if self.process.poll() is None:
@@ -496,7 +508,8 @@ class Launcher:
         import ctypes as C
         try:
             values = Settings.load()
-            sdl = C.CDLL('libSDL2-2.0.so.0')
+            from . import native_libs
+            sdl = native_libs.sdl()
             sdl.SDL_GetKeyName.argtypes = (C.c_int,)
             sdl.SDL_GetKeyName.restype = C.c_char_p
             sdl.SDL_GetKeyFromName.argtypes = (C.c_char_p,)
@@ -541,7 +554,7 @@ class Launcher:
 def configure_bundled_fonts():
     """Add package fonts explicitly; old Fontconfig resolves relative dirs to cwd."""
     fonts = Path(sys.prefix) / 'share/fonts'
-    if not fonts.is_dir():
+    if not sys.platform.startswith('linux') or not fonts.is_dir():
         return
     import ctypes as C
     fontconfig = C.CDLL('libfontconfig.so.1')
