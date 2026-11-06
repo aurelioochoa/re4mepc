@@ -162,8 +162,8 @@ jobs:
         with:
           name: linux-x86_64
           path: |
-            dist/*.AppImage
-            dist/*.tar.gz
+            dist/re4mepc-*.AppImage
+            dist/re4mepc-*.tar.gz
           if-no-files-found: error
 
   release:
