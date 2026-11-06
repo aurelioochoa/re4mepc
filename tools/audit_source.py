@@ -12,7 +12,7 @@ from pathlib import Path
 
 TOP_LEVEL = {'.gitignore', 'LICENSE', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md',
              'Makefile', 'README.md', 'README.es.md', 'VALIDATION.md',
-             'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml',
+             'requirements.txt', 'setup.sh', 're4pc.sh', '.github/workflows/ci.yml', '.github/workflows/portable.yml',
              'docs/readme-banner.svg', 'docs/banner-artwork.md', 'docs/launcher-assets.md', 'docs/advanced-usage.md',
              'docs/render-audit.md', 'docs/fps-performance.md', 'docs/graphics-quality.md', 'docs/diagnostics.md', 'docs/desktop-release.md', 'docs/achievements.md',
              'docs/qualification-summary.md', 'docs/dialogs.md', 'docs/roadmap-results.md', 'docs/rea-workflow.md', 'docs/menu-controls.md', 'docs/portable-captures.md', 'docs/campaign-coverage.md'}
@@ -117,20 +117,21 @@ SOURCE_FILES = {
               'actions', 'controllers', 'settings', 'languages', 'backups', 'save_boundary',
               'launcher', 'launcher_ui', 'case_dialog', 'packaging', 'diagnostics', 'texture_cache', 'achievements', 'achievement_media',
               'native_math', 'native_unzip', 'ui_images', 'gl_bridge', 'render_stream', 'presentation',
-              'display', 'postprocess'),
+              'display', 'postprocess', 'native_libs', 'platform_memory', 'portable'),
     'tools': ('audit_source', 'build_native', 'disassemble', 'install_desktop', 'live_test',
               'migrate_local', 'probe_input', 'test_components', 'verify_softfloat',
-              'test_pc_controls', 'test_combat', 'test_laser', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session', 'probe_render', 'test_presentation', 'verify_native_math', 'verify_camera_turns'),
+              'test_pc_controls', 'test_combat', 'test_laser', 'test_visible', 'package', 'benchmark', 'compare_dispatch', 'audit_render', 'validate_package', 'preview_dialogs', 'rea_workflow', 'test_menu_controls', 'validate_session', 'probe_render', 'test_presentation', 'verify_native_math', 'verify_camera_turns', 'package_portable'),
     'tests': ('test_arm', 'test_assets', 'test_audit_source', 'test_desktop', 'test_graphics',
               'test_input', 'test_key_routing', 'test_mouse_capture', 'test_laser', 'test_media', 'test_migration',
               'test_paths', 'test_pc_controls', 'test_runtime_log', 'test_textures', 'test_timing',
               'test_actions', 'test_controllers', 'test_settings', 'test_languages', 'test_backups',
               'test_save_boundary', 'test_launcher', 'test_packaging', 'test_diagnostics',
               'test_texture_cache', 'test_cli', 'test_setup_commands', 'test_benchmark', 'test_achievements', 'test_achievement_media', 'test_build_native', 'test_menu_controls', 'test_capture_exports', 'test_rea_workflow',
-              'test_native_math', 'test_native_unzip', 'test_softfloat', 'test_ui_images', 'test_gl_bridge', 'test_render_stream', 'test_display'),
+              'test_native_math', 'test_native_unzip', 'test_softfloat', 'test_ui_images', 'test_gl_bridge', 'test_render_stream', 'test_display', 'test_native_abi'),
 }
 PUBLISH_FILES = TOP_LEVEL | set(DOCUMENTATION_IMAGES) | {'native/audio.c', 'native/fast.c', 'native/gl.c', 'native/render.c', 'native/display.c',
-                                                         'native/Cargo.toml', 'native/Cargo.lock', 'native/math.rs'} | {
+                                                         'native/Cargo.toml', 'native/Cargo.lock', 'native/math.rs',
+                                                         'native/glplatform.h', 'native/uc_api.h', 'native/launcher_win.c'} | {
     f'{folder}/{name}.py' for folder, names in SOURCE_FILES.items() for name in names}
 MAX_SOURCE_BYTES = 256 * 1024
 MAX_DOCUMENTATION_IMAGE_BYTES = 4 * 1024 * 1024
