@@ -4,7 +4,7 @@ name: Portable builds
 # "publish" creates a GitHub prerelease with every archive and SHA256SUMS.
 on:
   push:
-    branches: [main, cross-platform]
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
     inputs:
