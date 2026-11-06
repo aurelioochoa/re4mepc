@@ -90,7 +90,7 @@ Settings & controls → **Graphics** adds internal resolution scaling up to 4×,
 
 #### Portable builds
 
-The [experimental release](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.2.0-experimental.20261106) provides a Linux AppImage and portable archive alongside the Windows and macOS builds, with `SHA256SUMS`. The earlier [October 2026 prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014) is the one described in the [qualification summary](docs/qualification-summary.md). These packages contain no game data and are not fully campaign-qualified.
+The [experimental release](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.2.0-experimental.20261106) provides a Linux AppImage and portable archive alongside the Windows and macOS builds, with `SHA256SUMS`. The [qualification summary](docs/qualification-summary.md) records the checks run on the earlier October 2026 packages, which are no longer published. These packages contain no game data and are not fully campaign-qualified.
 
 Make the AppImage executable and run it; if FUSE is unavailable, add `--appimage-extract-and-run`. For the archive, extract it and run `re4mepc/AppRun`. Both open the launcher without arguments and accept the same CLI commands as `re4mepc`. Build them with `make setup` and `make package` using Docker. See [portable build instructions](docs/advanced-usage.md#portable-builds) and [distribution requirements](docs/desktop-release.md).
 
@@ -345,7 +345,7 @@ Ajustes y controles → **Gráficos** añade escalado de resolución interna has
 
 #### Versiones portátiles
 
-La [versión experimental](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.2.0-experimental.20261106) ofrece un AppImage de Linux y un archivo portátil junto a las versiones de Windows y macOS, con `SHA256SUMS`. La [preversión anterior de octubre de 2026](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014) es la descrita en el [resumen de validación](docs/qualification-summary.md) (en inglés). Los paquetes no incluyen el juego y no están completamente validados para la campaña.
+La [versión experimental](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.2.0-experimental.20261106) ofrece un AppImage de Linux y un archivo portátil junto a las versiones de Windows y macOS, con `SHA256SUMS`. El [resumen de validación](docs/qualification-summary.md) (en inglés) registra las pruebas de los paquetes anteriores de octubre de 2026, que ya no están publicados. Los paquetes no incluyen el juego y no están completamente validados para la campaña.
 
 Da permiso de ejecución al AppImage y ejecútalo; sin FUSE, añade `--appimage-extract-and-run`. Para el archivo portátil, extráelo y ejecuta `re4mepc/AppRun`. Ambos abren el lanzador sin argumentos y aceptan los mismos comandos que `re4mepc`. Compílalos con `make setup` y `make package` usando Docker. Consulta las [instrucciones de compilación portátil](docs/advanced-usage.md#portable-builds) y los [requisitos de distribución](docs/desktop-release.md) (en inglés).
 

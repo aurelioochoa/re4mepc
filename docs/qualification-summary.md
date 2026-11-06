@@ -4,7 +4,7 @@ This document qualifies the frozen 2026-10-14 package bytes. The later
 [FPS/graphics implementation](fps-performance.md) is a current-source feature;
 these packages were not rebuilt for it and their qualification does not cover it.
 
-[Release v0.1.0-experimental.20261014](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014)
+Release `v0.1.0-experimental.20261014` (no longer published; superseded by [`v0.2.0-experimental.20261106`](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.2.0-experimental.20261106))
 is **experimental and not fully campaign-qualified**. Linux x86_64 only;
 authoritative simulation and presentation remain at 20 Hz. Users supply their
 own compatible APK. Campaign, endurance and broader physical-device work remain
@@ -106,7 +106,7 @@ CI check before repository visibility changes.
 - No loading optimization qualified; converted-texture caching stays opt-in.
   Independent rendering is unproved and no 30/60 FPS mode ships.
 
-The preceding [2026-10-13 prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261013)
+The preceding 2026-10-13 prerelease `v0.1.0-experimental.20261013` (no longer published)
 and its attached qualification summary remain unchanged. Its AppImage hash is
 `dbf6dc7df6f70a2e96ee15a8eb89a3c350ea3cb84d90334cc491bb5a6c7d5c11`;
 its archive hash is

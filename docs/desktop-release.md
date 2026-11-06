@@ -144,7 +144,8 @@ and vendor-specific driver combinations remain additional coverage.
 
 ## Current public-test packages — 2026-10-14
 
-The [refreshed experimental prerelease](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.1.0-experimental.20261014)
+The refreshed experimental prerelease `v0.1.0-experimental.20261014` (no longer published; superseded by
+[`v0.2.0-experimental.20261106`](https://github.com/aurelioochoa/re4mepc/releases/tag/v0.2.0-experimental.20261106))
 includes the six-language selectors, bundled Japanese fonts and the dependency-notice
 staging fix. Its [qualification summary](qualification-summary.md) records the new
 artifact hashes and validation image IDs. Both formats pass clean Ubuntu 22.04,
